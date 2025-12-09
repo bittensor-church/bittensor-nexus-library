@@ -1,0 +1,85 @@
+[project]
+name = "nexus-poc"
+version = "0.1.0"
+
+description = "A PoC for the Nexus subnet template library"
+authors = [
+    { name = "Reef", email = "reef@reef.sh" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic-settings",
+    "pydantic",
+    "litestar[standard,prometheus]",
+#    "cachetools",
+#    "docker",
+#    "requests",
+#    "bittensor_wallet",
+#    "sqlalchemy",
+#    "aiosqlite",
+#    "alembic",
+#    "tenacity",
+#    "sentry-sdk[litestar]",
+#    "greenlet",
+#    "flask",
+]
+
+license = { text = "../LICENSE" }
+
+[project.urls]
+homepage = "https://github.com/bittensor-church/nexus-poc"
+repository = "https://github.com/bittensor-church/nexus-poc"
+documentation = "https://github.com/bittensor-church/nexus-poc#readme"
+
+[project.optional-dependencies]
+format = [
+    "ruff",
+    "ty", 
+    "pyright",
+    "freezegun",
+    "sentry-sdk[litestar]"
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "I", "UP", "B", "TC005",
+]
+ignore = [
+    "D100", "D105", "D107", "D200", "D202", "D203", "D205", "D212", "D400", "D401", "D415",
+    "D101", "D102","D103", "D104",
+    "E501", "B027", "B904", "B905",
+]
+preview = true
+explicit-preview-rules = true
+extend-select = ["DOC501"]
+
+[tool.ruff.lint.per-file-ignores]
+
+"__init__.py" = ["I", "F401"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+# uv-specific settings can go here
+
+[tool.hatch.build.targets.wheel]
+packages = ["nexus"]
+
+[tool.pyright]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+include = ["nexus"]
+useLibraryCodeForTypes = true
+reportMissingTypeStubs = "warning"
+reportUndefinedVariable = "error"
+reportUnusedImport = "warning"
