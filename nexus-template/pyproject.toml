@@ -39,6 +39,9 @@ format = [
     "freezegun",
     "sentry-sdk[litestar]"
 ]
+test = [
+    "pytest"
+]
 
 [tool.ruff]
 line-length = 120

@@ -1,0 +1,207 @@
+"""
+Subnet definition for a cat‑image generation and validation service.
+
+This module shows how a subnet owner would use the generic Nexus
+framework provided in `nexus_core.py` to build a concrete subnet.  It
+defines domain‑specific data models and configures the mining and
+validation tasks, including request batching and one‑per‑miner sampling.
+"""
+
+from dataclasses import dataclass
+from typing import List, Callable, NewType
+
+from nexus_core import (
+    NexusTask,
+    BatchBuffer,
+    RoundRobinRouter,
+    RetryStrategy,
+)
+
+# ---------------------------- Domain models --------------------------------
+
+UserId = NewType("UserId", str)
+Hotkey = NewType("Hotkey", str)
+ImageName = NewType("ImageName", str)
+S3Url = NewType("S3Url", str)
+PresignedUrl = NewType("PresignedUrl", str)
+Score = NewType("Score", float)
+ImageHash = NewType("ImageHash", str)
+
+# Validator identifier type
+ValidatorId = NewType("ValidatorId", str)
+
+@dataclass
+class SingleCatImageInput:
+    """
+    User request model for generating a cat‑augmented image.
+
+    `user_id` identifies the client; `image_s3_url` refers to the original
+    background image stored on S3; `image_name` is a file name used in
+    constructing upload keys.
+    """
+
+    # this is essentially user data
+    # apart from that we have some additional data kept in the context like
+    # user_id, request_id
+    image_s3_url: S3Url
+    image_name: ImageName
+
+
+# @dataclass
+# class MinerInputItem:
+#     """
+#     Payload sent to miners.  Extends the user request with a presigned S3
+#     upload URL where the miner must upload its generated image.
+#     """
+#
+#     user_data: SingleCatImageInput
+#
+#     #user_id: UserId
+#     #image_s3_url: S3Url
+#     #image_name: ImageName
+#     upload_url: PresignedUrl
+
+
+@dataclass
+class MinerResult:
+    """
+    Result returned by miners.  Contains the user id so that the result
+    can be routed back to the correct client, and includes the miner
+    identifier to enable per‑miner sampling.
+    """
+
+    download_url: S3Url
+    image_hash: ImageHash
+
+
+@dataclass
+class ValidationResult:
+    """
+    Result returned by the validation executor.
+    """
+
+    score: Score
+    logits: Logits
+
+
+# ----------------------------- Validator definition ---------------------------
+
+class CatImagesEvaluator(ValidationEvaluator):
+    def evaluate(miner_result: List[MinerResult]) -> List[ValidationResult]:
+        """Evaluate a batch of miner results and return a batch of validation results."""
+        # TODO: implement actual evaluation; return dummy scores for demo.
+        return [ValidationResult(res.miner_hotkey, Score(1.0)) for res in images]
+
+class CatImagesValidator:
+    """
+    Definition of the cat‑images subnet validator.  It wires together generic Nexus
+    components with domain‑specific data models and helper functions.
+    """
+
+    entry: EntryPoint = RestEntryPoint(path="/cat", user_data_model=SingleCatImageInput)
+
+    # Buffer user requests until we have 8 items; flush logic for time
+    # windows should be implemented by a scheduler calling `flush()` on the
+    # buffer.
+    user_buffer: BatchBuffer[SingleCatImageInput] = BatchBuffer(name="", max_elements=8, max_age_seconds=123)
+
+    # Mining task: from a batch of user inputs, create a batch of miner
+    # payloads, choose a miner via round‑robin, and return a list of miner
+    # results.  The generic parameters spell out the input/output types.
+    # each task result is stored, and can be retrieved
+    # each task result is stamped with block number from... well... exactly which point?
+    mining_task: NexusTask[
+        List[SingleCatImageInput],
+        List[MinerResult]
+    ] = NexusTask(
+        name="cat-mining",
+        retry_strategy=MaxAttempts(7),
+        # passing the classes here doesn't look great; but there's no way around not providing that information somewhere?
+        # the field parameter is here, but maybe the field should be annotated in the model, and the adder should introspect?
+        payload_creator=S3PresignUrlAdder( field="upload_url"),
+        router=RoundRobinRouter(routes=registered_miners("cat-images")),
+        executor_communicator=AsyncHttpConnector(initial_timeout=10.0, total_timeout=30, listening_port=1234),
+    )
+
+    # One‑per‑miner sampler to create validation batches.  It takes
+    # `MinerResult` inputs and outputs a
+    # sampled list of results.
+    one_per_miner_sampler: MinerReusltSampler[MinerResult] = MinerResultSampler(
+        max_miners=64,
+        max_per_miner=1,
+        flush_on_epoch_change=True,
+        max_age_seconds=2400,
+        min_delay_between_flushes_seconds=1200,
+        # ???
+    )
+
+    # Validation task: from a batch of sampled results, create a validation
+    # payload (identity), choose a validator (no routing needed), and
+    # return a list of validation results.
+    validation_task: NexusTask[
+        List[MinerResult],
+        List[ValidationResult],     # validator's response batch
+    ] = NexusTask(
+        name="cat-validation",
+        retry_strategy=NoRetry(),
+        payload_creator=CustomData(factory=...), # function ctx, input -> output
+        router=lambda ctx, payload: ValidatorId("validator"),   # single validator route
+        executor_communicator=SyncHttpConnector(...),
+    )
+
+    # you can do binds manually, but this looks so much more readable...
+    weight_setting_flow: SubnetFlow = flow(
+        BlockBasedTrigger(after_epoch_delay_blocks=15)
+        .then(SetWeightsUsing(CatImagesSubnet.compute_weights))
+    )
+
+    organic_flow: SubnetFlow = flow(   # flow function is probably not needed;
+        # each operation should be a single-element
+        # flow with default input/output
+        entry.user_request # in/out pipes
+        .then(user_buffer)
+        .then(mining_task)
+        .then(
+            error=fork(
+                to_user=entry.return_to_user,
+                whatever_else=some_other_side_effect,
+            ),
+            ok=fork(
+                # names of the parameters are just readability sugar
+                to_user=entry.return_to_user,
+                to_validation=flow(
+                    #store_mining_result
+                    one_per_miner_sampler
+                    .then(validation_task)
+                ),
+            ),
+        )
+    )
+
+    @staticmethod
+    def compute_weights(current_block: Block, ???) -> dict[MinerHotkey, Score]:
+        """
+        Example weight function: map each miner to its aggregated score.  This
+        function operates on the validation results collected during an epoch.
+        """
+        miner_processed_images: dict[MinerHotkey, int] = collections.defaultdict(int)
+
+        current_epoch = get_epoch(current_block)
+        mining_epoch = current_epoch.previous()
+        for miner_results in get_task_results(name='cat-mining', block_range=mining_epoch):
+            for miner_result in miner_results:
+                miner_processed_images[miner_result.miner_hotkey] += len(miner_result.payload)
+
+        avg_computer = AvgComputer(...)
+
+        # is the block range for validation results the same as for mining?
+        # edge case is that some validation in epoch N+1 validates mining from epoch N
+        for validation_epoch in [current_epoch, mining_epoch]:
+            for validation_results in get_task_results(name='cat-validation', block_range=validation_epoch):
+                for validation_result in validation_results:
+                    if validation_result.input.block_number in mining_epoch:
+                        avg_computer.add(validation_result.miner_hotkey, validation_result.score)
+
+        weights = {hotkey: miner_job_count[hotkey] * avg_computer.avg(hotkey)
+                   for hotkey in miner_job_count}
+        return weights
