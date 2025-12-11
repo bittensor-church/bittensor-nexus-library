@@ -5,7 +5,7 @@ from typing import NewType, Callable
 from nexus import get_logger
 from nexus.context_store import ContextId
 from nexus.piping.dsl import Transform, Sink
-from nexus.runtime.event_bus import ToBus, FromBus, ReceiveEvent, SendEvent, StopEvent, StopActorEvent
+from nexus.runtime.events import FromBus, ToBus, ReceiveEvent, StopActorEvent, SendEvent
 
 logger = get_logger("Actor")
 
@@ -30,7 +30,7 @@ class Actor(ABC):
     def loop(self):
         while True:
             event: ReceiveEvent = self.from_bus.get()
-            if event is StopActorEvent:
+            if isinstance(event, StopActorEvent):
                 logger.info(f"Stop event received in actor: {self.actor_id}; stopping loop.")
                 break
             handler = self.handlers().get(event.target, None)
@@ -70,7 +70,10 @@ class TransformActor[From, To](Actor, ABC):
                 SendEvent(ctx=event.ctx, source=self.spec.source, payload=output_payload)
             )
         except Exception as e:
-            logger.error(f"Error in TransformActor {self.actor_id} while processing event: {event}", e)
+            logger.error(
+                f"Error in TransformActor {self.actor_id} while processing event: {event}",
+                exc_info=e,
+            )
 
     @abstractmethod
     def _transform(self, ctx: ContextId, payload: From) -> To:
