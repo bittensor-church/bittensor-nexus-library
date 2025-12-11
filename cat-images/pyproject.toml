@@ -11,7 +11,10 @@ dependencies = [
     "pydantic-settings",
     "pydantic",
     "litestar[standard,prometheus]",
-    "nexus-poc",
+    "bittensor-nexus-lib",
+    "basedpyright>=1.36.1",
+    "ruff>=0.14.8",
+    "ty>=0.0.1a32",
 ]
 
 [project.optional-dependencies]
@@ -67,7 +70,7 @@ documentation = "https://github.com/bittensor-church/nexus-poc#readme"
 [tool.uv]
 
 [tool.uv.sources]
-nexus-poc = { path = "../nexus-template" }
+bittensor-nexus-lib = { path = "../nexus-template" }
 # uv-specific settings can go here
 
 [tool.pyright]

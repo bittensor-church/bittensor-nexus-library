@@ -1,29 +1,30 @@
-from __future__ import annotations
+import logging
+from typing import Any
 
 from nexus.logging_utils import get_logger
-from nexus.piping.dsl import Pipes, Sink
+from nexus.piping.dsl import Sink, Pipes
 from nexus.runtime.actor import Actor
-from nexus.runtime.events import ToBus, StopBusEvent, SendEvent, StopActorEvent, ReceiveEvent
+from nexus.runtime.events import ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent, ToBus
 
-logger = get_logger(__name__)
+logger: logging.Logger = get_logger(__name__)
 
 
 class EventBus:
     connections: Pipes
     input_pipe: ToBus
-    sinks: dict[Sink, Actor]
+    sinks: dict[Sink[Any], Actor]
 
-    def __init__(self, connections: Pipes, input_pipe: ToBus, sinks: dict[Sink, Actor]) -> None:
+    def __init__(self, connections: Pipes, input_pipe: ToBus, sinks: dict[Sink[Any], Actor]) -> None:
         self.connections = connections
         self.sinks = sinks
         self.input_pipe = input_pipe
 
-    def stop(self):
+    def stop(self) -> None:
         self.input_pipe.put(StopBusEvent())
 
-    def loop(self):
+    def loop(self) -> None:
         while True:
-            event: SendEvent = self.input_pipe.get()
+            event: SendEvent[Any] = self.input_pipe.get()
             if isinstance(event, StopBusEvent):
                 logger.info("Stop event received in EventBus; stopping loop.")
                 for sink in self.sinks.values():

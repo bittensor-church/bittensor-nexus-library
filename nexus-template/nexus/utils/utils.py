@@ -1,6 +1,6 @@
 import itertools
 
-global_counter: itertools.count = itertools.count()
+global_counter: itertools.count[int] = itertools.count()
 
 
 def default_name(obj: object) -> str:

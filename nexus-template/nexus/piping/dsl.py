@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 import itertools
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TypeVar, NewType
+from typing import TypeVar, NewType, Any
 
 T = TypeVar("T")
+
 
 SourceId = NewType("SourceId", str)
 SinkId = NewType("SinkId", str)
 
-endpoints_counter: itertools.count = itertools.count()
+endpoints_counter: itertools.count[int] = itertools.count()
 
 
 class Source[T]:
@@ -20,6 +23,10 @@ class Source[T]:
     def __init__(self, source_id: SourceId):
         self.source_id = source_id
 
+    @classmethod
+    def with_name(cls, name: str) -> SourceId:
+        return SourceId(f"{name}-source")
+
 
 class Sink[T]:
     """
@@ -30,6 +37,9 @@ class Sink[T]:
     def __init__(self, sink_id: SinkId):
         self.sink_id = sink_id
 
+    @classmethod
+    def with_name(cls, name: str) -> SinkId:
+        return SinkId(f"{name}-sink")
 
 class Transform[From, To]:
     sink: Sink[From]
@@ -39,13 +49,13 @@ class Transform[From, To]:
     """
 
     def __init__(self, name: str):
-        self.source = Source[To](SourceId(f"{name}-source"))
-        self.sink = Sink[From](SinkId(f"{name}-sink"))
+        self.source = Source[To](Source.with_name(name))
+        self.sink = Sink[From](Sink.with_name(name))
 
 
-Sources = set[Source]
-Sinks = set[Sink]
-Pipes = defaultdict[Source, set[Sink]]
+Sources = set[Source[Any]]
+Sinks = set[Sink[Any]]
+Pipes = defaultdict[Source[Any], set[Sink[Any]]]  # we loose type info here for simplicity
 
 
 @dataclass
@@ -60,5 +70,5 @@ class Piping:
     def __init__(self):
         self.pipes = Pipes(set)
 
-    def connect[T](self, source: Source[T], sink: Sink[T]):
+    def connect[T](self, source: Source[T], sink: Sink[T]) -> None:
         self.pipes[source].add(sink)
