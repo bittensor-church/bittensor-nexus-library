@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 
-from pydantic import BaseModel
-
-from nexus.piping.flow import flow
+# from nexus.piping.flow import flow
 from nexus.sources.rest import RestEntryPoint
 from nexus.transforms.stringify import Stringify
+from nexus.transforms.uppercase_or_error import UppercaseOrError
+from pydantic import BaseModel
 
 
 @dataclass
@@ -50,8 +50,9 @@ class CatImagesValidator:
 
     stringify: Stringify[SingleCatImageInput] = Stringify()
 
-    # forking_task: UppercaseOrError = UppercaseOrError()
-    #
+    forking_task: UppercaseOrError = UppercaseOrError()
+
+
     # flow: Flow = flow(entry)
     #     .then(stringify)
     #     .then(entry)

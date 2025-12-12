@@ -47,15 +47,13 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "freezegun", marker = "extra == 'format'" },
+    { name = "basedpyright", marker = "extra == 'test'" },
     { name = "litestar", extras = ["standard", "prometheus"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "pyright", marker = "extra == 'format'" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "ruff", marker = "extra == 'format'" },
-    { name = "sentry-sdk", extras = ["litestar"], marker = "extra == 'format'" },
-    { name = "ty", marker = "extra == 'format'" },
+    { name = "tenacity", marker = "extra == 'test'" },
 ]
 provides-extras = ["format", "test"]
 

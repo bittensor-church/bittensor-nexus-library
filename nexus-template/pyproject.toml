@@ -37,7 +37,8 @@ format = [
 ]
 test = [
     "basedpyright",
-    "pytest"
+    "pytest",
+    "tenacity",
 ]
 
 [tool.ruff]
@@ -48,11 +49,11 @@ target-version = "py314"
 select = [
     "E", "F", "I", "UP", "B", "TC005",
 ]
-ignore = [
-    "D100", "D105", "D107", "D200", "D202", "D203", "D205", "D212", "D400", "D401", "D415",
-    "D101", "D102","D103", "D104",
-    "E501", "B027", "B904", "B905",
-]
+#ignore = [
+#    "D100", "D105", "D107", "D200", "D202", "D203", "D205", "D212", "D400", "D401", "D415",
+#    "D101", "D102","D103", "D104",
+#    "E501", "B027", "B904", "B905",
+#]
 preview = true
 explicit-preview-rules = true
 extend-select = ["DOC501"]
@@ -79,3 +80,18 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["nexus"]
+
+[tool.basedpyright]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+include = ["nexus", "tests"]
+verboseOutput = true
+useLibraryCodeForTypes = true
+reportMissingTypeStubs = "warning"
+reportUndefinedVariable = "error"
+reportUnusedImport = "warning"
+reportExplicitAny = "none"
+stubPath = ".pyright-stubs"
+venvPath = "."
+venv = ".venv"
+extraPaths = [".venv/lib/python3.14/site-packages"]
