@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
-# from nexus.piping.flow import flow
-from nexus.sources.rest import RestEntryPoint
-from nexus.transforms.stringify import Stringify
-from nexus.transforms.uppercase_or_error import UppercaseOrError
+from core.dsl import flow
+from actors.rest import RestEntryPoint
+from nexus.actors.stringify import Stringify
+from nexus.actors.uppercase_or_error import UppercaseOrError
 from pydantic import BaseModel
 
 
@@ -53,9 +53,12 @@ class CatImagesValidator:
     forking_task: UppercaseOrError = UppercaseOrError()
 
 
-    # flow: Flow = flow(entry)
-    #     .then(stringify)
-    #     .then(entry)
+    flow: Flow = flow(entry)
+         .then(stringify)
+         .then(forking_task)
+         .then(ok=stringify
+                    .then(stringify),
+               error=stringify)
 
     # or maybe ?
     # flow: Flow = Flow.start(entry.output)

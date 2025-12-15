@@ -3,9 +3,10 @@ from threading import Thread
 from typing import Any
 
 from nexus.logging_utils import get_logger
-from nexus.piping.dsl import Pipes, Sink
-from nexus.runtime.actor import Actor
-from nexus.runtime.events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
+
+from ..dsl.nodes import Pipes, Sink
+from .actor import Actor
+from .events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
 
 logger: logging.Logger = get_logger(__name__)
 

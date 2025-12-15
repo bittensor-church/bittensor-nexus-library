@@ -1,4 +1,4 @@
-from nexus.runtime.event_bus import EventBus
+from nexus.core.runtime.event_bus import EventBus
 
 
 class NexusValidator:

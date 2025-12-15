@@ -1,9 +1,10 @@
 from typing import override
 
-from context_store import ContextId
-from piping.dsl import Transform
-from runtime.actor import ActorBuilder, TransformActor
-from runtime.events import PipeToBus
+from nexus.context_store import ContextId
+from nexus.core.dsl.nodes import Transform
+from nexus.core.runtime.actor import ActorBuilder
+from nexus.core.runtime.actor_patterns import TransformActor
+from nexus.core.runtime.events import PipeToBus
 
 
 class EvenSucks(Exception):
@@ -11,8 +12,8 @@ class EvenSucks(Exception):
 
 
 class UppercaseOrError(Transform[str, str], ActorBuilder):
-    def __init__(self, name: str | None = None) -> None:
-        super().__init__(name=name)
+    def __init__(self, gid_prefix: str | None = None) -> None:
+        super().__init__(gid_prefix=gid_prefix)
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus) -> UppercaseOrErrorActor:

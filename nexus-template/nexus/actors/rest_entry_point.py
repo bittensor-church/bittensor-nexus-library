@@ -1,27 +1,30 @@
 from typing import override
 
-from nexus.piping.dsl import Source
-from nexus.runtime.actor import Actor, ActorBuilder
-from nexus.runtime.events import PipeToBus
+from nexus.core.dsl.nodes import HasGlobalId, Sink, Source
+from nexus.core.runtime.actor import Actor, ActorBuilder
+from nexus.core.runtime.events import PipeToBus
 
 
-class RestEntryPoint[Model](Source[Model], ActorBuilder):
-    name: str
+class RestEntryPoint[Model](HasGlobalId, ActorBuilder):
+    gid: str
+    source: Source[Model]
+    sink: Sink[str]
     __path: str
     __port: int
     __user_data_model: type[Model]
 
     def __init__(self, *,
-                 name: str | None = None,
+                 gid_prefix: str | None = None,
                  path: str,
                  port: int,
                  user_data_model: type[Model]
                  ) -> None:
-        Source[Model].__init__(self, name)
-        ActorBuilder.__init__(self)
+        super().__init__(gid_prefix=gid_prefix)
         self.__path = path
         self.__port = port
         self.__user_data_model = user_data_model
+        self.source = Source(gid_prefix)
+        self.sink = Sink(gid_prefix)
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus) -> Actor:

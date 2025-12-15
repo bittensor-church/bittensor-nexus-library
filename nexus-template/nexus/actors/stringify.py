@@ -1,16 +1,17 @@
 from typing import override
 
 from nexus.context_store import ContextId
-from nexus.piping.dsl import Transform
-from nexus.runtime.actor import ActorBuilder, TransformActor
-from nexus.runtime.events import PipeToBus
+from nexus.core.dsl.nodes import Transform
+from nexus.core.runtime.actor import ActorBuilder
+from nexus.core.runtime.actor_patterns import TransformActor
+from nexus.core.runtime.events import PipeToBus
 
 
 class Stringify[T](Transform[T, str], ActorBuilder):
     def __init__(self, *,
-                 name: str | None = None,
+                 gid_prefix: str | None = None,
                  ) -> None:
-        super().__init__(name=name)
+        super().__init__(gid_prefix=gid_prefix)
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus):

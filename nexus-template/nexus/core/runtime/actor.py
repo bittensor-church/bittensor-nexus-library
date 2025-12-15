@@ -2,12 +2,12 @@ import itertools
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from threading import Thread
-from typing import Any, NewType, override
+from typing import Any, NewType
 
-from nexus.context_store import ContextId
 from nexus.logging_utils import get_logger
-from nexus.piping.dsl import Sink, Transform
-from nexus.runtime.events import PipeFromBus, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
+
+from ..dsl.nodes import Sink
+from .events import PipeFromBus, PipeToBus, ReceiveEvent, StopActorEvent
 
 logger = get_logger("Actor")
 
@@ -65,34 +65,4 @@ class Actor(ABC):
 class ActorBuilder(ABC):
     @abstractmethod
     def build_actor(self, *, pipe_to_bus: PipeToBus) -> Actor:
-        pass
-
-
-class TransformActor[From, To](Actor, ABC):
-    spec: Transform[From, To]
-
-    def __init__(self, spec: Transform[From, To], pipe_to_bus: PipeToBus) -> None:
-        super().__init__(name=spec.name, pipe_to_bus=pipe_to_bus)
-        self.spec = spec
-
-    @override
-    def handlers(self) -> dict[Sink[Any], EventHandler]:
-        return {
-            self.spec.sink: self.handle
-        }
-
-    def handle(self, event: ReceiveEvent[From]) -> None:
-        assert event.target == self.spec.sink
-        try:
-            output_payload = self._transform(event.ctx, event.payload)
-            self.pipe_to_bus.put(
-                SendEvent(ctx=event.ctx, source=self.spec.ok, payload=output_payload)
-            )
-        except Exception as exception:
-            self.pipe_to_bus.put(
-                SendEvent(ctx=event.ctx, source=self.spec.error, payload=exception)
-            )
-
-    @abstractmethod
-    def _transform(self, ctx: ContextId, payload: From) -> To:
         pass

@@ -6,12 +6,15 @@ from typing import Any, override
 
 from utils import Jobs, wait_until
 
+from nexus.actors.stringify import Stringify, StringifyActor
+from nexus.actors.uppercase_or_error import EvenSucks, UppercaseOrError, UppercaseOrErrorActor
 from nexus.context_store import ContextId
-from nexus.piping.dsl import Piping, Sink, Source, SourceId, Transform
-from nexus.runtime.actor import Actor, EventHandler, TransformActor
-from nexus.runtime.event_bus import EventBus
-from nexus.runtime.events import Event, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
-from nexus.transforms.stringify import Stringify, StringifyActor
+from nexus.core.dsl.nodes import DoubleTransform, Fork, Sink, Source, Transform
+from nexus.core.dsl.piping import Piping
+from nexus.core.runtime.actor import Actor, EventHandler
+from nexus.core.runtime.actor_patterns import DoubleTransformActor, ForkActor, TransformActor
+from nexus.core.runtime.event_bus import EventBus
+from nexus.core.runtime.events import Event, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
 
 
 class DualSinkActor(Actor):
@@ -53,7 +56,7 @@ class FaultyTransformActor(TransformActor):
         super().__init__(spec=Transform(name), pipe_to_bus=pipe_to_bus)
 
     @override
-    def _transform(self, ctx: ContextId, payload: Any):  # pragma: no cover - exercised in tests
+    def _transform(self, ctx: ContextId, payload: Any):
         raise ValueError("boom")
 
 
@@ -77,6 +80,41 @@ class FlakyActor(Actor):
             self.pipe_to_bus.put(SendEvent(ctx=event.ctx, source=self.source, payload=f"ok-{event.payload}"))
 
 
+class BranchingForkActor(ForkActor[str, str, str]):
+    def __init__(self, *, pipe_to_bus: PipeToBus) -> None:
+        super().__init__(spec=Fork[str, str, str](gid_prefix="branching-fork"), pipe_to_bus=pipe_to_bus)
+
+    @override
+    def _process(self, ctx: ContextId, payload: str) -> tuple[str, None] | tuple[None, str]:
+        if payload.startswith("left"):
+            return payload, None
+        else:
+            return None, payload
+
+
+class TestDoubleTransformActor(DoubleTransformActor[str, str, str, str]):
+    def __init__(self, *, pipe_to_bus: PipeToBus) -> None:
+        spec = DoubleTransform[str, str, str, str](gid_prefix="instrumented-double")
+        super().__init__(
+            name=spec.gid,
+            input_spec=spec.input_transform,
+            output_spec=spec.output_transform,
+            pipe_to_bus=pipe_to_bus,
+        )
+
+    @override
+    def _transform_input(self, ctx: ContextId, payload: str) -> str:
+        if payload.startswith("fail"):
+            raise ValueError("input-failed")
+        return payload.upper()
+
+    @override
+    def _transform_output(self, ctx: ContextId, payload: str) -> str:
+        if payload.startswith("fail"):
+            raise ValueError("output-failed")
+        return f"{payload}-out"
+
+
 def test_actor_dispatches_events_to_handlers():
     actor = DualSinkActor()
 
@@ -98,11 +136,57 @@ def test_actor_dispatches_events_to_handlers():
     assert actor.handled_right == ["payload-right"]
 
 
+def test_fork_actor_routes_left_and_right_sources():
+    pipe_to_bus = queue.Queue()
+    actor = BranchingForkActor(pipe_to_bus=pipe_to_bus)
+
+    ctx_left = ContextId("ctx-left")
+    ctx_right = ContextId("ctx-right")
+
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_left, target=actor.spec.sink, payload="left-payload"))
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_right, target=actor.spec.sink, payload="right-payload"))
+    actor.pipe_from_bus.put(StopActorEvent())
+
+    actor_job = actor.run_loop()
+    actor_job.join(1.0)
+    assert not actor_job.is_alive()
+
+    left_event = pipe_to_bus.get_nowait()
+    right_event = pipe_to_bus.get_nowait()
+
+    assert left_event.source == actor.spec.left
+    assert left_event.payload == "left-payload"
+    assert left_event.ctx == ctx_left
+
+    assert right_event.source == actor.spec.right
+    assert right_event.payload == "right-payload"
+    assert right_event.ctx == ctx_right
+
+    assert pipe_to_bus.empty()
+
+
+def test_fork_actor_preserves_context_id():
+    pipe_to_bus = queue.Queue()
+    actor = BranchingForkActor(pipe_to_bus=pipe_to_bus)
+    ctx = ContextId("ctx-fork-preserve")
+
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx, target=actor.spec.sink, payload="left-ctx"))
+    actor.pipe_from_bus.put(StopActorEvent())
+
+    job = actor.run_loop()
+    job.join(1.0)
+    assert not job.is_alive()
+
+    emitted = pipe_to_bus.get_nowait()
+    assert emitted.ctx == ctx
+    assert emitted.source == actor.spec.left
+    assert emitted.payload == "left-ctx"
+    assert pipe_to_bus.empty()
+
 
 def test_transform_actor_emits_transformed_event():
     stringify = Stringify()  # stringify is a test transform anyway, so let's use it here
     pipe_to_bus = queue.Queue()
-    pipe_from_bus = queue.Queue()
     actor = StringifyActor(spec=stringify, pipe_to_bus=pipe_to_bus)
 
     context = ContextId("ctx-123")
@@ -123,38 +207,80 @@ def test_transform_actor_emits_transformed_event():
     assert pipe_to_bus.empty()
 
 
-def test_context_id_preserved_through_transform_and_bus():
-    stringify = Stringify()
+def test_transform_actor_routes_ok_and_error_sources():
+    transform = UppercaseOrError()
+    pipe_to_bus = queue.Queue()
+    actor = UppercaseOrErrorActor(spec=transform, pipe_to_bus=pipe_to_bus)
 
+    ctx_ok = ContextId("ctx-transform-ok")
+    ctx_error = ContextId("ctx-transform-error")
+
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_ok, target=transform.sink, payload="odd"))
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_error, target=transform.sink, payload="boom"))
+    actor.pipe_from_bus.put(StopActorEvent())
+
+    job = actor.run_loop()
+    job.join(1.0)
+    assert not job.is_alive()
+
+    events = [pipe_to_bus.get_nowait(), pipe_to_bus.get_nowait()]
+    ok_event = next(event for event in events if event.ctx == ctx_ok)
+    error_event = next(event for event in events if event.ctx == ctx_error)
+
+    assert ok_event.source == transform.ok
+    assert ok_event.payload == "ODD"
+    assert ok_event.ctx == ctx_ok
+
+    assert error_event.source == transform.error
+    assert isinstance(error_event.payload, EvenSucks)
+    assert error_event.ctx == ctx_error
+    assert pipe_to_bus.empty()
+
+
+def test_transform_actor_preserves_context_id():
+    stringify = Stringify()
+    pipe_to_bus = queue.Queue()
+    actor = StringifyActor(spec=stringify, pipe_to_bus=pipe_to_bus)
+
+    ctx = ContextId("ctx-transform-preserve")
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx, target=stringify.sink, payload=7))
+    actor.pipe_from_bus.put(StopActorEvent())
+
+    job = actor.run_loop()
+    job.join(1.0)
+    assert not job.is_alive()
+
+    sent = pipe_to_bus.get_nowait()
+    assert sent.ctx == ctx
+    assert sent.payload == "7"
+    assert sent.source == stringify.ok
+    assert pipe_to_bus.empty()
+
+
+def test_event_bus_preserves_context_id():
     pipe_to_bus = queue.Queue()
 
-    collector_actor = CollectorActor(pipe_to_bus=pipe_to_bus)
-    transform_actor = StringifyActor(spec=stringify, pipe_to_bus=pipe_to_bus)
+    source = Source("context-source")
+    collector = CollectorActor(pipe_to_bus=pipe_to_bus)
 
     piping = Piping()
-    piping.connect(stringify.ok, collector_actor.sink)
-    event_bus = EventBus(
-        connections=piping.pipes,
-        input_pipe=pipe_to_bus,
-        actors=[transform_actor, collector_actor],
-    )
+    piping.connect(source, collector.sink)
 
-    context = ContextId("ctx-pass-through")
-    transform_actor.pipe_from_bus.put(
-        ReceiveEvent(ctx=context, target=stringify.sink, payload=42)
-    )
-    jobs = Jobs(
-        transform_actor.run_loop(),
-        collector_actor.run_loop(),
-        event_bus.run_loop())
+    event_bus = EventBus(connections=piping.pipes, input_pipe=pipe_to_bus, actors=[collector])
 
-    wait_until(lambda: len(collector_actor.received_events) == 1)
-    handled_event = collector_actor.received_events[0]
-    assert handled_event.ctx == context
-    assert handled_event.payload == "42"
+    ctx = ContextId("ctx-bus-preserve")
+    pipe_to_bus.put(SendEvent(ctx=ctx, source=source, payload="bus-payload"))
+
+    jobs = Jobs(event_bus.run_loop(), collector.run_loop())
+    wait_until(lambda: len(collector.received_events) == 1)
+
+    received = collector.received_events[0]
+    assert received.ctx == ctx
+    assert received.payload == "bus-payload"
 
     event_bus.request_stop()
     jobs.join()
+
 
 def test_event_bus_routes_events_to_configured_sinks():
     pipe_to_bus = queue.Queue()
@@ -249,3 +375,83 @@ def test_actor_error_does_not_stop_event_bus(caplog: Any):
         record.exc_info and isinstance(record.exc_info[1], ValueError) and str(record.exc_info[1]) == "flaky failure"
         for record in error_records
     )
+
+
+def test_double_transform_actor_routes_input_output_and_errors():
+    pipe_to_bus = queue.Queue()
+    actor = TestDoubleTransformActor(pipe_to_bus=pipe_to_bus)
+
+    ctx_input_ok = ContextId("ctx-input-ok")
+    ctx_input_error = ContextId("ctx-input-error")
+    ctx_output_ok = ContextId("ctx-output-ok")
+    ctx_output_error = ContextId("ctx-output-error")
+
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_input_ok, target=actor.input_spec.sink, payload="success"))
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_input_error, target=actor.input_spec.sink, payload="fail-input"))
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_output_ok, target=actor.output_spec.sink, payload="payload"))
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_output_error, target=actor.output_spec.sink, payload="fail-output"))
+    actor.pipe_from_bus.put(StopActorEvent())
+
+    actor_job = actor.run_loop()
+    actor_job.join(1.0)
+    assert not actor_job.is_alive()
+
+    events = [pipe_to_bus.get_nowait() for _ in range(4)]
+
+    def _event_by_ctx(ctx: ContextId) -> SendEvent[Any]:
+        return next(event for event in events if event.ctx == ctx)
+
+    input_ok = _event_by_ctx(ctx_input_ok)
+    input_error = _event_by_ctx(ctx_input_error)
+    output_ok = _event_by_ctx(ctx_output_ok)
+    output_error = _event_by_ctx(ctx_output_error)
+
+    assert input_ok.source == actor.input_spec.ok
+    assert input_ok.payload == "SUCCESS"
+    assert input_ok.ctx == ctx_input_ok
+
+    assert input_error.source == actor.input_spec.error
+    assert isinstance(input_error.payload, ValueError)
+    assert str(input_error.payload) == "input-failed"
+    assert input_error.ctx == ctx_input_error
+
+    assert output_ok.source == actor.output_spec.ok
+    assert output_ok.payload == "payload-out"
+    assert output_ok.ctx == ctx_output_ok
+
+    assert output_error.source == actor.output_spec.error
+    assert isinstance(output_error.payload, ValueError)
+    assert str(output_error.payload) == "output-failed"
+    assert output_error.ctx == ctx_output_error
+
+    assert pipe_to_bus.empty()
+
+
+def test_double_transform_actor_preserves_context_id():
+    pipe_to_bus = queue.Queue()
+    actor = TestDoubleTransformActor(pipe_to_bus=pipe_to_bus)
+
+    ctx_input = ContextId("ctx-double-input")
+    ctx_output = ContextId("ctx-double-output")
+
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_input, target=actor.input_spec.sink, payload="in"))
+    actor.pipe_from_bus.put(ReceiveEvent(ctx=ctx_output, target=actor.output_spec.sink, payload="out"))
+    actor.pipe_from_bus.put(StopActorEvent())
+
+    job = actor.run_loop()
+    job.join(1.0)
+    assert not job.is_alive()
+
+    events = [pipe_to_bus.get_nowait(), pipe_to_bus.get_nowait()]
+    input_event = next(event for event in events if event.ctx == ctx_input)
+    output_event = next(event for event in events if event.ctx == ctx_output)
+
+    assert input_event.ctx == ctx_input
+    assert input_event.payload == "IN"
+    assert input_event.source == actor.input_spec.ok
+
+    assert output_event.ctx == ctx_output
+    assert output_event.payload == "out-out"
+    assert output_event.source == actor.output_spec.ok
+
+    assert pipe_to_bus.empty()

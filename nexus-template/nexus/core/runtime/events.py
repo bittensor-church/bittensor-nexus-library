@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from nexus.context_store import ContextId
-from nexus.piping.dsl import Sink, Source
+
+from ..dsl.nodes import Sink, Source
 
 
 @dataclass
@@ -24,8 +25,8 @@ class ReceiveEvent[T](Event[T]):
 
 # we'd need some proper control events someday...
 _STOP_CTX = ContextId("stop")
-_STOP_SOURCE = Source[None]("stop")
-_STOP_SINK = Sink[None]("stop")
+_STOP_SOURCE = Source[None]("stop-source")
+_STOP_SINK = Sink[None]("stop-sink")
 
 
 class StopBusEvent(SendEvent[None]):
