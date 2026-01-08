@@ -19,17 +19,39 @@ def _safe_invoke[ReturnType](fn: Callable[[], ReturnType]) -> tuple[ReturnType, 
 def _fork_handler[From, ToLeft, ToRight](
         event: ReceiveEvent[From],
         process: Callable[[ContextId, From], tuple[ToLeft, None] | tuple[None, ToRight]],
-        left_source: Source[ToLeft],
-        right_source: Source[ToRight],
+        left: Source[ToLeft],
+        right: Source[ToRight],
         pipe_to_bus: PipeToBus) -> None:
     result = process(event.ctx, event.payload)
     match result:
-        case (left, None):
+        case (left_payload, None):
             pipe_to_bus.put(
-                SendEvent(ctx=event.ctx, source=left_source, payload=left))
-        case (None, right):
+                SendEvent(ctx=event.ctx, source=left, payload=left_payload))
+        case (None, right_payload):
             pipe_to_bus.put(
-                SendEvent(ctx=event.ctx, source=right_source, payload=right))
+                SendEvent(ctx=event.ctx, source=right, payload=right_payload))
+
+
+class ConsumerActor[From](Actor, ABC):
+    def __init__(self,
+                 spec: Sink[From],
+                 pipe_to_bus: PipeToBus) -> None:
+        super().__init__(name=spec.gid, pipe_to_bus=pipe_to_bus)
+        self.spec = spec
+
+    @override
+    def handlers(self) -> dict[Sink[Any], EventHandler]:
+        return {
+            self.spec: self.handle
+        }
+
+    def handle(self, event: ReceiveEvent[Any]) -> None:
+        assert event.target == self.spec
+        return self._consume(event.ctx, event.payload)
+
+    @abstractmethod
+    def _consume(self, ctx: ContextId, payload: From) -> None:
+        pass
 
 
 class ForkActor[From, ToLeft, ToRight](Actor, ABC):
