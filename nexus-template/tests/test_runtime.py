@@ -2,14 +2,21 @@
 
 import logging
 import queue
+import unittest
 from typing import Any, override
 
 from utils import Jobs, wait_until
 
-from nexus.actors.stringify import Stringify, StringifyActor
-from nexus.actors.uppercase_or_error import EvenSucks, UppercaseOrError, UppercaseOrErrorActor
+from nexus.actors import (
+    EvenSucks,
+    Stringify,
+    StringifyActor,
+    UppercaseOrError,
+    UppercaseOrErrorActor,
+)
 from nexus.context_store import ContextId
-from nexus.core.dsl.nodes import DoubleTransform, Fork, Sink, Source, Transform
+from nexus.core.dsl.flow import Flow
+from nexus.core.dsl.nodes import DoubleTransform, Fork, Sink, Source, SourceName, Transform
 from nexus.core.dsl.piping import Piping
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.actor_patterns import DoubleTransformActor, ForkActor, TransformActor
@@ -455,3 +462,89 @@ def test_double_transform_actor_preserves_context_id():
     assert output_event.source == actor.output_spec.ok
 
     assert pipe_to_bus.empty()
+
+
+class TestFlow(unittest.TestCase):
+    def test_then_requires_targets(self) -> None:
+        flow = Flow.from_node(Source("start"))
+        with self.assertRaises(AssertionError):
+            flow.then()
+
+    def test_then_rejects_mixed_positional_and_keyword(self) -> None:
+        flow = Flow.from_node(Source("start"))
+        with self.assertRaises(AssertionError):
+            flow.then(Sink("a"), ok=Sink("b"))
+
+    def test_then_positional_connects_all_targets_and_continues_from_single_processing_target(self) -> None:
+        start = Source("start")
+        main = Transform[str, str]("main")
+        side_effect = Sink("side-effect")
+        end = Sink("end")
+
+        flow = Flow.from_node(start).then(main, side_effect).then(ok=end)
+
+        self.assertEqual(flow.pipes[start], {main.sink, side_effect})
+        self.assertEqual(flow.pipes[main.ok], {end})
+        self.assertNotIn(main.error, flow.pipes)
+
+    def test_then_positional_continuation_target_independent_of_order(self) -> None:
+        start = Source("start")
+        main = Transform[str, str]("main")
+        side_effect = Sink("side-effect")
+
+        flow = Flow.from_node(start).then(side_effect, main)
+
+        self.assertEqual(flow.pipes[start], {main.sink, side_effect})
+        self.assertIs(flow.exit_sources.sources[SourceName("ok")], main.ok)
+        self.assertIs(flow.exit_sources.sources[SourceName("error")], main.error)
+
+    def test_then_positional_raises_when_multiple_targets_have_sources(self) -> None:
+        start = Source("start")
+        left = Transform[str, str]("left")
+        right = Transform[str, str]("right")
+
+        flow = Flow.from_node(start)
+        with self.assertRaises(AssertionError):
+            flow.then(left, right)
+
+    def test_then_keyword_connects_named_sources_and_ends_flow(self) -> None:
+        transform = Transform[str, str]("transform")
+        ok_sink = Sink("ok-sink")
+        error_sink = Sink("error-sink")
+
+        flow = Flow.from_node(transform).then(ok=ok_sink, error=error_sink)
+
+        self.assertEqual(flow.pipes[transform.ok], {ok_sink})
+        self.assertEqual(flow.pipes[transform.error], {error_sink})
+        self.assertEqual(flow.exit_sources.sources, {})
+
+    def test_then_keyword_supports_multiple_targets_per_source(self) -> None:
+        transform = Transform[str, str]("transform")
+        ok_a = Sink("ok-a")
+        ok_b = Sink("ok-b")
+        error_sink = Sink("error-sink")
+
+        flow = Flow.from_node(transform).then(ok=[ok_a, ok_b], error=error_sink)
+
+        self.assertEqual(flow.pipes[transform.ok], {ok_a, ok_b})
+        self.assertEqual(flow.pipes[transform.error], {error_sink})
+        self.assertEqual(flow.exit_sources.sources, {})
+
+    def test_then_keyword_raises_on_unknown_source_name(self) -> None:
+        transform = Transform[str, str]("transform")
+        flow = Flow.from_node(transform)
+        with self.assertRaises(AssertionError):
+            flow.then(does_not_exist=Sink("sink"))
+
+    def test_then_merges_target_flow_pipes(self) -> None:
+        start = Source("start")
+        a = Transform[str, str]("a")
+        b = Transform[str, str]("b")
+        end = Sink("end")
+
+        subflow = Flow.from_node(a).then(b)
+        flow = Flow.from_node(start).then(subflow).then(ok=end)
+
+        self.assertEqual(flow.pipes[start], {a.sink})
+        self.assertEqual(flow.pipes[a.ok], {b.sink})
+        self.assertEqual(flow.pipes[b.ok], {end})
