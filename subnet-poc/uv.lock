@@ -61,7 +61,7 @@ provides-extras = ["format", "test"]
 dev = [{ name = "basedpyright", specifier = ">=1.36.1" }]
 
 [[package]]
-name = "cat-images-subnet"
+name = "subnet-poc"
 source = { virtual = "." }
 dependencies = [
     { name = "basedpyright" },

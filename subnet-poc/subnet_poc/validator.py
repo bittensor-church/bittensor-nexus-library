@@ -12,9 +12,9 @@ S3Url = NewType("S3Url", str)
 
 ImageName = NewType("ImageName", str)
 
-class SingleCatImageInput(BaseModel):
+class SingleSubnetPocInput(BaseModel):
     """
-    User request model for generating a cat‑augmented image.
+    User request model for the subnet PoC.
 
     `image_s3_url` refers to the original
     background image stored on S3; `image_name` is a file name used in
@@ -29,12 +29,12 @@ class SingleCatImageInput(BaseModel):
 
 
 def make_subnet():
-    entry: RestEntryPoint[SingleCatImageInput] = RestEntryPoint(
+    entry: RestEntryPoint[SingleSubnetPocInput] = RestEntryPoint(
         path="/cat",
         port=8080,
-        user_data_model=SingleCatImageInput)
+        user_data_model=SingleSubnetPocInput)
 
-    stringify: Stringify[SingleCatImageInput] = Stringify()
+    stringify: Stringify[SingleSubnetPocInput] = Stringify()
 
     mining_task: UppercaseOrError = UppercaseOrError()
 

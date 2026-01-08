@@ -85,7 +85,7 @@
             <mxPoint x="650" y="160" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="130" parent="10" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#9A3412;fontColor=#7C2D12;" value="Registered Miners&#xa;`registered_miners(cat-images)`" vertex="1">
+        <mxCell id="130" parent="10" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#9A3412;fontColor=#7C2D12;" value="Registered Miners&#xa;`registered_miners(subnet-poc)`" vertex="1">
           <mxGeometry height="70" width="220" x="1340" y="210" as="geometry" />
         </mxCell>
         <mxCell id="506" edge="1" parent="10" source="123" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#9A3412;fontColor=#7C2D12;exitX=1.016;exitY=0.34;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="130" value="executor comms">
@@ -123,13 +123,13 @@
         <mxCell id="310" parent="300" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#334155;fontColor=#111827;" value="BlockBasedTrigger&#xa;(after_epoch_delay_blocks=15)" vertex="1">
           <mxGeometry height="60" width="220" x="40" y="60" as="geometry" />
         </mxCell>
-        <mxCell id="311" parent="300" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#F8FAFC,#003366);strokeColor=#334155;fontColor=#111827;" value="SetWeightsUsing&#xa;`CatImagesSubnet.compute_weights`" vertex="1">
+        <mxCell id="311" parent="300" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#F8FAFC,#003366);strokeColor=#334155;fontColor=#111827;" value="SetWeightsUsing&#xa;`SubnetPoc.compute_weights`" vertex="1">
           <mxGeometry height="60" width="260" x="300" y="60" as="geometry" />
         </mxCell>
         <mxCell id="500" edge="1" parent="1" source="100" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#111827;entryX=0;entryY=0.25;entryDx=0;entryDy=0;exitX=1;exitY=0.3333333333333333;exitDx=0;exitDy=0;exitPerimeter=0;" target="110" value="HTTP request">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="501" edge="1" parent="1" source="110" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#111827;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" target="111" value="SingleCatImageInput">
+        <mxCell id="501" edge="1" parent="1" source="110" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#111827;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" target="111" value="SingleSubnetPocInput">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="502" edge="1" parent="1" source="111" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#111827;" target="120" value="batched inputs">

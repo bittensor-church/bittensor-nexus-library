@@ -1,8 +1,8 @@
 [project]
-name = "cat-images-subnet"
+name = "subnet-poc"
 
 dynamic = ["version"]
-description = "A PoC subnet that adds pictures of cats to user-supplied images"
+description = "A PoC subnet"
 authors = [
     { name = "Reef", email = "reef@reef.sh" }
 ]
@@ -76,7 +76,7 @@ bittensor-nexus-lib = { path = "../nexus-template" }
 [tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
-include = ["cat_images_subnet"]
+include = ["subnet_poc"]
 useLibraryCodeForTypes = true
 reportMissingTypeStubs = "warning"
 reportUndefinedVariable = "error"
