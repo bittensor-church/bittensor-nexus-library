@@ -36,6 +36,18 @@ class DualSinkPreferred(Node):
         return NodeSources(sources={})
 
 
+def test_then_requires_targets() -> None:
+    flow = Flow.from_node(Source("start"))
+    with pytest.raises(AssertionError, match="expected continuation"):
+        flow.then()
+
+
+def test_then_rejects_mixed_positional_and_keyword() -> None:
+    flow = Flow.from_node(Source("start"))
+    with pytest.raises(AssertionError, match="either positional or keyword"):
+        flow.then(Sink("a"), ok=Sink("b"))
+
+
 def test_single_source_connects_to_single_sink() -> None:
     start = Source("start")
     end = Sink("end")
@@ -177,6 +189,44 @@ def test_positional_then_continues_from_single_flow_target_with_sources() -> Non
     assert flow.pipes[start] == {side_effect, transform.sink}
     assert flow.exit_sources.sources[SourceName("ok")] is transform.ok
     assert flow.exit_sources.sources[SourceName("error")] is transform.error
+
+
+def test_positional_then_connects_all_targets_and_continues() -> None:
+    start = Source("start")
+    main = Transform[str, str]("main")
+    side_effect = Sink("side-effect")
+    end = Sink("end")
+
+    flow = Flow.from_node(start).then(main, side_effect).then(ok=end)
+
+    assert flow.pipes[start] == {main.sink, side_effect}
+    assert flow.pipes[main.ok] == {end}
+    assert main.error not in flow.pipes
+    assert flow.exit_sources.sources == {}
+
+
+def test_positional_then_raises_when_multiple_targets_have_sources() -> None:
+    start = Source("start")
+    left = Transform[str, str]("left")
+    right = Transform[str, str]("right")
+
+    flow = Flow.from_node(start)
+    with pytest.raises(AssertionError, match="multiple continuation targets define exit sources"):
+        flow.then(left, right)
+
+
+def test_positional_then_absorbs_target_flow_pipes() -> None:
+    start = Source("start")
+    a = Transform[str, str]("a")
+    b = Transform[str, str]("b")
+    end = Sink("end")
+
+    subflow = Flow.from_node(a).then(b)
+    flow = Flow.from_node(start).then(subflow).then(ok=end)
+
+    assert flow.pipes[start] == {a.sink}
+    assert flow.pipes[a.ok] == {b.sink}
+    assert flow.pipes[b.ok] == {end}
 
 
 def test_self_loops_are_allowed() -> None:
