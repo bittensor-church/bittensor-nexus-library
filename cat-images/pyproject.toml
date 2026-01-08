@@ -1,8 +1,8 @@
 [project]
-name = "subnet-poc"
+name = "cat-images"
 
 dynamic = ["version"]
-description = "A PoC subnet"
+description = "A cat-images subnet"
 authors = [
     { name = "Jakub Zytka", email = "jakub.zytka@reef.pl" }
 ]
@@ -19,19 +19,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-#    "freezegun",
     "uv",
-#    "nox",
     "pytest",
     "pytest-asyncio>=1.0.0",
-#    "pytest-httpx",
-#    "turbobt>=0.2.2",
-#    "respx>=0.22.0",
-#    "polyfactory>=2.22.2",
 ]
 format = [
     "ruff",
-    "ty", 
+    "ty",
     "pyright",
     "freezegun",
     "sentry-sdk[litestar]"
@@ -45,11 +39,6 @@ target-version = "py314"
 select = [
     "E", "F", "I", "UP", "B", "TC005",
 ]
-#ignore = [
-#    "D100", "D105", "D107", "D200", "D202", "D203", "D205", "D212", "D400", "D401", "D415",
-#    "D101", "D102","D103", "D104",
-#    "E501", "B027", "B904", "B905",
-#]
 preview = true
 explicit-preview-rules = true
 extend-select = ["DOC501"]
@@ -71,12 +60,11 @@ documentation = "https://github.com/bittensor-church/nexus-poc#readme"
 
 [tool.uv.sources]
 bittensor-nexus-lib = { path = "../nexus-template" }
-# uv-specific settings can go here
 
 [tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
-include = ["subnet_poc"]
+include = ["cat_images"]
 useLibraryCodeForTypes = true
 reportMissingTypeStubs = "warning"
 reportUndefinedVariable = "error"

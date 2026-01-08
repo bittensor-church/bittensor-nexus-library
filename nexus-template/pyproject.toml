@@ -4,7 +4,7 @@ version = "0.1.0"
 
 description = "A PoC for the Nexus subnet template library"
 authors = [
-    { name = "Reef", email = "reef@reef.sh" }
+    { name = "Jakub Zytka", email = "jakub.zytka@reef.pl" }
 ]
 requires-python = ">=3.14"
 dependencies = [
