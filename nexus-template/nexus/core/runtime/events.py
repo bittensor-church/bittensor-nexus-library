@@ -2,14 +2,16 @@ import queue
 from dataclasses import dataclass
 from typing import Any
 
-from nexus.context_store import ContextId
+from .context_store_types import ContextId
 
 from ..dsl.nodes import Sink, Source
+
+# I somehow feel these should use deep copy on initialization to ~enforce immutability
 
 
 @dataclass
 class Event[T]:
-    ctx: ContextId
+    ctx_id: ContextId
     payload: T
 
 
@@ -31,12 +33,12 @@ _STOP_SINK = Sink[None]("stop-sink")
 
 class StopBusEvent(SendEvent[None]):
     def __init__(self) -> None:
-        super().__init__(ctx=_STOP_CTX, payload=None, source=_STOP_SOURCE)
+        super().__init__(ctx_id=_STOP_CTX, source=_STOP_SOURCE, payload=None)
 
 
 class StopActorEvent(ReceiveEvent[None]):
     def __init__(self) -> None:
-        super().__init__(ctx=_STOP_CTX, payload=None, target=_STOP_SINK)
+        super().__init__(ctx_id=_STOP_CTX, target=_STOP_SINK, payload=None)
 
 
 PipeToBus = queue.Queue[SendEvent[Any]]

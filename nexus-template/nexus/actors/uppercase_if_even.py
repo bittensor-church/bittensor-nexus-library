@@ -1,6 +1,6 @@
 from typing import override
 
-from nexus.context_store import ContextId
+from nexus.core.runtime.context_store import ContextId
 from nexus.core.dsl.nodes import Fork
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import ForkActor
@@ -8,8 +8,8 @@ from nexus.core.runtime.events import PipeToBus
 
 
 class UppercaseIfEven(Fork[str, str, str], ActorBuilder):
-    def __init__(self, gid_prefix: str | None = None) -> None:
-        super().__init__(gid_prefix=gid_prefix)
+    def __init__(self, _id: str) -> None:
+        super().__init__(_id)
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus) -> UppercaseIfEvenActor:

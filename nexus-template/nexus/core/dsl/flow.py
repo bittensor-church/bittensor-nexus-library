@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, NewType
 
-from .nodes import Node, NodeSinks, NodeSources, Pipes, Sink, Source, SourceName
+from .nodes import Node, NodeSinks, NodeSources, Pipes, Sink, Source, SourceName, SinkNode, SourceNode
 
 SinkPath = NewType("SinkPath", str)
 SourcePath = NewType("SourcePath", str)
@@ -50,7 +50,8 @@ SourcePath = NewType("SourcePath", str)
         # again, flow has some input (sink) and output (source); validation_task
         # has only one sink, so no need to specify exactly validation_task.sink
         flow(validation_task)
-        # validation_task has two sources; the 'ok' source is connected to two sinks: stringify and validation_side_effect;
+        # validation_task has two sources; the 'ok' source is connected to two sinks: stringify and 
+        # validation_side_effect;
         # if there was only one sink, we could just write .then(ok=stringify), but hI wonere there are two sinks,
         # so we put them in a list
         .then(ok=(stringify, validation_side_effect),
@@ -111,14 +112,14 @@ class Flow:
     sources: set[Source[Any]]
 
     def __init__(
-            self,
-            *,
-            entry_sinks: NodeSinks,
-            exit_sources: NodeSources,
-            pipes: Pipes | None = None,
-            nodes: set[Node] | None = None,
-            sinks: set[Sink[Any]] | None = None,
-            sources: set[Source[Any]] | None = None,
+        self,
+        *,
+        entry_sinks: NodeSinks,
+        exit_sources: NodeSources,
+        pipes: Pipes | None = None,
+        nodes: set[Node] | None = None,
+        sinks: set[Sink[Any]] | None = None,
+        sources: set[Source[Any]] | None = None,
     ) -> None:
         self.entry_sinks = entry_sinks
         self.exit_sources = exit_sources
@@ -128,7 +129,12 @@ class Flow:
         self.sources = sources or set()
 
     @classmethod
-    def from_node(cls, node: Node) -> Flow:
+    def from_node(cls, node: Node | Sink | Source) -> Flow:
+        match node:
+            case Sink() as s:
+                node = SinkNode(s)
+            case Source() as s:
+                node = SourceNode(s)
         sinks = node.sinks()
         sources = node.sources()
 
@@ -138,7 +144,7 @@ class Flow:
             pipes=Pipes(set),
             nodes={node},
             sinks=set(sinks.sinks.values()),
-            sources=set(sources.sources.values())
+            sources=set(sources.sources.values()),
         )
         return flow_object
 
@@ -147,8 +153,9 @@ class Flow:
         assert not targets or not routes, "expected continuation of the flow as either positional or keyword paramters"
 
         if targets:
-            assert self.exit_sources.default_source, \
+            assert self.exit_sources.default_source, (
                 f"No default exit source to connect the continuation to the provided sinks: exit_sources={self.exit_sources}"
+            )
 
             source: Source[Any] = self.exit_sources.default_source
 
@@ -156,15 +163,17 @@ class Flow:
 
             for target in targets:
                 target_flow = Flow._as_flow(target)
-                assert target_flow.entry_sinks.default_sink, \
+                assert target_flow.entry_sinks.default_sink, (
                     f"No default entry sink to connect the source to the provided flow: target_flow={target_flow}"
+                )
 
                 self._absorb(target_flow)
                 self._connect(source, target_flow.entry_sinks.default_sink)
 
                 if target_flow.exit_sources.sources:
-                    assert continuation_exit_sources is None, \
+                    assert continuation_exit_sources is None, (
                         f"multiple continuation targets define exit sources: {continuation_exit_sources} and {target_flow.exit_sources}"
+                    )
                     continuation_exit_sources = target_flow.exit_sources
 
             # continuation only if there is exactly one source among the target flows
@@ -174,16 +183,18 @@ class Flow:
         elif routes:
             for source_str, target in routes.items():
                 source_name = SourceName(source_str)
-                assert source_name in self.exit_sources.sources, \
+                assert source_name in self.exit_sources.sources, (
                     f"Unexpected connection from {source_name}; available sources: {self.exit_sources.sources}"
+                )
                 source = self.exit_sources.sources[source_name]
 
                 targets_to_connect: Iterable[Node | Flow] = list(target) if isinstance(target, Iterable) else [target]
 
                 for target_item in targets_to_connect:
                     target_flow = Flow._as_flow(target_item)
-                    assert target_flow.entry_sinks.default_sink, \
+                    assert target_flow.entry_sinks.default_sink, (
                         f"No default entry sink to connect the source to the provided flow: target_flow={target_flow}"
+                    )
 
                     self._absorb(target_flow)
                     self._connect(source, target_flow.entry_sinks.default_sink)

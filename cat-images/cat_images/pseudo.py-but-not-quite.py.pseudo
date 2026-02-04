@@ -7,15 +7,16 @@ defines domain‑specific data models and configures the mining and
 validation tasks, including request batching and one‑per‑miner sampling.
 """
 
-from dataclasses import dataclass
 from typing import List, Callable, NewType
 
+from nexus.core.dsl.flow import Flow
 from nexus_core import (
     NexusTask,
     BatchBuffer,
     RoundRobinRouter,
     RetryStrategy,
 )
+from pydantic import BaseModel
 
 # ---------------------------- Domain models --------------------------------
 
@@ -86,6 +87,9 @@ class CatImagesValidator:
     # buffer.
     user_requests_buffer: BatchBuffer[SingleCatImageInput] = BatchBuffer(name="", max_elements=8, max_age_seconds=123)
 
+    validation_executor: HttpExecutor = HttpExecutor(name="cat-validator", port=5678, execution=CatImagesValidator)
+
+
     # Mining task: from a batch of user inputs, create a batch of miner
     # payloads, choose a miner via round‑robin, and return a list of miner
     # results.  The generic parameters spell out the input/output types.
@@ -99,7 +103,7 @@ class CatImagesValidator:
 		retry_strategy=MaxAttempts(7),
         payload_creator=S3PresignUrlAdder( field="upload_url"),
         router=RoundRobinRouter(routes=registered_miners("cat-images")),
-        executor_communicator=AsyncHttpConnector(initial_timeout=10.0, total_timeout=30, listening_port=1234),
+        executor_communicator=AsyncHttpConnector(executor=validation_executor, initial_timeout=10.0, total_timeout=30, listening_port=1234),
     )
 
     # One‑per‑miner sampler to create validation batches.  It takes
@@ -128,22 +132,22 @@ class CatImagesValidator:
         executor_communicator=SyncHttpConnector(...),
     )
 
-    organic_flow: SubnetFlow = (
-        flow(rest_endpoint)
+    organic_flow: Flow = (
+        Flow.from_node(rest_endpoint)
             .then(user_requests_buffer)
             .then(mining_task)
             .then(
-                error=[
+                error=(
                     rest_endpoint,
                     some_other_side_effect
-                ],
-                ok=[
+                ),
+                ok=(
                     rest_endpoint,
                     flow(
                         one_per_miner_sampler
                             .then(validation_task)
-                    )],
-            )),
+                    )),
+            ))
 
     # you can do binds manually, but this looks so much more readable...
     weight_setting_flow: SubnetFlow = flow(

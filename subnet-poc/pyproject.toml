@@ -19,15 +19,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-#    "freezegun",
     "uv",
-#    "nox",
     "pytest",
     "pytest-asyncio>=1.0.0",
-#    "pytest-httpx",
-#    "turbobt>=0.2.2",
-#    "respx>=0.22.0",
-#    "polyfactory>=2.22.2",
 ]
 format = [
     "ruff",

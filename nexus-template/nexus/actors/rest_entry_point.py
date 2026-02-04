@@ -10,8 +10,8 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ValidationError
 
-from nexus.context_store import ContextId
-from nexus.core.dsl.nodes import HasGlobalId, Sink, Source
+from nexus.core.runtime.context_store import ContextId, Context
+from nexus.core.dsl.nodes import Sink, Source
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
 from nexus.logging_utils import get_logger
@@ -19,26 +19,22 @@ from nexus.logging_utils import get_logger
 logger: logging.Logger = get_logger(__name__)
 
 
-class RestEntryPoint[Model: BaseModel](HasGlobalId, ActorBuilder):
-    gid: str
+class RestEntryPoint[Model: BaseModel](ActorBuilder):
+    # id: ActorId
+    id: str
     source: Source[Model]
     sink: Sink[str]
     path: str
     port: int
     user_data_model: type[Model]
 
-    def __init__(self, *,
-                 gid_prefix: str | None = None,
-                 path: str,
-                 port: int,
-                 user_data_model: type[Model]
-                 ) -> None:
-        super().__init__(gid_prefix=gid_prefix)
+    def __init__(self, *, _id: str, path: str, port: int, user_data_model: type[Model]) -> None:
+        self.id = _id
         self.path = path if path.startswith("/") else f"/{path}"
         self.port = port
         self.user_data_model = user_data_model
-        self.source = Source(gid_prefix=f"{self.gid}-source")
-        self.sink = Sink(gid_prefix=f"{self.gid}-sink")
+        self.source = Source(f"{self.id}-source")
+        self.sink = Sink(f"{self.id}-sink")
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus) -> Actor:
@@ -49,10 +45,10 @@ class RestEntryPointActor[Model: BaseModel](Actor):
     _RESPONSE_TIMEOUT_S: float = 30.0
 
     def __init__(self, *, spec: RestEntryPoint[Model], pipe_to_bus: PipeToBus) -> None:
-        super().__init__(name=spec.gid, pipe_to_bus=pipe_to_bus)
+        super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus)
         self.spec = spec
 
-        self._pending_by_ctx_id: dict[str, queue.Queue[str]] = {}
+        self._pending_by_ctx_id: dict[ContextId, queue.Queue[str]] = {}
         self._pending_lock = threading.Lock()
 
         self._server: ThreadingHTTPServer | None = None
@@ -110,7 +106,7 @@ class RestEntryPointActor[Model: BaseModel](Actor):
         t = threading.Thread(
             target=server.serve_forever,
             daemon=True,
-            name=f"RestEntryPointHTTP-{self.spec.gid}",
+            name=f"RestEntryPointHTTP-{self.spec.id}",
         )
         t.start()
         self._server_thread = t
@@ -132,8 +128,8 @@ class RestEntryPointActor[Model: BaseModel](Actor):
         self._server = None
         self._server_thread = None
 
-    def _handle_response(self, event: ReceiveEvent[Any]) -> None:
-        ctx_id = event.ctx.id
+    def _handle_response(self, context: Context, event: ReceiveEvent[Any]) -> None:
+        ctx_id = context.id
         if not isinstance(event.payload, str):
             logger.error(f"RestEntryPoint expected str response, got {type(event.payload)!r} for ctx={ctx_id}")
             return
@@ -205,14 +201,14 @@ class RestEntryPointActor[Model: BaseModel](Actor):
             self._send_text(request, status=400, body="Invalid request body\n")
             return
 
-        ctx = ContextId(f"{self.spec.gid}:{uuid.uuid4().hex}")
+        ctx = ContextId(f"{self.spec.id}:{uuid.uuid4().hex}")
         response_queue: queue.Queue[str] = queue.Queue(maxsize=1)
 
         with self._pending_lock:
             self._pending_by_ctx_id[ctx.id] = response_queue
 
         try:
-            self.pipe_to_bus.put(SendEvent(ctx=ctx, source=self.spec.source, payload=model))
+            self.pipe_to_bus.put(SendEvent(ctx_id=ctx, source=self.spec.source, payload=model))
             try:
                 response = response_queue.get(timeout=self._RESPONSE_TIMEOUT_S)
             except queue.Empty:
