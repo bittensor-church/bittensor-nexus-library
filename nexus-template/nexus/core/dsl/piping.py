@@ -6,8 +6,9 @@ from .nodes import Pipes, Sink, Sinks, Source, Sources
 @dataclass
 class Piping:
     """
-        DSL for defining data flow connections between Sources and Sinks.
+    DSL for defining data flow connections between Sources and Sinks.
     """
+
     pipes: Pipes
     sources: Sources
     sinks: Sinks

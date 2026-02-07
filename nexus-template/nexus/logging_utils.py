@@ -13,10 +13,10 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def configure_default_logging(
-        level: int | str = logging.INFO,
-        stream: TextIO | None = None,
-        *,
-        force: bool = False,
+    level: int | str = logging.INFO,
+    stream: TextIO | None = None,
+    *,
+    force: bool = False,
 ) -> None:
     """Configure a sane default handler for quickstarts without affecting host apps."""
     if stream is None:

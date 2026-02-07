@@ -5,16 +5,17 @@ import traceback
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, NewType, TypeVar, override
+from typing import Any, NewType, TypeVar, override, Literal
 
 T = TypeVar("T")
 
-# globally unique IDs for Sources and Sinks, to be used to identify them in the system
+# globally unique IDs for Sources, Sinks and Actors, to be used to identify them in the system
+NodeId = NewType("NodeId", str)
 SourceId = NewType("SourceId", str)
 SinkId = NewType("SinkId", str)
 
 # locally unique IDs for Sources and Sinks, to be used within a context of a specific
-# contraption that owns them
+# contraption that owns them;
 SourceName = NewType("SourceName", str)
 SinkName = NewType("SinkName", str)
 
@@ -25,9 +26,9 @@ class NodeSources:
     default_source: Source[Any] | None = None
 
     def __post_init__(self) -> None:
-        assert self.default_source is None or self.default_source in self.sources.values(), \
-            f"primary_source {self.default_source!r} must be None or a key in sources; " \
-            f"available: {list(self.sources)}"
+        assert self.default_source is None or self.default_source in self.sources.values(), (
+            f"primary_source {self.default_source!r} must be None or a key in sources; available: {list(self.sources)}"
+        )
         if len(self.sources) == 1:
             self.default_source = next(iter(self.sources.values()))
 
@@ -41,17 +42,22 @@ class NodeSinks:
     default_sink: Sink[Any] | None = None
 
     def __post_init__(self) -> None:
-        assert self.default_sink is None or self.default_sink in self.sinks, \
-            f"primary_sink {self.default_sink!r} must be None or a key in sinks; " \
-            f"available: {list(self.sinks.keys())}"
+        assert self.default_sink is None or self.default_sink in self.sinks, (
+            f"primary_sink {self.default_sink!r} must be None or a key in sinks; available: {list(self.sinks.keys())}"
+        )
         if len(self.sinks) == 1:
             self.default_sink = next(iter(self.sinks.values()))
 
 
 class Node(ABC):
     """
-        any element of the processing graph is a Node
+    any element of the processing graph is a Node
     """
+
+    id: NodeId
+
+    def __init__(self, _id: str):
+        self.id = NodeId(_id)
 
     @abstractmethod
     def sinks(self) -> NodeSinks:
@@ -62,41 +68,75 @@ class Node(ABC):
         pass
 
 
-class HasGlobalId:
-    id_counter: itertools.count[int] = itertools.count()
-    global_ids: dict[str, traceback.StackSummary] = {}  # to track where IDs were created
+# class HasGlobalId[T]:
+#     id_counter: itertools.count[int] = itertools.count()
+#     global_ids: dict[GlobalId, traceback.StackSummary] = {}  # to track where IDs were created
+#
+#     gid: GlobalId
+#
+#     def __init__(self, gid_prefix: str | None = None) -> None:
+#         super().__init__()
+#         self.gid = GlobalId(f'{gid_prefix or self.__class__.__name__}-{next(HasGlobalId.id_counter)}')
+#         assert self.gid not in HasGlobalId.global_ids, \
+#             f"Global ID collision: {self.gid} created previously in\n" \
+#             f"{''.join(traceback.format_list(HasGlobalId.global_ids[self.gid]))}"
+#         HasGlobalId.global_ids[self.gid] = traceback.extract_stack()
+#
+# type SourceId = HasGlobalId[Literal["Source"]]
+# type SinkId = HasGlobalId[Literal["Sink"]]
+# type ActorId = HasGlobalId[Literal["Actor"]]
 
-    gid: str
 
-    def __init__(self, gid_prefix: str | None = None) -> None:
-        super().__init__()
-        self.gid = f'{gid_prefix or self.__class__.__name__}-{next(HasGlobalId.id_counter)}'
-        assert self.gid not in HasGlobalId.global_ids, \
-            f"Global ID collision: {self.gid} created previously in\n" \
-            f"{''.join(traceback.format_list(HasGlobalId.global_ids[self.gid]))}"
-        HasGlobalId.global_ids[self.gid] = traceback.extract_stack()
-
-
-class Source[T](HasGlobalId, Node):
+class Source[T]:
     """
-        A logical endpoint for data production.
+    A logical endpoint for data production.
     """
+
+    id: SourceId
+
+    def __init__(self, _id: str):
+        self.id = SourceId(_id)
+
+
+class SourceNode[T](Node):
+    """
+    A Node wrapper for a Source
+    """
+
+    source: Source[T]
+
+    def __init__(self, source: Source[T]):
+        super().__init__(source.id)
+        self.source = source
 
     @override
     def sources(self) -> NodeSources:
-        return NodeSources(sources={
-            SourceName("self"): self
-        })
+        return NodeSources(sources={SourceName("self"): self.source})
 
     @override
     def sinks(self) -> NodeSinks:
         return NodeSinks(sinks={})
 
 
-class Sink[T](HasGlobalId, Node):
+class Sink[T]:
     """
-        A logical endpoint for data consumption.
+    A logical endpoint for data consumption.
     """
+
+    id: SinkId
+
+    def __init__(self, _id: str):
+        self.id = SinkId(_id)
+
+
+class SinkNode[T](Node):
+    """
+    A Node wrapper for a Sink
+    """
+
+    def __init__(self, sink: Sink[T]):
+        super().__init__(sink.id)
+        self.sink = sink
 
     @override
     def sources(self) -> NodeSources:
@@ -104,41 +144,43 @@ class Sink[T](HasGlobalId, Node):
 
     @override
     def sinks(self) -> NodeSinks:
-        return NodeSinks({
-            SinkName("self"): self
-        })
+        return NodeSinks({SinkName("self"): self.sink})
 
 
-class Fork[From, ToLeft, ToRight](HasGlobalId, Node):
+class Fork[From, ToLeft, ToRight](Node):
     """
-        A logical data processing unit that forks data from a Sink to two Sources.
+    A logical data processing unit that forks data from a Sink to two Sources.
     """
 
     sink: Sink[From]
     left: Source[ToLeft]
     right: Source[ToRight]
 
-    def __init__(self, gid_prefix: str | None = None):
-        super().__init__(gid_prefix=gid_prefix)
-        self.sink = Sink[From](gid_prefix=f"{self.gid}-sink")
-        self.left = Source[ToLeft](gid_prefix=f"{self.gid}-left-source")
-        self.right = Source[ToRight](gid_prefix=f"{self.gid}-right-source")
+    def __init__(self, _id: str):
+        super().__init__(_id)
+        self.sink = Sink[From](f"{_id}-sink")
+        self.left = Source[ToLeft](f"{_id}-left-source")
+        self.right = Source[ToRight](f"{_id}-right-source")
 
     @override
     def sinks(self) -> NodeSinks:
-        return NodeSinks(sinks={
-            SinkName("sink"): self.sink,
-        })
+        return NodeSinks(
+            sinks={
+                SinkName("sink"): self.sink,
+            }
+        )
 
     @override
     def sources(self) -> NodeSources:
-        return NodeSources(sources={
-            SourceName("left"): self.left,
-            SourceName("right"): self.right,
-        })
+        return NodeSources(
+            sources={
+                SourceName("left"): self.left,
+                SourceName("right"): self.right,
+            }
+        )
 
 
-class Transform[From, To](Fork[From, To, Exception], Node):
+class Transform[From, To](Fork[From, To, Exception]):
     # convenient aliases
     ok: Source[To]
     error: Source[Exception]
@@ -148,8 +190,8 @@ class Transform[From, To](Fork[From, To, Exception], Node):
         Transform is a Fork really, but for the time being it's clearer to have it as a separate concept.
     """
 
-    def __init__(self, gid_prefix: str | None = None):
-        super().__init__(gid_prefix=gid_prefix)
+    def __init__(self, _id: str):
+        super().__init__(_id)
 
         self.ok = self.left
         self.error = self.right
@@ -161,15 +203,17 @@ class Transform[From, To](Fork[From, To, Exception], Node):
                 SourceName("ok"): self.ok,
                 SourceName("error"): self.error,
             },
-            default_source=self.ok)
+            default_source=self.ok,
+        )
 
 
-class DoubleTransform[InputFrom, InputTo, OutputFrom, OutputTo](HasGlobalId, Node):
+class DoubleTransform[InputFrom, InputTo, OutputFrom, OutputTo](Node):
     """
-        A logical data processing unit that is a two-way Transform
-        - the first Transform converts InputFrom to InputTo
-        - the second Transform converts InputTo to OutputTo
+    A logical data processing unit that is a two-way Transform
+    - the first Transform converts InputFrom to InputTo
+    - the second Transform converts InputTo to OutputTo
     """
+
     input_transform: Transform[InputFrom, InputTo]
     output_transform: Transform[OutputFrom, OutputTo]
 
@@ -182,10 +226,10 @@ class DoubleTransform[InputFrom, InputTo, OutputFrom, OutputTo](HasGlobalId, Nod
     output_ok: Source[OutputTo]
     output_error: Source[Exception]
 
-    def __init__(self, gid_prefix: str | None = None):
-        super().__init__(gid_prefix=gid_prefix)
-        self.input_transform = Transform[InputFrom, InputTo](gid_prefix=f"{self.gid}-input-transform")
-        self.output_transform = Transform[OutputFrom, OutputTo](gid_prefix=f"{self.gid}-output-transform")
+    def __init__(self, _id: str):
+        super().__init__(_id)
+        self.input_transform = Transform[InputFrom, InputTo](f"{_id}-input-transform")
+        self.output_transform = Transform[OutputFrom, OutputTo](f"{_id}-output-transform")
 
         self.input_sink = self.input_transform.sink
         self.input_ok = self.input_transform.ok

@@ -3,12 +3,14 @@ from threading import Thread
 
 from tenacity import RetryError, retry, stop_after_delay, wait_fixed
 
+from nexus.core.runtime.context_store import ContextStore, InMemoryContextStorePersistence
+
 
 def wait_until(condition, *, timeout=1.0, interval=0.05):
     """
-        I wasn't able to find this as a library function :shrug:
+    I wasn't able to find this as a library function :shrug:
 
-        Wait until the given condition callable returns True, or raise an AssertionError if the timeout is reached.
+    Wait until the given condition callable returns True, or raise an AssertionError if the timeout is reached.
     """  # noqa: DOC501
 
     @retry(stop=stop_after_delay(timeout), wait=wait_fixed(interval), reraise=True)
@@ -30,3 +32,8 @@ class Jobs:
         for job in self.jobs:
             job.join(timeout)
             assert not job.is_alive()
+
+
+def empty_context_store() -> ContextStore:
+    persistence = InMemoryContextStorePersistence()
+    return ContextStore.recover_from(persistence).context_store
