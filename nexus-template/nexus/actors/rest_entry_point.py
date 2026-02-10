@@ -3,16 +3,16 @@ from __future__ import annotations
 import logging
 import queue
 import threading
-import uuid
+from collections.abc import Iterable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, override
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ValidationError
 
-from nexus.core.runtime.context_store import ContextId, Context
 from nexus.core.dsl.nodes import Sink, Source
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus.core.runtime.context_store import ContextId, Context, ContextStore
 from nexus.core.runtime.events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
 from nexus.logging_utils import get_logger
 
@@ -37,19 +37,20 @@ class RestEntryPoint[Model: BaseModel](ActorBuilder):
         self.sink = Sink(f"{self.id}-sink")
 
     @override
-    def build_actor(self, *, pipe_to_bus: PipeToBus) -> Actor:
-        return RestEntryPointActor(spec=self, pipe_to_bus=pipe_to_bus)
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
+        return RestEntryPointActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
 class RestEntryPointActor[Model: BaseModel](Actor):
     _RESPONSE_TIMEOUT_S: float = 30.0
 
-    def __init__(self, *, spec: RestEntryPoint[Model], pipe_to_bus: PipeToBus) -> None:
-        super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus)
+    def __init__(self, *, spec: RestEntryPoint[Model], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
+        super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.spec = spec
 
         self._pending_by_ctx_id: dict[ContextId, queue.Queue[str]] = {}
         self._pending_lock = threading.Lock()
+        self._pipe_to_bus = pipe_to_bus
 
         self._server: ThreadingHTTPServer | None = None
         self._server_thread: threading.Thread | None = None
@@ -83,7 +84,9 @@ class RestEntryPointActor[Model: BaseModel](Actor):
                     continue
 
                 try:
-                    handler(event)
+                    context: Context = self.context_store.get_context(event.ctx_id)
+                    for send_event in handler(context, event):
+                        self._pipe_to_bus.put(send_event)
                 except Exception as exc:
                     logger.error(
                         f"Error while handling event {event} in actor {self.actor_id} for target {event.target}",
@@ -128,23 +131,24 @@ class RestEntryPointActor[Model: BaseModel](Actor):
         self._server = None
         self._server_thread = None
 
-    def _handle_response(self, context: Context, event: ReceiveEvent[Any]) -> None:
+    def _handle_response(self, context: Context, event: ReceiveEvent[Any]) -> Iterable[SendEvent[Any]]:
         ctx_id = context.id
         if not isinstance(event.payload, str):
             logger.error(f"RestEntryPoint expected str response, got {type(event.payload)!r} for ctx={ctx_id}")
-            return
+            return ()
 
         with self._pending_lock:
             response_queue = self._pending_by_ctx_id.get(ctx_id)
 
         if response_queue is None:
             logger.warning(f"No pending HTTP request found for ctx={ctx_id}; dropping response.")
-            return
+            return ()
 
         try:
             response_queue.put_nowait(event.payload)
         except queue.Full:
             logger.warning(f"Multiple responses received for ctx={ctx_id}; dropping subsequent response.")
+        return ()
 
     def _make_http_handler(self) -> type[BaseHTTPRequestHandler]:
         actor = self
@@ -201,14 +205,15 @@ class RestEntryPointActor[Model: BaseModel](Actor):
             self._send_text(request, status=400, body="Invalid request body\n")
             return
 
-        ctx = ContextId(f"{self.spec.id}:{uuid.uuid4().hex}")
+        ctx = self.context_store.create_context()
+        ctx_id = ctx.id
         response_queue: queue.Queue[str] = queue.Queue(maxsize=1)
 
         with self._pending_lock:
-            self._pending_by_ctx_id[ctx.id] = response_queue
+            self._pending_by_ctx_id[ctx_id] = response_queue
 
         try:
-            self.pipe_to_bus.put(SendEvent(ctx_id=ctx, source=self.spec.source, payload=model))
+            self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.spec.source, payload=model))
             try:
                 response = response_queue.get(timeout=self._RESPONSE_TIMEOUT_S)
             except queue.Empty:
@@ -218,7 +223,7 @@ class RestEntryPointActor[Model: BaseModel](Actor):
             self._send_text(request, status=200, body=response)
         finally:
             with self._pending_lock:
-                self._pending_by_ctx_id.pop(ctx.id, None)
+                self._pending_by_ctx_id.pop(ctx_id, None)
 
     @staticmethod
     def _send_text(request: BaseHTTPRequestHandler, *, status: int, body: str) -> None:
