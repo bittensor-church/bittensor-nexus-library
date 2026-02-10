@@ -4,6 +4,7 @@ import logging
 import queue
 from typing import Any, override
 
+from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import DoubleTransform, Fork, Sink, Source, Transform
 from nexus.core.dsl.piping import Piping
 from nexus.core.runtime.actor import Actor, EventHandler
@@ -12,8 +13,8 @@ from nexus.core.runtime.context_store import ContextId, ContextStore, Context
 from nexus.core.runtime.event_bus import EventBus
 from nexus.core.runtime.events import Event, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent, \
     MessagesToSend
-from stringify import Stringify, StringifyActor
-from uppercase_or_error import UppercaseOrError, UppercaseOrErrorActor, EvenSucks
+from nexus.actors.stringify import Stringify, StringifyActor
+from nexus.actors.uppercase_or_error import UppercaseOrError, UppercaseOrErrorActor, EvenSucks
 from utils import Jobs, wait_until, empty_context_store
 
 
@@ -281,7 +282,7 @@ def test_event_bus_preserves_context_id():
     collector = CollectorActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     piping = Piping()
-    piping.connect(source, collector.sink)
+    piping.add_flow(Flow.from_node(source).then(collector.sink))
 
     event_bus = EventBus(
         connections=piping.pipes,
@@ -313,8 +314,7 @@ def test_event_bus_routes_events_to_configured_sinks():
     collector_b = CollectorActor(name="collector-b", pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     piping = Piping()
-    piping.connect(broadcast, collector_a.sink)
-    piping.connect(broadcast, collector_b.sink)
+    piping.add_flow(Flow.from_node(broadcast).then(collector_a.sink, collector_b.sink))
 
     event_bus = EventBus(
         connections=piping.pipes,
@@ -347,7 +347,7 @@ def test_event_bus_appends_sent_messages_to_context_store():
     collector = CollectorActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     piping = Piping()
-    piping.connect(source, collector.sink)
+    piping.add_flow(Flow.from_node(source).then(collector.sink))
 
     event_bus = EventBus(
         connections=piping.pipes,
@@ -409,8 +409,8 @@ def test_actor_error_does_not_stop_event_bus(caplog: Any):
     collector = CollectorActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     piping = Piping()
-    piping.connect(source, flaky.sink)
-    piping.connect(flaky.source, collector.sink)
+    piping.add_flow(Flow.from_node(source).then(flaky.sink))
+    piping.add_flow(Flow.from_node(flaky.source).then(collector.sink))
 
     event_bus = EventBus(
         connections=piping.pipes,

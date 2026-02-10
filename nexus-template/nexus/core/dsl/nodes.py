@@ -68,25 +68,6 @@ class Node(ABC):
         pass
 
 
-# class HasGlobalId[T]:
-#     id_counter: itertools.count[int] = itertools.count()
-#     global_ids: dict[GlobalId, traceback.StackSummary] = {}  # to track where IDs were created
-#
-#     gid: GlobalId
-#
-#     def __init__(self, gid_prefix: str | None = None) -> None:
-#         super().__init__()
-#         self.gid = GlobalId(f'{gid_prefix or self.__class__.__name__}-{next(HasGlobalId.id_counter)}')
-#         assert self.gid not in HasGlobalId.global_ids, \
-#             f"Global ID collision: {self.gid} created previously in\n" \
-#             f"{''.join(traceback.format_list(HasGlobalId.global_ids[self.gid]))}"
-#         HasGlobalId.global_ids[self.gid] = traceback.extract_stack()
-#
-# type SourceId = HasGlobalId[Literal["Source"]]
-# type SinkId = HasGlobalId[Literal["Sink"]]
-# type ActorId = HasGlobalId[Literal["Actor"]]
-
-
 class Source[T]:
     """
     A logical endpoint for data production.

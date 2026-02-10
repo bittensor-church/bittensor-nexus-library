@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from .nodes import Pipes, Sink, Sinks, Source, Sources
+from .flow import Flow
+from .nodes import Pipes, Sinks, Sources
 
 
 @dataclass
@@ -15,6 +16,10 @@ class Piping:
 
     def __init__(self):
         self.pipes = Pipes(set)
+        self.sources = set()
+        self.sinks = set()
 
-    def connect[T](self, source: Source[T], sink: Sink[T]) -> None:
-        self.pipes[source].add(sink)
+    def add_flow(self, flow: Flow):
+        self.pipes.update(flow.pipes)
+        self.sources.update(flow.sources)
+        self.sinks.update(flow.sinks)
