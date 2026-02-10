@@ -2,6 +2,7 @@
 
 import logging
 import queue
+from collections.abc import Iterable
 from typing import Any, override
 
 from nexus.core.dsl.nodes import DoubleTransform, Fork, Sink, Source, Transform
@@ -30,11 +31,13 @@ class DualSinkActor(Actor):
             self.sink_right: self.handle_right,
         }
 
-    def handle_left(self, context: Context, receive_event: ReceiveEvent) -> None:
+    def handle_left(self, context: Context, receive_event: ReceiveEvent) -> Iterable[SendEvent[Any]]:
         self.handled_left.append(receive_event.payload)
+        return ()
 
-    def handle_right(self, context: Context, receive_event: ReceiveEvent) -> None:
+    def handle_right(self, context: Context, receive_event: ReceiveEvent) -> Iterable[SendEvent[Any]]:
         self.handled_right.append(receive_event.payload)
+        return ()
 
 
 class CollectorActor(Actor):
@@ -46,8 +49,9 @@ class CollectorActor(Actor):
     def handlers(self):
         return {self.sink: self._handle}
 
-    def _handle(self, context: Context, event: ReceiveEvent) -> None:
+    def _handle(self, context: Context, event: ReceiveEvent) -> Iterable[SendEvent[Any]]:
         self.received_events.append(event)
+        return ()
 
 
 class FaultyTransformActor(TransformActor):
@@ -70,11 +74,11 @@ class FlakyActor(Actor):
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {self.sink: self.handle}
 
-    def handle(self, context: Context, event: ReceiveEvent[Any]) -> None:
+    def handle(self, context: Context, event: ReceiveEvent[Any]) -> Iterable[SendEvent[Any]]:
         if event.payload == "boom":
             raise ValueError("flaky failure")
         else:
-            self.pipe_to_bus.put(SendEvent(ctx_id=event.ctx_id, source=self.source, payload=f"ok-{event.payload}"))
+            return (SendEvent(ctx_id=event.ctx_id, source=self.source, payload=f"ok-{event.payload}"),)
 
 
 class BranchingForkActor(ForkActor[str, str, str]):

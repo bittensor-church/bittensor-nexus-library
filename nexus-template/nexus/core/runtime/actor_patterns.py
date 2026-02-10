@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any, cast, override
 
 from .actor import Actor, EventHandler
@@ -21,14 +21,14 @@ def _fork_handler[From, ToLeft, ToRight](
     process: Callable[[Context, From], tuple[ToLeft, None] | tuple[None, ToRight]],
     left: Source[ToLeft],
     right: Source[ToRight],
-    pipe_to_bus: PipeToBus,
-) -> None:
-    result = process(ctx, event.payload)
-    match result:
-        case (left_payload, None):
-            pipe_to_bus.put(SendEvent(ctx_id=event.ctx_id, source=left, payload=left_payload))
-        case (None, right_payload):
-            pipe_to_bus.put(SendEvent(ctx_id=event.ctx_id, source=right, payload=right_payload))
+) -> tuple[SendEvent[ToLeft] | SendEvent[ToRight]]:
+    left_payload, right_payload = process(ctx, event.payload)
+    if right_payload is None:
+        assert left_payload is not None
+        return (SendEvent(ctx_id=event.ctx_id, source=left, payload=left_payload),)
+    if left_payload is None:
+        return (SendEvent(ctx_id=event.ctx_id, source=right, payload=right_payload),)
+    raise AssertionError(f"Unexpected fork handler output for event {event}: {(left_payload, right_payload)}")
 
 
 class ConsumerActor[From](Actor, ABC):
@@ -40,9 +40,10 @@ class ConsumerActor[From](Actor, ABC):
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {self.spec: self.handle}
 
-    def handle(self, ctx: Context, event: ReceiveEvent[Any]) -> None:
+    def handle(self, ctx: Context, event: ReceiveEvent[Any]) -> Iterable[SendEvent[Any]]:
         assert event.target == self.spec
-        return self._consume(ctx, event.payload)
+        self._consume(ctx, event.payload)
+        return ()
 
     @abstractmethod
     def _consume(self, ctx: Context, payload: From) -> None:
@@ -58,9 +59,9 @@ class ForkActor[From, ToLeft, ToRight](Actor, ABC):
     def handlers(self) -> dict[Sink[From], EventHandler]:
         return {self.spec.sink: self.handle}
 
-    def handle(self, ctx: Context, event: ReceiveEvent[From]) -> None:
+    def handle(self, ctx: Context, event: ReceiveEvent[From]) -> Iterable[SendEvent[Any]]:
         assert event.target == self.spec.sink
-        return _fork_handler(ctx, event, self._process, self.spec.left, self.spec.right, self.pipe_to_bus)
+        return _fork_handler(ctx, event, self._process, self.spec.left, self.spec.right)
 
     @abstractmethod
     def _process(self, ctx: Context, payload: From) -> tuple[ToLeft, None] | tuple[None, ToRight]:
@@ -111,7 +112,7 @@ class DoubleTransformActor[InputFrom, InputTo, OutputFrom, OutputTo](Actor, ABC)
             self.output_spec.sink: lambda ctx, event: self.handle(DoubleTransformActor.Output(), ctx, event),
         }
 
-    def handle(self, pipe: Input | Output, ctx: Context, event: ReceiveEvent[Any]) -> None:
+    def handle(self, pipe: Input | Output, ctx: Context, event: ReceiveEvent[Any]) -> Iterable[SendEvent[Any]]:
         match pipe:
             case DoubleTransformActor.Input():
                 assert event.target == self.input_spec.sink
@@ -121,7 +122,6 @@ class DoubleTransformActor[InputFrom, InputTo, OutputFrom, OutputTo](Actor, ABC)
                     lambda _ctx, payload: _safe_invoke(lambda: self._transform_input(_ctx, payload)),
                     self.input_spec.ok,
                     self.input_spec.error,
-                    self.pipe_to_bus,
                 )
             case DoubleTransformActor.Output():
                 assert event.target == self.output_spec.sink
@@ -131,7 +131,6 @@ class DoubleTransformActor[InputFrom, InputTo, OutputFrom, OutputTo](Actor, ABC)
                     lambda _ctx, payload: _safe_invoke(lambda: self._transform_output(_ctx, payload)),
                     self.output_spec.ok,
                     self.output_spec.error,
-                    self.pipe_to_bus,
                 )
 
     @abstractmethod

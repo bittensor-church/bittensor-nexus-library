@@ -1,6 +1,6 @@
 from typing import override
 
-from nexus.core.runtime.context_store import ContextId
+from nexus.core.runtime.context_store import ContextId, ContextStore
 from nexus.core.dsl.nodes import DoubleTransform
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import DoubleTransformActor
@@ -12,14 +12,22 @@ class UppercaseInputLowercaseOutput(DoubleTransform[str, str, str, str], ActorBu
         super().__init__(_id)
 
     @override
-    def build_actor(self, *, pipe_to_bus: PipeToBus) -> UppercaseInputLowercaseOutputActor:
-        return UppercaseInputLowercaseOutputActor(spec=self, pipe_to_bus=pipe_to_bus)
+    def build_actor(
+        self, *, pipe_to_bus: PipeToBus, context_store: ContextStore
+    ) -> UppercaseInputLowercaseOutputActor:
+        return UppercaseInputLowercaseOutputActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
 class UppercaseInputLowercaseOutputActor(DoubleTransformActor[str, str, str, str]):
-    def __init__(self, *, spec: UppercaseInputLowercaseOutput, pipe_to_bus: PipeToBus) -> None:
+    def __init__(
+        self, *, spec: UppercaseInputLowercaseOutput, pipe_to_bus: PipeToBus, context_store: ContextStore
+    ) -> None:
         super().__init__(
-            name=spec.id, input_spec=spec.input_transform, output_spec=spec.output_transform, pipe_to_bus=pipe_to_bus
+            name=spec.id,
+            input_spec=spec.input_transform,
+            output_spec=spec.output_transform,
+            pipe_to_bus=pipe_to_bus,
+            context_store=context_store,
         )
 
     @override

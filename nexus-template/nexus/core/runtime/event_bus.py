@@ -26,7 +26,7 @@ class EventBus:
         self.input_pipe = input_pipe
         self.context_store = context_store
         for actor in actors:
-            assert actor.pipe_to_bus is self.input_pipe, (
+            assert actor._Actor__pipe_to_bus is self.input_pipe, (
                 f"Actor {actor.actor_id} pipe_to_bus does not match EventBus input_pipe."
             )
 
