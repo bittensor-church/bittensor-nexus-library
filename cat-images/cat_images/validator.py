@@ -1,10 +1,13 @@
 from typing import NewType
 
+from nexus.actors.uppercase_or_error import UppercaseOrError
+
+from nexus.actors.stringify import Stringify
+
 from nexus.actors import (
     RestEntryPoint,
-    Stringify,
-    UppercaseOrError,
 )
+from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.piping import Piping
 from pydantic import BaseModel
 
@@ -26,22 +29,29 @@ class SingleCatImageInput(BaseModel):
 
 def make_subnet():
     entry: RestEntryPoint[SingleCatImageInput] = RestEntryPoint(
+        _id="cat-images-user-requests",
         path="/cat-images",
         port=8081,
         user_data_model=SingleCatImageInput,
     )
 
-    stringify: Stringify[SingleCatImageInput] = Stringify()
-    mining_task: UppercaseOrError = UppercaseOrError()
+    stringify: Stringify[SingleCatImageInput] = Stringify("stringify-user-request")
+    mining_task: UppercaseOrError = UppercaseOrError("simulate-mining-task-that-can-succeed-or-fail")
 
-    stringify_error: Stringify[Exception] = Stringify()
+    stringify_error: Stringify[Exception] = Stringify("stringify-error")
 
-    piping = Piping()
-    piping.connect(entry.source, stringify.sink)
-    piping.connect(stringify.ok, mining_task.sink)
-    piping.connect(mining_task.ok, entry.sink)
-    piping.connect(mining_task.error, stringify_error.sink)
-    piping.connect(stringify_error.ok, entry.sink)
+    subnet_flow: Flow = (
+        Flow.from_node(entry)
+        .then(stringify)
+        .then(mining_task)
+        .then(
+            ok=entry,
+            error=Flow.from_node(stringify_error).then(entry)
+        )
+    )
+
+    piping: Piping = Piping()
+    piping.add_flow(subnet_flow)
 
     return piping, [entry, stringify, mining_task, stringify_error]
 
