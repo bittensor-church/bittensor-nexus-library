@@ -175,6 +175,14 @@ class Context:
 class ContextStore:
     """
     Stores and manages contexts and their associated log entries.
+
+    Each context is associated with a linear sequence of log entries that represent the history
+    of that context, including its creation, messages sent, user data changes, etc.
+
+    Multiple context can have parent-children relationships. When a context is created with parent contexts,
+    a log entry is appended to each parent context indicating the creation of the child context. Also,
+    the child context is initialized with a log entry that indicates its parent contexts.
+    This allows us to reconstruct the context tree and the relationships between contexts during recovery.
     """
 
     __persistence: ContextStorePersistence

@@ -42,25 +42,25 @@ class Actor(ABC):
 
     def _loop(self) -> None:
         while True:
-            event: ReceiveEvent[Any] = self.pipe_from_bus.get()
-            events_produced_by_the_handler = ()
-            if isinstance(event, StopActorEvent):
+            event_to_handle: ReceiveEvent[Any] = self.pipe_from_bus.get()
+            events_produced_by_the_handler: tuple[SendEvent[Any], ...] = ()
+            if isinstance(event_to_handle, StopActorEvent):
                 logger.info(f"Stop event received in actor: {self.actor_id}; stopping loop.")
                 self.pipe_from_bus.task_done()
                 break
             else:
-                handler: EventHandler | None = self.handlers().get(event.target, None)
+                handler: EventHandler | None = self.handlers().get(event_to_handle.target, None)
                 if handler:
                     try:
-                        with self.context_store.get_context(event.ctx_id) as context:
-                            events_produced_by_the_handler = handler(context, event)
+                        with self.context_store.get_context(event_to_handle.ctx_id) as context:
+                            events_produced_by_the_handler = handler(context, event_to_handle)
                     except Exception as exc:
                         logger.error(
-                            f"Error while handling event {event} in actor {self.actor_id} for target {event.target}",
+                            f"Error while handling event {event_to_handle} in actor {self.actor_id} for target {event_to_handle.target}",
                             exc_info=exc,
                         )
                 else:
-                    logger.error(f"No handler found for sink: {event.target} in actor: {self.actor_id}")
+                    logger.error(f"No handler found for sink: {event_to_handle.target} in actor: {self.actor_id}")
 
                 for event_to_send in events_produced_by_the_handler:
                     self.__pipe_to_bus.put(event_to_send)
