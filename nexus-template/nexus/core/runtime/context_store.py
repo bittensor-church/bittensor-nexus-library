@@ -1,5 +1,6 @@
 import copy
 import datetime
+import logging
 import threading
 import uuid
 from abc import ABC, abstractmethod
@@ -23,9 +24,12 @@ from .context_store_types import (
     StepIdx,
 )
 from ..dsl.nodes import Source
+from ... import get_logger
 
 type LastMessages = dict[ContextId, MessageSent]
 
+
+logger: logging.Logger = get_logger(__name__)
 
 class ContextStorePersistence(ABC):
     @abstractmethod
@@ -88,11 +92,20 @@ class ThreadContextStoreLocks(ContextStoreLocks):
         if context_lock is None:
             raise InvalidContextIdException(f"Context lock for {ctx} not found")
 
-        context_lock.acquire()
+        # try-lock; it should succeed immediately if the framework is correctly ensuring that there
+        # is no concurrent processing of the same context.
+        # We use a try-lock here to pro-actively detect any bugs in the framework that may lead to
+        # concurrent processing of the same context, deadlocks etc.
+        acquired = context_lock.acquire(blocking=False)
+        if not acquired:
+            logger.error(f"Context {ctx} is already locked?; this This is unexpected and may suggest a bug. Attempting to acquire lock in a blocking way...")
+            context_lock.acquire()
         try:
+            logger.info(f"Context {ctx} locked for processing.")
             yield
         finally:
             context_lock.release()
+            logger.info(f"Context {ctx} released from processing.")
 
 
 @dataclass(frozen=True)
@@ -209,6 +222,8 @@ class ContextStore:
     Each context is associated with a linear sequence of log entries that represent the history
     of that context, including its creation, messages sent, user data changes, etc.
 
+    A context log always starts with a ContextCreated entry and ends with a ContextCompleted entry.
+
     A context can scatter processing across multiple contexts by creating child contexts (e.g. consider
     a use case where a child context is created to execute validation, and another child context continues
     to return a response to the user;
@@ -228,6 +243,29 @@ class ContextStore:
 
     This allows us to reconstruct the context tree and the relationships between contexts during
     recovery or audit.
+
+    A Context must be "owned" for processing. For that purpose ContextStoreLocks are used to
+    ensure mutual exclusion on contexts during processing, and to prevent concurrent modifications
+    to the same context.
+    These lock should NOT be strictly necessary as the framework is supposed to make sure
+    there can not be concurrent processing of the same context. They are an extra safety
+    measure to prevent data corruption and to pro-actively signal any bugs in the framework
+    that may lead to concurrent processing of the same context.
+
+    Context ownership rules:
+    - To create a new context, you must have ownership of all parent contexts (if any).
+    - To access an existing context, you must have ownership of that context.
+    - Currently, ownership is automatically acquired and released for the duration of
+      processing of a specific message.
+    - You may want to retain ownership of a context across multiple messages, but that is
+      not currently supported. E.g. for the case
+      of creating a context with multiple parents (for which you should own all parents),
+      the parents get locked during create_context instead of being owned across many
+      messages coming from multiple parent contexts; This is sub-optimal, but good enough
+      for the time being.
+
+      Please consider these rules especially whenever you want to scatter or gather
+      processing across contexts, and when you want to access contexts in your code.
     """
 
     __persistence: ContextStorePersistence
