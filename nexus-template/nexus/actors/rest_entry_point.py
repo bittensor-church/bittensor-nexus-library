@@ -3,14 +3,13 @@ from __future__ import annotations
 import logging
 import queue
 import threading
-from collections.abc import Iterable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, override
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ValidationError
 
-from nexus.core.dsl.nodes import Sink, Source
+from nexus.core.dsl.nodes import Sink, Source, Node, NodeSources, NodeSinks, SourceName, SinkName
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.context_store import ContextId, Context, ContextStore
 from nexus.core.runtime.events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, MessagesToSend
@@ -19,7 +18,7 @@ from nexus.logging_utils import get_logger
 logger: logging.Logger = get_logger(__name__)
 
 
-class RestEntryPoint[Model: BaseModel](ActorBuilder):
+class RestEntryPoint[Model: BaseModel](Node, ActorBuilder):
     # id: ActorId
     id: str
     source: Source[Model]
@@ -29,7 +28,7 @@ class RestEntryPoint[Model: BaseModel](ActorBuilder):
     user_data_model: type[Model]
 
     def __init__(self, *, _id: str, path: str, port: int, user_data_model: type[Model]) -> None:
-        self.id = _id
+        super().__init__(_id = _id)
         self.path = path if path.startswith("/") else f"/{path}"
         self.port = port
         self.user_data_model = user_data_model
@@ -39,6 +38,14 @@ class RestEntryPoint[Model: BaseModel](ActorBuilder):
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
         return RestEntryPointActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
+
+    @override
+    def sinks(self) -> NodeSinks:
+        return NodeSinks({SinkName("miner-responses"): self.sink})
+
+    @override
+    def sources(self) -> NodeSources:
+        return NodeSources(sources={SourceName("user-requests"): self.source})
 
 
 class RestEntryPointActor[Model: BaseModel](Actor):
