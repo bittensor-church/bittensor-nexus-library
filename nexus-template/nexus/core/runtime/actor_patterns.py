@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import Any, cast, override
 
 from .actor import Actor, EventHandler
 from .context_store import ContextStore, Context
-from .events import PipeToBus, ReceiveEvent, SendEvent
+from .events import PipeToBus, ReceiveEvent, SendEvent, MessagesToSend
 from ..dsl.nodes import Fork, Sink, Source, Transform
 
 
@@ -40,7 +40,7 @@ class ConsumerActor[From](Actor, ABC):
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {self.spec: self.handle}
 
-    def handle(self, ctx: Context, event: ReceiveEvent[Any]) -> Iterable[SendEvent[Any]]:
+    def handle(self, ctx: Context, event: ReceiveEvent[Any]) -> MessagesToSend:
         assert event.target == self.spec
         self._consume(ctx, event.payload)
         return ()
@@ -59,7 +59,7 @@ class ForkActor[From, ToLeft, ToRight](Actor, ABC):
     def handlers(self) -> dict[Sink[From], EventHandler]:
         return {self.spec.sink: self.handle}
 
-    def handle(self, ctx: Context, event: ReceiveEvent[From]) -> Iterable[SendEvent[Any]]:
+    def handle(self, ctx: Context, event: ReceiveEvent[From]) -> MessagesToSend:
         assert event.target == self.spec.sink
         return _fork_handler(ctx, event, self._process, self.spec.left, self.spec.right)
 
@@ -112,7 +112,7 @@ class DoubleTransformActor[InputFrom, InputTo, OutputFrom, OutputTo](Actor, ABC)
             self.output_spec.sink: lambda ctx, event: self.handle(DoubleTransformActor.Output(), ctx, event),
         }
 
-    def handle(self, pipe: Input | Output, ctx: Context, event: ReceiveEvent[Any]) -> Iterable[SendEvent[Any]]:
+    def handle(self, pipe: Input | Output, ctx: Context, event: ReceiveEvent[Any]) -> MessagesToSend:
         match pipe:
             case DoubleTransformActor.Input():
                 assert event.target == self.input_spec.sink

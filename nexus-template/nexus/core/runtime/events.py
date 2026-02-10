@@ -43,3 +43,5 @@ class StopActorEvent(ReceiveEvent[None]):
 
 PipeToBus = queue.Queue[SendEvent[Any]]
 PipeFromBus = queue.Queue[ReceiveEvent[Any]]
+
+MessagesToSend = tuple[SendEvent[Any], ...]

@@ -26,8 +26,8 @@ class EventBus:
         self.input_pipe = input_pipe
         self.context_store = context_store
         for actor in actors:
-            assert actor._Actor__pipe_to_bus is self.input_pipe, (
-                f"Actor {actor.actor_id} pipe_to_bus does not match EventBus input_pipe."
+            assert actor._Actor__pipe_to_bus is self.input_pipe, (  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                f"Actor {actor.actor_id} pipe_to_bus does not match EventBus input_pipe {self.input_pipe}."
             )
 
     def request_stop(self) -> None:
@@ -55,7 +55,7 @@ class EventBus:
                 self.pass_message_downstream(event)
                 self.input_pipe.task_done()
 
-    def pass_message_downstream(self, event: SendEvent) -> None:
+    def pass_message_downstream(self, event: SendEvent[Any]) -> None:
         """
         Actual message distribution logic. Recovery from the context store
         means we rebuild the contexts and then replay the messages using this function.

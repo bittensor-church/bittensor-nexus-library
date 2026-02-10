@@ -1,9 +1,9 @@
 from typing import override
 
-from nexus.core.runtime.context_store import ContextId, ContextStore
 from nexus.core.dsl.nodes import Transform
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import TransformActor
+from nexus.core.runtime.context_store import ContextStore, Context
 from nexus.core.runtime.events import PipeToBus
 
 
@@ -20,5 +20,6 @@ class StringifyActor[T](TransformActor[T, str]):
     def __init__(self, *, spec: Stringify[T], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
         super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
-    def _transform(self, ctx: ContextId, payload: T) -> str:
+    @override
+    def _transform(self, ctx: Context, payload: T) -> str:
         return str(payload)
