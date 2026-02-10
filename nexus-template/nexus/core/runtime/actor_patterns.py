@@ -32,8 +32,8 @@ def _fork_handler[From, ToLeft, ToRight](
 
 
 class ConsumerActor[From](Actor, ABC):
-    def __init__(self, spec: Sink[From], pipe_to_bus: PipeToBus) -> None:
-        super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus)
+    def __init__(self, spec: Sink[From], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
+        super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.spec = spec
 
     @override

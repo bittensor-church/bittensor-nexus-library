@@ -19,9 +19,9 @@ EventHandler = Callable[[Context, ReceiveEvent[Any]], None]
 
 class Actor(ABC):
     actor_id: ActorId
+    context_store: ContextStore
     pipe_from_bus: PipeFromBus  # transport for incoming events
     pipe_to_bus: PipeToBus  # transport for outgoing events
-    context_store: ContextStore
 
     actor_counter: itertools.count[int] = itertools.count()
 
@@ -69,5 +69,5 @@ class Actor(ABC):
 
 class ActorBuilder(ABC):
     @abstractmethod
-    def build_actor(self, *, pipe_to_bus: PipeToBus) -> Actor:
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
         pass

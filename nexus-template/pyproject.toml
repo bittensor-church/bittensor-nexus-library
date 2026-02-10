@@ -68,6 +68,12 @@ extend-select = ["DOC501"]
 extend-immutable-calls = [
 ]
 
+[tool.pytest.ini_options]
+filterwarnings = [
+"error::pytest.PytestUnhandledThreadExceptionWarning",
+]
+
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
