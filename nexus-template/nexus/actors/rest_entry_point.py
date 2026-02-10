@@ -84,9 +84,9 @@ class RestEntryPointActor[Model: BaseModel](Actor):
                     continue
 
                 try:
-                    context: Context = self.context_store.get_context(event.ctx_id)
-                    for send_event in handler(context, event):
-                        self._pipe_to_bus.put(send_event)
+                    with self.context_store.get_context(event.ctx_id) as context:
+                        for send_event in handler(context, event):
+                            self._pipe_to_bus.put(send_event)
                 except Exception as exc:
                     logger.error(
                         f"Error while handling event {event} in actor {self.actor_id} for target {event.target}",
@@ -205,8 +205,8 @@ class RestEntryPointActor[Model: BaseModel](Actor):
             self._send_text(request, status=400, body="Invalid request body\n")
             return
 
-        ctx = self.context_store.create_context()
-        ctx_id = ctx.id
+        with self.context_store.create_context() as context:
+            ctx_id = context.id
         response_queue: queue.Queue[str] = queue.Queue(maxsize=1)
 
         with self._pending_lock:

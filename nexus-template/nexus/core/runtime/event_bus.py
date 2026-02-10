@@ -49,8 +49,8 @@ class EventBus:
                 break
             else:
                 # update the context
-                context = self.context_store.get_context(event.ctx_id)
-                context.append_message(event.source, event.payload)
+                with self.context_store.get_context(event.ctx_id) as context:
+                    context.append_message(event.source, event.payload)
 
                 self.pass_message_downstream(event)
                 self.input_pipe.task_done()

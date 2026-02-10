@@ -1,9 +1,11 @@
 import copy
 import datetime
+import threading
 import uuid
 from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
-from typing import override, Iterable, Any
+from typing import override, Iterable, Any, Iterator
 
 import deepdiff
 from deepdiff.serialization import json_loads, json_dumps
@@ -49,6 +51,49 @@ class ContextStorePersistence(ABC):
         pass
 
 
+class ContextStoreLocks(ABC):
+    """
+    provides primitives for mutual exclusion on contexts, to ensure that only
+    one entity can access a context at a time
+    """
+    @abstractmethod
+    def register_context(self, ctx: ContextId) -> None:
+        pass
+
+    @abstractmethod
+    def lock_context(self, ctx: ContextId) -> AbstractContextManager[None]:
+        pass
+
+
+class ThreadContextStoreLocks(ContextStoreLocks):
+    __locks: dict[ContextId, threading.Lock]
+    __registry_lock: threading.Lock
+
+    def __init__(self) -> None:
+        self.__locks = {}
+        self.__registry_lock = threading.Lock()
+
+    @override
+    def register_context(self, ctx: ContextId) -> None:
+        with self.__registry_lock:
+            assert ctx not in self.__locks, f"Context {ctx} already registered in locks? It should have been created first."
+            self.__locks[ctx] = threading.Lock()
+
+    @override
+    @contextmanager
+    def lock_context(self, ctx: ContextId) -> Iterator[None]:
+        with self.__registry_lock:
+            context_lock = self.__locks.get(ctx, None)
+        if context_lock is None:
+            raise InvalidContextIdException(f"Context lock for {ctx} not found")
+
+        context_lock.acquire()
+        try:
+            yield
+        finally:
+            context_lock.release()
+
+
 @dataclass(frozen=True)
 class RecoveredContextStore:
     context_store: ContextStore
@@ -75,6 +120,10 @@ class Context:
     are only modified through the interface methods, as changing to the context
     should always be accompanied by appending the corresponding log entry
     to the persistence layer.
+
+    A Context may only be used by a single thread at a time, and is not thread safe.
+    Mutual exclusion is provided by the ContextStore methods, which provide
+    Context and it's ownership (via context managers)
     """
 
     _id: ContextId
@@ -130,6 +179,7 @@ class ContextStore:
 
     __persistence: ContextStorePersistence
     __contexts: dict[ContextId, Context]
+    __locks: ContextStoreLocks
 
     @classmethod
     def recover_from(cls: type[ContextStore], persistence: ContextStorePersistence) -> RecoveredContextStore:
@@ -166,21 +216,32 @@ class ContextStore:
         # true intialization of the ContextStore
         context_store.__persistence = persistence
         context_store.__contexts = contexts
+        context_store.__locks = ThreadContextStoreLocks()
+        for context_id in contexts:
+            context_store.__locks.register_context(context_id)
 
         return RecoveredContextStore(context_store, last_messages)
 
     def __init__(self, token="intialize_using_factory_methods_not_directly") -> None:
         assert token == "factory_method", "ContextStore should be initialized using factory methods, not directly."
 
-    def create_context(self, *, parents: tuple[ContextId, ...] = ()) -> Context:
+    @contextmanager
+    def create_context(self, *, parents: tuple[ContextId, ...] = ()) -> Iterator[Context]:
         new_context_id = self.__persistence.create_context(parents)
-        self.__contexts[new_context_id] = Context(_id=new_context_id, payload=None, user_data={}, context_store=self)
-        return self.__contexts[new_context_id]
+        context = Context(_id=new_context_id, payload=None, user_data={}, context_store=self)
+        self.__contexts[new_context_id] = context
+        self.__locks.register_context(new_context_id)
 
-    def get_context(self, ctx: ContextId) -> Context:
-        if ctx not in self.__contexts:
-            raise InvalidContextIdException(f"Context {ctx} not found")
-        return self.__contexts[ctx]
+        with self.__locks.lock_context(new_context_id):
+            yield context
+
+    @contextmanager
+    def get_context(self, ctx: ContextId) -> Iterator[Context]:
+        with self.__locks.lock_context(ctx):
+            if ctx not in self.__contexts:
+                raise InvalidContextIdException(f"Context {ctx} not found")
+
+            yield self.__contexts[ctx]
 
     def _append_entry(self, ctx: ContextId, entry: LogEntryData) -> None:
         assert ctx in self.__contexts, f"Context {ctx} not found in store? It should have been created first."

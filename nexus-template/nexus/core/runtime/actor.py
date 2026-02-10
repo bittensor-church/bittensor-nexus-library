@@ -49,11 +49,11 @@ class Actor(ABC):
                 self.pipe_from_bus.task_done()
                 break
             else:
-                context: Context = self.context_store.get_context(event.ctx_id)
                 handler: EventHandler | None = self.handlers().get(event.target, None)
                 if handler:
                     try:
-                        events_produced_by_the_handler = handler(context, event)
+                        with self.context_store.get_context(event.ctx_id) as context:
+                            events_produced_by_the_handler = handler(context, event)
                     except Exception as exc:
                         logger.error(
                             f"Error while handling event {event} in actor {self.actor_id} for target {event.target}",

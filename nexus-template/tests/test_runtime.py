@@ -119,11 +119,16 @@ class SomeDoubleTransformActor(DoubleTransformActor[str, str, str, str]):
         return f"{payload}-out"
 
 
+def _create_context(context_store: ContextStore) -> Context:
+    with context_store.create_context() as context:
+        return context
+
+
 def test_actor_dispatches_events_to_handlers():
     context_store = empty_context_store()
-    ctx_left_1 = context_store.create_context()
-    ctx_left_2 = context_store.create_context()
-    ctx_right = context_store.create_context()
+    ctx_left_1 = _create_context(context_store)
+    ctx_left_2 = _create_context(context_store)
+    ctx_right = _create_context(context_store)
     actor = DualSinkActor(context_store)
 
     events = [
@@ -146,8 +151,8 @@ def test_actor_dispatches_events_to_handlers():
 
 def test_fork_actor_routes_left_and_right_sources():
     context_store = empty_context_store()
-    ctx_left = context_store.create_context()
-    ctx_right = context_store.create_context()
+    ctx_left = _create_context(context_store)
+    ctx_right = _create_context(context_store)
 
     pipe_to_bus: PipeToBus = queue.Queue()
     actor = BranchingForkActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
@@ -178,7 +183,7 @@ def test_fork_actor_preserves_context_id():
     context_store = empty_context_store()
     pipe_to_bus: PipeToBus = queue.Queue()
     actor = BranchingForkActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
-    ctx_to_preserve = context_store.create_context()
+    ctx_to_preserve = _create_context(context_store)
 
     actor.pipe_from_bus.put(ReceiveEvent(ctx_id=ctx_to_preserve.id, target=actor.spec.sink, payload="left-ctx"))
     actor.pipe_from_bus.put(StopActorEvent())
@@ -200,7 +205,7 @@ def test_transform_actor_emits_transformed_event():
     pipe_to_bus: PipeToBus = queue.Queue()
     actor = StringifyActor(spec=stringify, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
-    context = context_store.create_context()
+    context = _create_context(context_store)
 
     actor.pipe_from_bus.put(ReceiveEvent(ctx_id=context.id, target=stringify.sink, payload=123))
     actor.pipe_from_bus.put(StopActorEvent())
@@ -222,8 +227,8 @@ def test_transform_actor_routes_ok_and_error_sources():
     pipe_to_bus: PipeToBus = queue.Queue()
     actor = UppercaseOrErrorActor(spec=transform, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
-    ctx_ok = context_store.create_context()
-    ctx_error = context_store.create_context()
+    ctx_ok = _create_context(context_store)
+    ctx_error = _create_context(context_store)
 
     actor.pipe_from_bus.put(ReceiveEvent(ctx_id=ctx_ok.id, target=transform.sink, payload="odd"))
     actor.pipe_from_bus.put(ReceiveEvent(ctx_id=ctx_error.id, target=transform.sink, payload="boom"))
@@ -253,7 +258,7 @@ def test_transform_actor_preserves_context_id():
     pipe_to_bus: PipeToBus = queue.Queue()
     actor = StringifyActor(spec=stringify, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
-    ctx = context_store.create_context()
+    ctx = _create_context(context_store)
     actor.pipe_from_bus.put(ReceiveEvent(ctx_id=ctx.id, target=stringify.sink, payload=7))
     actor.pipe_from_bus.put(StopActorEvent())
 
@@ -285,7 +290,7 @@ def test_event_bus_preserves_context_id():
         context_store=context_store,
     )
 
-    ctx = context_store.create_context()
+    ctx = _create_context(context_store)
     pipe_to_bus.put(SendEvent(ctx_id=ctx.id, source=source, payload="bus-payload"))
 
     jobs = Jobs(event_bus.run_loop(), collector.run_loop())
@@ -318,7 +323,7 @@ def test_event_bus_routes_events_to_configured_sinks():
         context_store=context_store,
     )
 
-    ctx = context_store.create_context()
+    ctx = _create_context(context_store)
     pipe_to_bus.put(SendEvent(ctx_id=ctx.id, source=broadcast, payload="hello"))
     pipe_to_bus.put(StopBusEvent())
 
@@ -351,8 +356,8 @@ def test_event_bus_appends_sent_messages_to_context_store():
         context_store=context_store,
     )
 
-    ctx_one = context_store.create_context()
-    ctx_two = context_store.create_context()
+    ctx_one = _create_context(context_store)
+    ctx_two = _create_context(context_store)
     event_one = SendEvent(ctx_id=ctx_one.id, source=source, payload="one")
     event_two = SendEvent(ctx_id=ctx_two.id, source=source, payload="two")
     pipe_to_bus.put(event_one)
@@ -365,8 +370,10 @@ def test_event_bus_appends_sent_messages_to_context_store():
     event_bus.request_stop()
     jobs.join()
 
-    assert context_store.get_context(ctx_one.id).payload == "one"
-    assert context_store.get_context(ctx_two.id).payload == "two"
+    with context_store.get_context(ctx_one.id) as context_one:
+        assert context_one.payload == "one"
+    with context_store.get_context(ctx_two.id) as context_two:
+        assert context_two.payload == "two"
 
 
 def test_event_bus_logs_when_no_connections(caplog: Any):
@@ -380,7 +387,7 @@ def test_event_bus_logs_when_no_connections(caplog: Any):
         context_store=context_store,
     )
     source = Source("orphan")
-    ctx = context_store.create_context()
+    ctx = _create_context(context_store)
 
     with caplog.at_level(logging.ERROR):
         pipe_to_bus.put(SendEvent(ctx_id=ctx.id, source=source, payload="payload"))
@@ -412,9 +419,9 @@ def test_actor_error_does_not_stop_event_bus(caplog: Any):
         context_store=context_store,
     )
 
-    ctx_flaky_1 = context_store.create_context()
-    ctx_flaky_2 = context_store.create_context()
-    ctx_flaky_3 = context_store.create_context()
+    ctx_flaky_1 = _create_context(context_store)
+    ctx_flaky_2 = _create_context(context_store)
+    ctx_flaky_3 = _create_context(context_store)
     pipe_to_bus.put(SendEvent(ctx_id=ctx_flaky_1.id, source=source, payload="good-1"))
     pipe_to_bus.put(SendEvent(ctx_id=ctx_flaky_2.id, source=source, payload="boom"))
     pipe_to_bus.put(SendEvent(ctx_id=ctx_flaky_3.id, source=source, payload="good-2"))
@@ -443,10 +450,10 @@ def test_double_transform_actor_routes_input_output_and_errors():
     pipe_to_bus: PipeToBus = queue.Queue()
     actor = SomeDoubleTransformActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
 
-    ctx_input_ok = context_store.create_context()
-    ctx_input_error = context_store.create_context()
-    ctx_output_ok = context_store.create_context()
-    ctx_output_error = context_store.create_context()
+    ctx_input_ok = _create_context(context_store)
+    ctx_input_error = _create_context(context_store)
+    ctx_output_ok = _create_context(context_store)
+    ctx_output_error = _create_context(context_store)
 
     actor.pipe_from_bus.put(ReceiveEvent(ctx_id=ctx_input_ok.id, target=actor.input_spec.sink, payload="success"))
     actor.pipe_from_bus.put(ReceiveEvent(ctx_id=ctx_input_error.id, target=actor.input_spec.sink, payload="fail-input"))
@@ -496,8 +503,8 @@ def test_double_transform_actor_preserves_context_id():
     pipe_to_bus: PipeToBus = queue.Queue()
     actor = SomeDoubleTransformActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
 
-    ctx_input = context_store.create_context()
-    ctx_output = context_store.create_context()
+    ctx_input = _create_context(context_store)
+    ctx_output = _create_context(context_store)
 
     actor.pipe_from_bus.put(ReceiveEvent(ctx_id=ctx_input.id, target=actor.input_spec.sink, payload="in"))
     actor.pipe_from_bus.put(ReceiveEvent(ctx_id=ctx_output.id, target=actor.output_spec.sink, payload="out"))
