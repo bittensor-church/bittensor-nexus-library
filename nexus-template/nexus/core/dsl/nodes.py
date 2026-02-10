@@ -33,7 +33,7 @@ class NodeSources:
             self.default_source = next(iter(self.sources.values()))
 
     def empty(self) -> bool:
-        return bool(self.sources)
+        return not bool(self.sources)
 
 
 @dataclass

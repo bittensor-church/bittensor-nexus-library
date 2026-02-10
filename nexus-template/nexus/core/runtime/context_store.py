@@ -44,7 +44,7 @@ class ContextStorePersistence(ABC):
     def log_entries(self) -> Iterable[LogEntry]:
         """
         Returns all log entries stored in the persistence layer, ordered
-        by their creation order
+        by their creation order within their respective contexts (i.e. by step idx).
         """
         pass
 
@@ -62,7 +62,7 @@ def _assert_recovery(old_value, delta_json, new_value):
     recovered_value = old_value + delta
     diff = deepdiff.DeepDiff(recovered_value, new_value)
     assert len(diff) == 0, (
-        "delta application did not recover the new value? recovered value: {recovered_value} != new value: {new_value};\n"
+        f"delta application did not recover the new value? recovered value: {recovered_value} != new value: {new_value};\n"
         "old value: {old_value}\napplied delta = {delta_json}\n"
         "detected differences: {diff}"
     )
@@ -110,7 +110,7 @@ class Context:
 
         _assert_recovery(self._payload, payload_delta_json, payload)
 
-        self._payload = payload
+        self._payload = copy.deepcopy(payload)
 
     def set_user_data(self, key: str, value: Any) -> None:
         old_value = self._user_data.get(key, None)
@@ -120,7 +120,7 @@ class Context:
 
         _assert_recovery(old_value, value_data_json, value)
 
-        self._user_data[key] = value
+        self._user_data[key] = copy.deepcopy(value)
 
 
 class ContextStore:

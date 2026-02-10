@@ -59,12 +59,6 @@ class ContextCreated(BaseModel):
 type LogEntryData = MessageSent | UserDataChange | ChildContextCreated | ContextCreated
 
 
-@dataclass
-class RecoveredContext:
-    context: Context
-    last_message_sent: MessageSent | None
-
-
 LogEntryId = NewType("LogEntryId", int)
 
 
