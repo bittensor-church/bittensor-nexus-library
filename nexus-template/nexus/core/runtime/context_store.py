@@ -23,6 +23,7 @@ from .context_store_types import (
     ContextCompleted,
     StepIdx,
 )
+from .serialization import unsafe_pickle_load
 from ..dsl.nodes import Source
 from ... import get_logger
 
@@ -31,11 +32,7 @@ type LastMessages = dict[ContextId, MessageSent]
 
 logger: logging.Logger = get_logger(__name__)
 
-type JsonDumps = Callable[..., str]
-type JsonLoads = Callable[..., Any]
-
-json_dumps: JsonDumps = cast(JsonDumps, deepdiff.serialization.json_dumps)
-json_loads: JsonLoads = cast(JsonLoads, deepdiff.serialization.json_loads)
+DELTA_DESERIALIZER=unsafe_pickle_load
 
 
 class ContextStorePersistence(ABC):
@@ -125,16 +122,16 @@ class ContextCompletedException(Exception):
     pass
 
 
-def _assert_recovery(old_value: Any, delta_json: str, new_value: Any):
+def _assert_recovery(old_value: Any, delta: bytes, new_value: Any):
     # not sure if we should have that assert in production code...
 
-    delta = deepdiff.Delta(delta_json, deserializer=json_loads)
+    delta = deepdiff.Delta(delta, deserializer=DELTA_DESERIALIZER)
     recovered_value = old_value + delta
     diff = deepdiff.DeepDiff(recovered_value, new_value)
     assert len(diff) == 0, (
-        f"delta application did not recover the new value? recovered value: {recovered_value} != new value: {new_value};\n"
-        "old value: {old_value}\napplied delta = {delta_json}\n"
-        "detected differences: {diff}"
+        f"delta application did not recover the new value? recovered value: {recovered_value!r} != new value: {new_value!r};\n"
+        f"old value: {old_value!r}\napplied delta = {delta!r}\n"
+        f"detected differences: {diff!r}"
     )
 
 
@@ -197,24 +194,24 @@ class Context:
 
     def append_message[T](self, source: Source[T], payload: T):
         self._assert_mutable()
-        payload_delta = deepdiff.Delta(deepdiff.DeepDiff(self._payload, payload), serializer=json_dumps)
-        payload_delta_json = cast(str, payload_delta.dumps())
+        delta = deepdiff.Delta(deepdiff.DeepDiff(self._payload, payload))
+        payload_delta: bytes = delta.dumps()
         self._context_store._append_entry(  # pyright: ignore[reportPrivateUsage]
-            self._id, MessageSent(source=source.id, payload_delta_json=payload_delta_json)
+            self._id, MessageSent(source=source.id, payload_delta=payload_delta)
         )
 
-        _assert_recovery(self._payload, payload_delta_json, payload)
+        _assert_recovery(self._payload, payload_delta, payload)
 
         self._payload = copy.deepcopy(payload)
 
     def set_user_data(self, key: str, value: Any) -> None:
         self._assert_mutable()
         old_value = self._user_data.get(key, None)
-        delta = deepdiff.Delta(deepdiff.DeepDiff(old_value, value), serializer=json_dumps)
-        value_data_json = cast(str, delta.dumps())
-        self._context_store._append_entry(self._id, UserDataChange(key=key, value_delta_json=value_data_json)) # pyright: ignore[reportPrivateUsage]
+        delta = deepdiff.Delta(deepdiff.DeepDiff(old_value, value))
+        value_delta: bytes = delta.dumps()
+        self._context_store._append_entry(self._id, UserDataChange(key=key, value_delta=value_delta)) # pyright: ignore[reportPrivateUsage]
 
-        _assert_recovery(old_value, value_data_json, value)
+        _assert_recovery(old_value, value_delta, value)
 
         self._user_data[key] = copy.deepcopy(value)
 
@@ -319,16 +316,16 @@ class ContextStore:
                     contexts[ctx] = context
                 case ChildContextCreated():
                     pass
-                case MessageSent(payload_delta_json=payload_delta_json) as message:
+                case MessageSent(payload_delta=payload_delta) as message:
                     context = contexts.get(ctx, None)
                     assert context is not None, f"MessageSent for missing context {ctx} during recovery."
-                    context._payload += deepdiff.Delta(payload_delta_json, deserializer=json_loads) # pyright: ignore[reportPrivateUsage]
+                    context._payload += deepdiff.Delta(payload_delta, deserializer=DELTA_DESERIALIZER) # pyright: ignore[reportPrivateUsage]
                     last_messages[ctx] = message
-                case UserDataChange(key=key, value_delta_json=value_delta_json):
+                case UserDataChange(key=key, value_delta=value_delta):
                     context = contexts.get(ctx, None)
                     assert context is not None, f"UserDataChange for missing context {ctx} during recovery."
                     context._user_data[key] = context._user_data.get(key, None) + deepdiff.Delta(  # pyright: ignore[reportPrivateUsage]
-                        value_delta_json, deserializer=json_loads
+                        value_delta, deserializer=DELTA_DESERIALIZER
                     )
                 case ContextCompleted():
                     context = contexts.pop(ctx, None)

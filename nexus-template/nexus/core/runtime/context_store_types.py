@@ -23,7 +23,7 @@ class MessageSent(BaseModel):
     """
 
     source: SourceId
-    payload_delta_json: str
+    payload_delta: bytes
 
 
 class UserDataChange(BaseModel):
@@ -32,7 +32,7 @@ class UserDataChange(BaseModel):
     """
 
     key: str
-    value_delta_json: str
+    value_delta: bytes
 
 
 class ChildContextCreated(BaseModel):
