@@ -1,3 +1,5 @@
+# pyright: basic
+
 import copy
 import random
 import threading

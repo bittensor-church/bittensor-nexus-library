@@ -1,13 +1,9 @@
 import datetime
-from dataclasses import dataclass
-from typing import NewType, TYPE_CHECKING
+from typing import NewType
 
 from pydantic import BaseModel
 
 from ..dsl.nodes import SourceId
-
-if TYPE_CHECKING:
-    from .context_store import Context
 
 ContextId = NewType("ContextId", str)
 StepIdx = NewType("StepIdx", int)

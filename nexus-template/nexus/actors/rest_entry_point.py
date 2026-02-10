@@ -13,7 +13,7 @@ from pydantic import BaseModel, ValidationError
 from nexus.core.dsl.nodes import Sink, Source
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.context_store import ContextId, Context, ContextStore
-from nexus.core.runtime.events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
+from nexus.core.runtime.events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, MessagesToSend
 from nexus.logging_utils import get_logger
 
 logger: logging.Logger = get_logger(__name__)
@@ -131,7 +131,7 @@ class RestEntryPointActor[Model: BaseModel](Actor):
         self._server = None
         self._server_thread = None
 
-    def _handle_response(self, context: Context, event: ReceiveEvent[Any]) -> Iterable[SendEvent[Any]]:
+    def _handle_response(self, context: Context, event: ReceiveEvent[Any]) -> MessagesToSend:
         ctx_id = context.id
         if not isinstance(event.payload, str):
             logger.error(f"RestEntryPoint expected str response, got {type(event.payload)!r} for ctx={ctx_id}")

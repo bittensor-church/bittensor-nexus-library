@@ -2,7 +2,6 @@
 
 import logging
 import queue
-from collections.abc import Iterable
 from typing import Any, override
 
 from nexus.core.dsl.nodes import DoubleTransform, Fork, Sink, Source, Transform
@@ -11,7 +10,8 @@ from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.actor_patterns import DoubleTransformActor, ForkActor, TransformActor
 from nexus.core.runtime.context_store import ContextId, ContextStore, Context
 from nexus.core.runtime.event_bus import EventBus
-from nexus.core.runtime.events import Event, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
+from nexus.core.runtime.events import Event, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent, \
+    MessagesToSend
 from stringify import Stringify, StringifyActor
 from uppercase_or_error import UppercaseOrError, UppercaseOrErrorActor, EvenSucks
 from utils import Jobs, wait_until, empty_context_store
@@ -31,11 +31,11 @@ class DualSinkActor(Actor):
             self.sink_right: self.handle_right,
         }
 
-    def handle_left(self, context: Context, receive_event: ReceiveEvent) -> Iterable[SendEvent[Any]]:
+    def handle_left(self, context: Context, receive_event: ReceiveEvent) -> MessagesToSend:
         self.handled_left.append(receive_event.payload)
         return ()
 
-    def handle_right(self, context: Context, receive_event: ReceiveEvent) -> Iterable[SendEvent[Any]]:
+    def handle_right(self, context: Context, receive_event: ReceiveEvent) -> MessagesToSend:
         self.handled_right.append(receive_event.payload)
         return ()
 
@@ -49,7 +49,7 @@ class CollectorActor(Actor):
     def handlers(self):
         return {self.sink: self._handle}
 
-    def _handle(self, context: Context, event: ReceiveEvent) -> Iterable[SendEvent[Any]]:
+    def _handle(self, context: Context, event: ReceiveEvent) -> MessagesToSend:
         self.received_events.append(event)
         return ()
 
@@ -74,7 +74,7 @@ class FlakyActor(Actor):
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {self.sink: self.handle}
 
-    def handle(self, context: Context, event: ReceiveEvent[Any]) -> Iterable[SendEvent[Any]]:
+    def handle(self, context: Context, event: ReceiveEvent[Any]) -> MessagesToSend:
         if event.payload == "boom":
             raise ValueError("flaky failure")
         else:

@@ -6,10 +6,10 @@ import uuid
 from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
-from typing import override, Iterable, Any, Iterator
+from typing import override, Iterable, Any, Iterator, Callable, cast
 
 import deepdiff
-from deepdiff.serialization import json_loads, json_dumps
+import deepdiff.serialization
 
 from .context_store_types import (
     LogEntryData,
@@ -30,6 +30,13 @@ type LastMessages = dict[ContextId, MessageSent]
 
 
 logger: logging.Logger = get_logger(__name__)
+
+type JsonDumps = Callable[..., str]
+type JsonLoads = Callable[..., Any]
+
+json_dumps: JsonDumps = cast(JsonDumps, deepdiff.serialization.json_dumps)
+json_loads: JsonLoads = cast(JsonLoads, deepdiff.serialization.json_loads)
+
 
 class ContextStorePersistence(ABC):
     @abstractmethod
@@ -118,7 +125,7 @@ class ContextCompletedException(Exception):
     pass
 
 
-def _assert_recovery(old_value, delta_json, new_value):
+def _assert_recovery(old_value: Any, delta_json: str, new_value: Any):
     # not sure if we should have that assert in production code...
 
     delta = deepdiff.Delta(delta_json, deserializer=json_loads)
@@ -144,6 +151,12 @@ class Context:
     A Context may only be used by a single thread at a time, and is not thread safe.
     Mutual exclusion is provided by the ContextStore methods, which provide
     Context and it's ownership (via context managers)
+
+    pyright exclusions on private ContextStore methods access is intentional;
+    the Context can have access to the context store's internal _append_entry method,
+    but it should not be exposed to the outside world;
+    adding an exclusion rather than making internal classes or making the
+    API public looks like a better tradeoff
     """
 
     _id: ContextId
@@ -185,8 +198,8 @@ class Context:
     def append_message[T](self, source: Source[T], payload: T):
         self._assert_mutable()
         payload_delta = deepdiff.Delta(deepdiff.DeepDiff(self._payload, payload), serializer=json_dumps)
-        payload_delta_json = payload_delta.dumps()
-        self._context_store._append_entry(
+        payload_delta_json = cast(str, payload_delta.dumps())
+        self._context_store._append_entry(  # pyright: ignore[reportPrivateUsage]
             self._id, MessageSent(source=source.id, payload_delta_json=payload_delta_json)
         )
 
@@ -198,8 +211,8 @@ class Context:
         self._assert_mutable()
         old_value = self._user_data.get(key, None)
         delta = deepdiff.Delta(deepdiff.DeepDiff(old_value, value), serializer=json_dumps)
-        value_data_json = delta.dumps()
-        self._context_store._append_entry(self._id, UserDataChange(key=key, value_delta_json=value_data_json))
+        value_data_json = cast(str, delta.dumps())
+        self._context_store._append_entry(self._id, UserDataChange(key=key, value_delta_json=value_data_json)) # pyright: ignore[reportPrivateUsage]
 
         _assert_recovery(old_value, value_data_json, value)
 
@@ -207,7 +220,7 @@ class Context:
 
     def complete(self) -> None:
         self._assert_mutable()
-        self._context_store._append_entry(self._id, ContextCompleted())
+        self._context_store._append_entry(self._id, ContextCompleted()) # pyright: ignore[reportPrivateUsage]
         self._is_completed = True
 
     def _assert_mutable(self) -> None:
@@ -274,6 +287,12 @@ class ContextStore:
 
     @classmethod
     def recover_from(cls: type[ContextStore], persistence: ContextStorePersistence) -> RecoveredContextStore:
+        """
+            Recovers a ContextStore from the given persistence layer by replaying all log entries.
+
+            pyright exclusions on Context private members is intentional; this is recovery code
+            which we want to be able to mutate the context's payload directly
+        """
         contexts: dict[ContextId, Context] = {}
         last_messages: LastMessages = {}
         completed_contexts: set[ContextId] = set()
@@ -285,7 +304,8 @@ class ContextStore:
         for log_entry in persistence.log_entries():
             ctx = log_entry.ctx
             previous_step = steps.get(ctx, None)
-            assert log_entry.step_idx == StepIdx(0) or log_entry.step_idx == previous_step + 1, (
+            assert (previous_step is None and log_entry.step_idx == StepIdx(0)) or \
+                   (previous_step is not None and log_entry.step_idx == previous_step + 1), (
                 f"log entry step idx out of order for context {ctx}: expected {log_entry.step_idx} to be after {previous_step}"
             )
             steps[ctx] = log_entry.step_idx
@@ -302,18 +322,18 @@ class ContextStore:
                 case MessageSent(payload_delta_json=payload_delta_json) as message:
                     context = contexts.get(ctx, None)
                     assert context is not None, f"MessageSent for missing context {ctx} during recovery."
-                    context._payload += deepdiff.Delta(payload_delta_json, deserializer=json_loads)
+                    context._payload += deepdiff.Delta(payload_delta_json, deserializer=json_loads) # pyright: ignore[reportPrivateUsage]
                     last_messages[ctx] = message
                 case UserDataChange(key=key, value_delta_json=value_delta_json):
                     context = contexts.get(ctx, None)
                     assert context is not None, f"UserDataChange for missing context {ctx} during recovery."
-                    context._user_data[key] = context._user_data.get(key, None) + deepdiff.Delta(
+                    context._user_data[key] = context._user_data.get(key, None) + deepdiff.Delta(  # pyright: ignore[reportPrivateUsage]
                         value_delta_json, deserializer=json_loads
                     )
                 case ContextCompleted():
                     context = contexts.pop(ctx, None)
                     assert context is not None, f"ContextCompleted for missing context {ctx} during recovery."
-                    context._is_completed = True
+                    context._is_completed = True  # pyright: ignore[reportPrivateUsage]
                     completed_contexts.add(ctx)
                     last_messages.pop(ctx, None)
 
@@ -326,7 +346,7 @@ class ContextStore:
 
         return RecoveredContextStore(context_store, last_messages)
 
-    def __init__(self, token="intialize_using_factory_methods_not_directly") -> None:
+    def __init__(self, token: str = "intialize_using_factory_methods_not_directly") -> None:
         assert token == "factory_method", "ContextStore should be initialized using factory methods, not directly."
 
     @contextmanager
@@ -443,7 +463,7 @@ class InMemoryContextStorePersistence(ContextStorePersistence):
 
     @override
     def log_entries(self) -> tuple[LogEntry, ...]:
-        all_entries = []
+        all_entries: list[LogEntry] = []
         for log_entries in self.__data.values():
             all_entries.extend(log_entries)
         all_entries.sort(key=lambda entry: entry.step_idx)

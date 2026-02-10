@@ -1,20 +1,19 @@
 import itertools
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from threading import Thread
 from typing import Any, NewType
 
 from nexus.logging_utils import get_logger
 from .context_store import ContextStore, Context
-
-from ..dsl.nodes import Sink
 from .events import PipeFromBus, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
+from ..dsl.nodes import Sink
 
 logger = get_logger("Actor")
 
 ActorId = NewType("ActorId", str)
 
-EventHandler = Callable[[Context, ReceiveEvent[Any]], Iterable[SendEvent[Any]]]
+EventHandler = Callable[[Context, ReceiveEvent[Any]], tuple[SendEvent[Any], ...]]
 
 
 class Actor(ABC):
