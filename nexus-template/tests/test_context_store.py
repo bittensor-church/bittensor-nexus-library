@@ -1,5 +1,6 @@
 import copy
 import random
+import threading
 
 import pytest
 
@@ -46,11 +47,16 @@ def _random_user_data(rng: random.Random, count: int) -> list[tuple[str, int]]:
     return user_data
 
 
+def _create_context_id(context_store: ContextStore, *, parents: tuple[ContextId, ...] = ()) -> ContextId:
+    with context_store.create_context(parents=parents) as context:
+        return context.id
+
+
 def test_append_message_persists_and_recovers_payload():
     persistence = InMemoryContextStorePersistence()
     original_context_store = ContextStore.recover_from(persistence).context_store
 
-    context = original_context_store.create_context()
+    context_id = _create_context_id(original_context_store)
 
     source = Source("payload-source")
 
@@ -59,45 +65,87 @@ def test_append_message_persists_and_recovers_payload():
         {"count": 2, "items": [0, 1, 2]},
         {"items": [2, 3]},
     ]
-    for payload in payloads:
-        context.append_message(source=source, payload=payload)
+    with original_context_store.get_context(context_id) as context:
+        for payload in payloads:
+            context.append_message(source=source, payload=payload)
 
     entries = persistence.log_entries()
     assert len(entries) == len(payloads) + 1  # +1 for the initial ContextCreated entry
 
     another_context_store = ContextStore.recover_from(persistence).context_store
-    recovered_context = another_context_store.get_context(context.id)
-    assert recovered_context.payload == original_context_store.get_context(context.id).payload
+    with another_context_store.get_context(context_id) as recovered_context:
+        with original_context_store.get_context(context_id) as original_context:
+            assert recovered_context.payload == original_context.payload
 
 
 def test_set_user_data_persists_and_recovers():
     persistence = InMemoryContextStorePersistence()
     original_context_store = ContextStore.recover_from(persistence).context_store
 
-    context = original_context_store.create_context()
+    context_id = _create_context_id(original_context_store)
 
-    context.set_user_data("count", 2)
-    context.set_user_data("string", "asd")
-    context.set_user_data("map", {"nested": True})
+    with original_context_store.get_context(context_id) as context:
+        context.set_user_data("count", 2)
+        context.set_user_data("string", "asd")
+        context.set_user_data("map", {"nested": True})
 
     entries = persistence.log_entries()
     assert len(entries) == 3 + 1  # +1 for the initial ContextCreated entry
 
     another_context_store = ContextStore.recover_from(persistence).context_store
-    recovered_context = another_context_store.get_context(context.id)
-    assert recovered_context.user_data == original_context_store.get_context(context.id).user_data
+    with another_context_store.get_context(context_id) as recovered_context:
+        with original_context_store.get_context(context_id) as original_context:
+            assert recovered_context.user_data == original_context.user_data
 
 
 def test_get_context_returns_or_raises():
     persistence = InMemoryContextStorePersistence()
     context_store = ContextStore.recover_from(persistence).context_store
 
-    context = context_store.create_context()
+    context_id = _create_context_id(context_store)
 
-    assert context_store.get_context(context.id) == context
+    with context_store.get_context(context_id) as context:
+        assert context.id == context_id
 
     with pytest.raises(InvalidContextIdException):
-        context_store.get_context(ContextId("ctx-missing"))
+        with context_store.get_context(ContextId("ctx-missing")):
+            pass
+
+
+def test_get_context_provides_mutual_exclusion():
+    persistence = InMemoryContextStorePersistence()
+    context_store = ContextStore.recover_from(persistence).context_store
+    context_id = _create_context_id(context_store)
+
+    first_has_lock = threading.Event()
+    release_first = threading.Event()
+    second_acquired = threading.Event()
+
+    def first_worker() -> None:
+        with context_store.get_context(context_id):
+            first_has_lock.set()
+            release_first.wait(timeout=1.0)
+
+    def second_worker() -> None:
+        first_has_lock.wait(timeout=1.0)
+        with context_store.get_context(context_id):
+            second_acquired.set()
+
+    t1 = threading.Thread(target=first_worker, daemon=True)
+    t2 = threading.Thread(target=second_worker, daemon=True)
+    t1.start()
+    t2.start()
+
+    assert first_has_lock.wait(timeout=1.0)
+    assert not second_acquired.wait(timeout=0.1)
+
+    release_first.set()
+    t1.join(timeout=1.0)
+    t2.join(timeout=1.0)
+
+    assert not t1.is_alive()
+    assert not t2.is_alive()
+    assert second_acquired.is_set()
 
 
 def test_randomized_payloads_are_recoverable():
@@ -106,16 +154,18 @@ def test_randomized_payloads_are_recoverable():
     persistence = InMemoryContextStorePersistence()
     original_context_store = ContextStore.recover_from(persistence).context_store
 
-    ctx = original_context_store.create_context()
+    ctx_id = _create_context_id(original_context_store)
     source = Source("random-source")
 
     payloads = _random_payloads(rng, 25)
-    for payload in payloads:
-        ctx.append_message(source=source, payload=payload)
+    with original_context_store.get_context(ctx_id) as context:
+        for payload in payloads:
+            context.append_message(source=source, payload=payload)
 
     recovered = ContextStore.recover_from(persistence).context_store
-    recovered_context = recovered.get_context(ctx.id)
-    assert recovered_context.payload == original_context_store.get_context(ctx.id).payload
+    with recovered.get_context(ctx_id) as recovered_context:
+        with original_context_store.get_context(ctx_id) as original_context:
+            assert recovered_context.payload == original_context.payload
 
 
 def test_randomized_user_data_is_recoverable():
@@ -124,24 +174,26 @@ def test_randomized_user_data_is_recoverable():
     persistence = InMemoryContextStorePersistence()
     original_context_store = ContextStore.recover_from(persistence).context_store
 
-    ctx = original_context_store.create_context()
+    ctx_id = _create_context_id(original_context_store)
 
     random_user_data = _random_user_data(rng, 30)
 
-    for set_user_data_event in random_user_data:
-        ctx.set_user_data(set_user_data_event[0], set_user_data_event[1])
+    with original_context_store.get_context(ctx_id) as context:
+        for set_user_data_event in random_user_data:
+            context.set_user_data(set_user_data_event[0], set_user_data_event[1])
 
     recovered = ContextStore.recover_from(persistence).context_store
-    recovered_context = recovered.get_context(ctx.id)
-    assert recovered_context.user_data == original_context_store.get_context(ctx.id).user_data
+    with recovered.get_context(ctx_id) as recovered_context:
+        with original_context_store.get_context(ctx_id) as original_context:
+            assert recovered_context.user_data == original_context.user_data
 
 
 def test_recover_rebuilds_messages():
     persistence = InMemoryContextStorePersistence()
     original_context_store = ContextStore.recover_from(persistence).context_store
 
-    context_1 = original_context_store.create_context()
-    context_2 = original_context_store.create_context(parents=(context_1.id,))
+    context_1 = _create_context_id(original_context_store)
+    _create_context_id(original_context_store, parents=(context_1,))
 
     # FIXME: add testcases for last message handling when the children context consumed the last messages
     # so we should replay them
@@ -151,23 +203,26 @@ def test_recover_multiple_contexts():
     persistence = InMemoryContextStorePersistence()
     original_context_store = ContextStore.recover_from(persistence).context_store
 
-    ctx_a = original_context_store.create_context()
-    ctx_b = original_context_store.create_context()
+    ctx_a = _create_context_id(original_context_store)
+    ctx_b = _create_context_id(original_context_store)
 
     source_a = Source("source-a")
     source_b = Source("source-b")
 
-    ctx_a.append_message(source=source_a, payload=1)
-    ctx_a.set_user_data("count", 2)
-    ctx_b.append_message(source=source_b, payload=12)
-    ctx_b.set_user_data("pound", 7)
+    with original_context_store.get_context(ctx_a) as context_a:
+        context_a.append_message(source=source_a, payload=1)
+        context_a.set_user_data("count", 2)
+    with original_context_store.get_context(ctx_b) as context_b:
+        context_b.append_message(source=source_b, payload=12)
+        context_b.set_user_data("pound", 7)
 
     another_context_store = ContextStore.recover_from(persistence).context_store
-    recovered_ctx_a = another_context_store.get_context(ctx_a.id)
-    recovered_ctx_b = another_context_store.get_context(ctx_b.id)
+    with another_context_store.get_context(ctx_a) as recovered_ctx_a:
+        with original_context_store.get_context(ctx_a) as original_ctx_a:
+            assert recovered_ctx_a.payload == original_ctx_a.payload
+            assert recovered_ctx_a.user_data == original_ctx_a.user_data
 
-    assert recovered_ctx_a.payload == original_context_store.get_context(ctx_a.id).payload
-    assert recovered_ctx_a.user_data == original_context_store.get_context(ctx_a.id).user_data
-
-    assert recovered_ctx_b.payload == original_context_store.get_context(ctx_b.id).payload
-    assert recovered_ctx_b.user_data == original_context_store.get_context(ctx_b.id).user_data
+    with another_context_store.get_context(ctx_b) as recovered_ctx_b:
+        with original_context_store.get_context(ctx_b) as original_ctx_b:
+            assert recovered_ctx_b.payload == original_ctx_b.payload
+            assert recovered_ctx_b.user_data == original_ctx_b.user_data
