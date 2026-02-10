@@ -59,7 +59,7 @@ documentation = "https://github.com/bittensor-church/nexus-poc#readme"
 [tool.uv]
 
 [tool.uv.sources]
-bittensor-nexus-lib = { path = "../nexus-template" }
+bittensor-nexus-lib = { path = "../nexus-template", editable = true }
 
 [tool.pyright]
 pythonVersion = "3.14"
