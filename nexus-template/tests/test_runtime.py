@@ -4,13 +4,6 @@ import logging
 import queue
 from typing import Any, override
 
-from nexus.actors import (
-    EvenSucks,
-    Stringify,
-    StringifyActor,
-    UppercaseOrError,
-    UppercaseOrErrorActor,
-)
 from nexus.core.dsl.nodes import DoubleTransform, Fork, Sink, Source, Transform
 from nexus.core.dsl.piping import Piping
 from nexus.core.runtime.actor import Actor, EventHandler
@@ -18,6 +11,8 @@ from nexus.core.runtime.actor_patterns import DoubleTransformActor, ForkActor, T
 from nexus.core.runtime.context_store import ContextId, ContextStore, Context
 from nexus.core.runtime.event_bus import EventBus
 from nexus.core.runtime.events import Event, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
+from stringify import Stringify, StringifyActor
+from uppercase_or_error import UppercaseOrError, UppercaseOrErrorActor, EvenSucks
 from utils import Jobs, wait_until, empty_context_store
 
 
@@ -464,12 +459,12 @@ def test_double_transform_actor_routes_input_output_and_errors():
     events = [pipe_to_bus.get_nowait() for _ in range(4)]
 
     def _event_by_ctx(ctx: ContextId) -> SendEvent[Any]:
-        return next(event for event in events if event.ctx_id == ctx.id)
+        return next(event for event in events if event.ctx_id == ctx)
 
-    input_ok = _event_by_ctx(ctx_input_ok)
-    input_error = _event_by_ctx(ctx_input_error)
-    output_ok = _event_by_ctx(ctx_output_ok)
-    output_error = _event_by_ctx(ctx_output_error)
+    input_ok = _event_by_ctx(ctx_input_ok.id)
+    input_error = _event_by_ctx(ctx_input_error.id)
+    output_ok = _event_by_ctx(ctx_output_ok.id)
+    output_error = _event_by_ctx(ctx_output_error.id)
 
     assert input_ok.source == actor.input_spec.ok
     assert input_ok.payload == "SUCCESS"
