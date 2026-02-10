@@ -12,8 +12,8 @@ class Stringify[T](Transform[T, str], ActorBuilder):
         super().__init__(_id)
 
     @override
-    def build_actor(self, *, pipe_to_bus: PipeToBus):
-        return StringifyActor[T](spec=self, pipe_to_bus=pipe_to_bus)
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore):
+        return StringifyActor[T](spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
 class StringifyActor[T](TransformActor[T, str]):
