@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from threading import Thread
 from typing import Any, cast, override
 
 from nexus.utils.exceptions import InternalFrameworkException, NexusException, SafeInvokeWrappedException
 
 from ..dsl.nodes import Fork, Sink, Source, Transform
 from .actor import Actor, EventHandler
-from .context_store import Context, ContextStore
-from .events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from .context_store import Context, ContextId, ContextStore
+from .events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
 
 
 def _safe_invoke[ReturnType](fn: Callable[[], ReturnType]) -> tuple[ReturnType, None] | tuple[None, NexusException]:
@@ -40,6 +41,54 @@ def _fork_handler[From, ToLeft, ToRight](
         f"Unexpected fork handler output for event {event}: "
         f"{(left_payload, right_payload)}"
     )
+
+
+class ProducerActor[To](Actor, ABC):
+    """
+    Source-only actor that originates events. Runs _produce() in a background daemon thread;
+    the main thread waits for the framework stop signal, then calls _on_stop().
+
+    _on_stop() is called from the main thread after the stop signal is received. Use it to
+    unblock _produce() — either by closing a blocking resource (socket, subscription) or by
+    setting a threading.Event that _produce() checks in its loop.
+
+    The produce thread is a daemon and will be killed on process exit if _on_stop() fails
+    to unblock it.
+    """
+
+    def __init__(self, spec: Source[To], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
+        super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
+        self.spec = spec
+        self._pipe_to_bus = pipe_to_bus
+
+    @override
+    def handlers(self) -> dict[Sink[Any], EventHandler]:
+        return {}
+
+    @override
+    def _loop(self) -> None:
+        produce_thread = Thread(target=self._produce, daemon=True, name=f"{type(self).__name__}-{self.actor_id}")
+        produce_thread.start()
+        while True:
+            event = self.pipe_from_bus.get()
+            self.pipe_from_bus.task_done()
+            if isinstance(event, StopActorEvent):
+                break
+        self._on_stop()
+
+    def _emit(self, payload: To) -> ContextId:
+        with self.context_store.create_context() as ctx:
+            ctx_id = ctx.id
+        self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.spec, payload=payload))
+        return ctx_id
+
+    @abstractmethod
+    def _on_stop(self) -> None:
+        pass
+
+    @abstractmethod
+    def _produce(self) -> None:
+        pass
 
 
 class ConsumerActor[From](Actor, ABC):
