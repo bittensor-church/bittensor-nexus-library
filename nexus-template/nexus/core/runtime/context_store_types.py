@@ -55,8 +55,16 @@ class ContextCreated(BaseModel):
     parents: tuple[ContextId, ...]
 
 
+class ContextCompleted(BaseModel):
+    """
+    Log entry representing completion of context processing.
+    """
+
+    pass
+
+
 # union for exhaustive type checking
-type LogEntryData = MessageSent | UserDataChange | ChildContextCreated | ContextCreated
+type LogEntryData = MessageSent | UserDataChange | ChildContextCreated | ContextCreated | ContextCompleted
 
 
 LogEntryId = NewType("LogEntryId", int)
