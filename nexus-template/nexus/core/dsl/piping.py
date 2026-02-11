@@ -20,6 +20,7 @@ class Piping:
         self.sinks = set()
 
     def add_flow(self, flow: Flow):
-        self.pipes.update(flow.pipes)
         self.sources.update(flow.sources)
         self.sinks.update(flow.sinks)
+        for source, sinks in flow.pipes.items():
+            self.pipes[source].update(sinks)
