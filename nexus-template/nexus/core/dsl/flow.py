@@ -93,6 +93,9 @@ SourcePath = NewType("SourcePath", str)
 """
 
 
+type Connectable = Node | Sink | Source
+
+
 class Flow:
     """
     A lightweight graph representation builder, constructed with the DSL used in validator examples.
@@ -129,26 +132,26 @@ class Flow:
         self.sources = sources or set()
 
     @classmethod
-    def from_node(cls, node: Node | Sink | Source) -> Flow:
-        match node:
+    def from_connectable(cls, connectable: Connectable) -> Flow:
+        match connectable:
             case Sink() as s:
-                node = SinkNode(s)
+                connectable = SinkNode(s)
             case Source() as s:
-                node = SourceNode(s)
-        sinks = node.sinks()
-        sources = node.sources()
+                connectable = SourceNode(s)
+        sinks = connectable.sinks()
+        sources = connectable.sources()
 
         flow_object = cls(
             entry_sinks=sinks,
             exit_sources=sources,
             pipes=Pipes(set),
-            nodes={node},
+            nodes={connectable},
             sinks=set(sinks.sinks.values()),
             sources=set(sources.sources.values()),
         )
         return flow_object
 
-    def then(self, *targets: Node | Flow, **routes: Node | Flow | Iterable[Node | Flow]) -> Flow:
+    def then(self, *targets: Connectable | Flow, **routes: Connectable | Flow | Iterable[Connectable | Flow]) -> Flow:
         assert targets or routes, "expected continuation of the flow as either positional or keyword parameters"
         assert not targets or not routes, "expected continuation of the flow as either positional or keyword paramters"
 
@@ -220,8 +223,8 @@ class Flow:
             self.pipes[source].update(sinks)
 
     @staticmethod
-    def _as_flow(component: Node | Flow) -> Flow:
+    def _as_flow(component: Connectable | Flow) -> Flow:
         if isinstance(component, Flow):
             return component
         else:
-            return Flow.from_node(component)
+            return Flow.from_connectable(component)

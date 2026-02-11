@@ -282,7 +282,7 @@ def test_event_bus_preserves_context_id():
     collector = CollectorActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     piping = Piping()
-    piping.add_flow(Flow.from_node(source).then(collector.sink))
+    piping.add_flow(Flow.from_connectable(source).then(collector.sink))
 
     event_bus = EventBus(
         connections=piping.pipes,
@@ -314,7 +314,7 @@ def test_event_bus_routes_events_to_configured_sinks():
     collector_b = CollectorActor(name="collector-b", pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     piping = Piping()
-    piping.add_flow(Flow.from_node(broadcast).then(collector_a.sink, collector_b.sink))
+    piping.add_flow(Flow.from_connectable(broadcast).then(collector_a.sink, collector_b.sink))
 
     event_bus = EventBus(
         connections=piping.pipes,
@@ -347,7 +347,7 @@ def test_event_bus_appends_sent_messages_to_context_store():
     collector = CollectorActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     piping = Piping()
-    piping.add_flow(Flow.from_node(source).then(collector.sink))
+    piping.add_flow(Flow.from_connectable(source).then(collector.sink))
 
     event_bus = EventBus(
         connections=piping.pipes,
@@ -409,8 +409,8 @@ def test_actor_error_does_not_stop_event_bus(caplog: Any):
     collector = CollectorActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     piping = Piping()
-    piping.add_flow(Flow.from_node(source).then(flaky.sink))
-    piping.add_flow(Flow.from_node(flaky.source).then(collector.sink))
+    piping.add_flow(Flow.from_connectable(source).then(flaky.sink))
+    piping.add_flow(Flow.from_connectable(flaky.source).then(collector.sink))
 
     event_bus = EventBus(
         connections=piping.pipes,
