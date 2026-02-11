@@ -41,12 +41,12 @@ def make_subnet():
     stringify_error: Stringify[Exception] = Stringify("stringify-error")
 
     subnet_flow: Flow = (
-        Flow.from_node(entry)
+        Flow.from_connectable(entry)
         .then(stringify)
         .then(mining_task)
         .then(
             ok=entry,
-            error=Flow.from_node(stringify_error).then(entry)
+            error=Flow.from_connectable(stringify_error).then(entry)
         )
     )
 
