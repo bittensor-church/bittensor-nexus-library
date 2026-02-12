@@ -220,6 +220,7 @@ class DoubleTransform[InputFrom, InputTo, OutputFrom, OutputTo](Node):
         self.output_ok = self.output_transform.ok
         self.output_error = self.output_transform.error
 
+    @override
     def sources(self) -> NodeSources:
         return NodeSources(
             sources={
@@ -230,6 +231,7 @@ class DoubleTransform[InputFrom, InputTo, OutputFrom, OutputTo](Node):
             }
         )
 
+    @override
     def sinks(self) -> NodeSinks:
         return NodeSinks(
             sinks={

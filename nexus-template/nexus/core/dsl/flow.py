@@ -144,7 +144,7 @@ class Flow:
         flow_object = cls(
             entry_sinks=sinks,
             exit_sources=sources,
-            pipes=Pipes(set),
+            pipes=Pipes(),
             nodes={connectable},
             sinks=set(sinks.sinks.values()),
             sources=set(sources.sources.values()),
