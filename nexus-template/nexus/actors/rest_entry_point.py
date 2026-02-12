@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ValidationError
 
-from nexus.core.dsl.nodes import Sink, Source, Node, NodeSources, NodeSinks, SourceName, SinkName
+from nexus.core.dsl.nodes import Sink, Source, Node, NodeSources, NodeSinks, SourceName, SinkName, Pipes
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.context_store import ContextId, Context, ContextStore
 from nexus.core.runtime.events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, MessagesToSend

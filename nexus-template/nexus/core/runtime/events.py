@@ -1,6 +1,6 @@
 import queue
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from .context_store_types import ContextId
 
@@ -44,4 +44,4 @@ class StopActorEvent(ReceiveEvent[None]):
 PipeToBus = queue.Queue[SendEvent[Any]]
 PipeFromBus = queue.Queue[ReceiveEvent[Any]]
 
-MessagesToSend = tuple[SendEvent[Any], ...]
+type MessagesToSend = SendEvent[Any] | tuple[SendEvent[Any], ...]

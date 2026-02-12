@@ -1,6 +1,7 @@
 # pyright: basic
 
 import pytest
+from typing_extensions import override
 
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import (
@@ -13,15 +14,17 @@ from nexus.core.dsl.nodes import (
     SinkName,
     Source,
     SourceName,
-    Transform,
+    Transform, Pipes,
 )
 
 
 class DualSinkPreferred(Node):
     def __init__(self) -> None:
+        super().__init__("dual-sink-preferred")
         self.primary = Sink("primary")
         self.secondary = Sink("secondary")
 
+    @override
     def sinks(self) -> NodeSinks:
         sinks = NodeSinks(
             sinks={
@@ -32,6 +35,7 @@ class DualSinkPreferred(Node):
         sinks.default_sink = self.secondary
         return sinks
 
+    @override
     def sources(self) -> NodeSources:
         return NodeSources(sources={})
 
