@@ -57,7 +57,6 @@ class RestEntryPointActor[Model: BaseModel](Actor):
 
         self._pending_by_ctx_id: dict[ContextId, queue.Queue[str]] = {}
         self._pending_lock = threading.Lock()
-        self._pipe_to_bus = pipe_to_bus
 
         self._server: ThreadingHTTPServer | None = None
         self._server_thread: threading.Thread | None = None
@@ -77,33 +76,10 @@ class RestEntryPointActor[Model: BaseModel](Actor):
     def _loop(self) -> None:
         self._ensure_server_started()
         try:
-            while True:
-                event: ReceiveEvent[Any] = self.pipe_from_bus.get()
-                if isinstance(event, StopActorEvent):
-                    logger.info(f"Stop event received in actor: {self.actor_id}; stopping loop.")
-                    self.pipe_from_bus.task_done()
-                    break
-
-                handler = self.handlers().get(event.target, None)
-                if handler is None:
-                    logger.error(f"No handler found for sink: {event.target} in actor: {self.actor_id}")
-                    self.pipe_from_bus.task_done()
-                    continue
-
-                try:
-                    with self.context_store.get_context(event.ctx_id) as context:
-                        for send_event in handler(context, event):
-                            self._pipe_to_bus.put(send_event)
-                except Exception as exc:
-                    logger.error(
-                        f"Error while handling event {event} in actor {self.actor_id} for target {event.target}",
-                        exc_info=exc,
-                    )
-                finally:
-                    self.pipe_from_bus.task_done()
+            super()._loop()
         finally:
             self._stop_server()
-
+            
     def _ensure_server_started(self) -> None:
         if self._server_thread is not None:
             return
