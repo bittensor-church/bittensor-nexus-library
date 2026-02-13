@@ -65,7 +65,8 @@ dev = [{ name = "basedpyright", specifier = ">=1.36.1" }]
 
 [[package]]
 name = "cat-images"
-source = { virtual = "." }
+version = "0.1.0"
+source = { editable = "." }
 dependencies = [
     { name = "basedpyright" },
     { name = "bittensor-nexus-lib" },
@@ -95,7 +96,7 @@ requires-dist = [
     { name = "basedpyright", specifier = ">=1.36.1" },
     { name = "bittensor-nexus-lib", editable = "../nexus-template" },
     { name = "freezegun", marker = "extra == 'format'" },
-    { name = "litestar", extras = ["prometheus", "standard"] },
+    { name = "litestar", extras = ["standard", "prometheus"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyright", marker = "extra == 'format'" },
