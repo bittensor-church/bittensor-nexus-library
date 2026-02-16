@@ -86,7 +86,8 @@ class Validator:
 
     def run_loop(self) -> tuple[Thread, ...]:
         jobs: list[Thread] = []
-        for actor in self.event_bus.sinks.values():
+        # One actor can own multiple sinks, so deduplicate actor instances before starting loops.
+        for actor in set(self.event_bus.sinks.values()):
             jobs.append(actor.run_loop())
 
         jobs.append(self.event_bus.run_loop())
@@ -94,4 +95,3 @@ class Validator:
 
     def stop(self):
         self.event_bus.request_stop()
-
