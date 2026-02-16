@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from threading import Thread
-from typing import Any, cast, override
+from typing import Any, cast, override, Generator
 
 from nexus.utils.exceptions import InternalFrameworkException, NexusException, SafeInvokeWrappedException
 
@@ -43,22 +43,22 @@ def _fork_handler[From, ToLeft, ToRight](
     )
 
 
-class ProducerActor[To](Actor, ABC):
+class ProducerActor[Product](Actor, ABC):
     """
-    Source-only actor that originates events. Runs _produce() in a background daemon thread;
-    the main thread waits for the framework stop signal, then calls _on_stop().
+    Source-only actor that originates events on its own and emits them from a single source.
 
-    _on_stop() is called from the main thread after the stop signal is received. Use it to
-    unblock _produce() — either by closing a blocking resource (socket, subscription) or by
-    setting a threading.Event that _produce() checks in its loop.
+    Runs _produce() in a background daemon thread while the main actor thread watches for the framework stop signal.
 
-    The produce thread is a daemon and will be killed on process exit if _on_stop() fails
-    to unblock it.
+    It is expected that it will loop and sleep as necessary while respecting some form of a stop signal:
+     - For a blocking resource-backed producer like a WS listener, _stop() may close the underlying resource.
+     - For polling-based producers, the loop may sleep on a threading.Event while _stop() should set the event.
+
+    The produce thread is a daemon and will be killed on process exit if _stop() fails to unblock it.
     """
 
-    def __init__(self, spec: Source[To], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
-        super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
-        self.spec = spec
+    def __init__(self, source: Source[Product], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
+        super().__init__(name=source.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
+        self.source = source
         self._pipe_to_bus = pipe_to_bus
 
     @override
@@ -67,27 +67,34 @@ class ProducerActor[To](Actor, ABC):
 
     @override
     def _loop(self) -> None:
-        produce_thread = Thread(target=self._produce, daemon=True, name=f"{type(self).__name__}-{self.actor_id}")
+        """
+        Main actor loop; to implement your producer, override the _produce method.
+        """
+        produce_thread = Thread(target=self._producer_loop, daemon=True, name=f"{type(self).__name__}-{self.actor_id}")
         produce_thread.start()
         while True:
             event = self.pipe_from_bus.get()
             self.pipe_from_bus.task_done()
             if isinstance(event, StopActorEvent):
                 break
-        self._on_stop()
+        self._stop()
 
-    def _emit(self, payload: To) -> ContextId:
+    def _producer_loop(self) -> None:
+        for product in self._produce():
+            self._emit(product)
+
+    def _emit(self, product: Product) -> ContextId:
         with self.context_store.create_context() as ctx:
             ctx_id = ctx.id
-        self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.spec, payload=payload))
+        self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.source, payload=product))
         return ctx_id
 
     @abstractmethod
-    def _on_stop(self) -> None:
+    def _produce(self) -> Generator[Product]:
         pass
 
     @abstractmethod
-    def _produce(self) -> None:
+    def _stop(self) -> None:
         pass
 
 
