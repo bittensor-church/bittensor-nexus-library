@@ -72,7 +72,18 @@ def test_validator_integration() -> None:
         assert odd_body == expected_odd_result
     finally:
         validator.stop()
+        cleanup_errors = []
         for job in jobs:
-            job.join(5.0)
-            assert not job.is_alive()
-        _wait_for_port_state(port=validator.entry.port, should_be_open=False)
+            try:
+                job.join(5.0)
+            except RuntimeError as exc:
+                cleanup_errors.append(exc)
+        for job in jobs:
+            if job.is_alive():
+                cleanup_errors.append(RuntimeError(f"Job {job.name} is still alive after join attempt"))
+        try:
+            _wait_for_port_state(port=validator.entry.port, should_be_open=False)
+        except AssertionError as exc:
+            cleanup_errors.append(RuntimeError(f"Port {validator.entry.port} is still open after stop attempt", exc))
+        if cleanup_errors:
+            raise RuntimeError(f"Errors during cleanup: {cleanup_errors}")
