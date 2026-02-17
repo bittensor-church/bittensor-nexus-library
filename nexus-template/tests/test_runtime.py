@@ -4,18 +4,26 @@ import logging
 import queue
 from typing import Any, override
 
+from utils import CollectorActor, Jobs, empty_context_store, wait_until
+
+from nexus.actors.stringify import Stringify, StringifyActor
+from nexus.actors.uppercase_or_error import EvenSucks, UppercaseOrError, UppercaseOrErrorActor
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import DoubleTransform, Fork, Sink, Source, Transform
 from nexus.core.dsl.piping import Piping
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.actor_patterns import DoubleTransformActor, ForkActor, TransformActor
-from nexus.core.runtime.context_store import ContextId, ContextStore, Context
+from nexus.core.runtime.context_store import Context, ContextId, ContextStore
 from nexus.core.runtime.event_bus import EventBus
-from nexus.core.runtime.events import Event, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent, \
-    MessagesToSend
-from nexus.actors.stringify import Stringify, StringifyActor
-from nexus.actors.uppercase_or_error import UppercaseOrError, UppercaseOrErrorActor, EvenSucks
-from utils import Jobs, wait_until, empty_context_store
+from nexus.core.runtime.events import (
+    Event,
+    MessagesToSend,
+    PipeToBus,
+    ReceiveEvent,
+    SendEvent,
+    StopActorEvent,
+    StopBusEvent,
+)
 
 
 class DualSinkActor(Actor):
@@ -38,20 +46,6 @@ class DualSinkActor(Actor):
 
     def handle_right(self, context: Context, receive_event: ReceiveEvent) -> MessagesToSend:
         self.handled_right.append(receive_event.payload)
-        return ()
-
-
-class CollectorActor(Actor):
-    def __init__(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore, name="collector"):
-        super().__init__(name=name, pipe_to_bus=pipe_to_bus, context_store=context_store)
-        self.sink = Sink(name)
-        self.received_events = []
-
-    def handlers(self):
-        return {self.sink: self._handle}
-
-    def _handle(self, context: Context, event: ReceiveEvent) -> MessagesToSend:
-        self.received_events.append(event)
         return ()
 
 

@@ -13,6 +13,7 @@ dependencies = [
     "litestar[standard,prometheus]",
     "deepdiff",
     "bittensor-pylon-client",
+    "boto3",
 #    "cachetools",
 #    "docker",
 #    "requests",
@@ -39,9 +40,12 @@ format = [
 ]
 test = [
     "basedpyright",
+    "boto3-stubs[s3]",
     "pytest",
     "tenacity",
     "pytest-cov",
+    "moto[server]",
+    "requests",
 ]
 
 [tool.ruff]
@@ -82,6 +86,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "basedpyright>=1.36.1",
+    "boto3-stubs[s3]",
 ]
 
 [tool.uv]
