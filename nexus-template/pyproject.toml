@@ -13,6 +13,7 @@ dependencies = [
     "litestar[standard,prometheus]",
     "deepdiff",
     "bittensor-pylon-client",
+    "boto3",
 #    "cachetools",
 #    "docker",
 #    "requests",
@@ -42,6 +43,7 @@ test = [
     "pytest",
     "tenacity",
     "pytest-cov",
+    "moto[server]",
 ]
 
 [tool.ruff]
