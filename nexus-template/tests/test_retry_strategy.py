@@ -6,9 +6,7 @@ from time import monotonic
 from typing import Any, override
 
 from pydantic import BaseModel
-
-from nexus.core.runtime.context_store_types import ContextId
-from utils import Jobs, empty_context_store, wait_until
+from utils import CollectorActor, Jobs, empty_context_store, wait_until
 
 from nexus.actors.retry_strategy import Attempt, RetriesExhaustedException, RetryStrategy
 from nexus.core.dsl.flow import Flow
@@ -16,6 +14,7 @@ from nexus.core.dsl.nodes import Sink, Source
 from nexus.core.dsl.piping import Piping
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore
+from nexus.core.runtime.context_store_types import ContextId
 from nexus.core.runtime.event_bus import EventBus
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 from nexus.utils.exceptions import NexusException
@@ -23,42 +22,6 @@ from nexus.utils.exceptions import NexusException
 
 class RetryInput(BaseModel):
     value: str
-
-
-class AttemptCollectorActor[T](Actor):
-    def __init__(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore, name: str = "attempt-collector") -> None:
-        super().__init__(name=name, pipe_to_bus=pipe_to_bus, context_store=context_store)
-        self.sink = Sink[Attempt[T]](f"{name}-sink")
-        self.received_events: list[ReceiveEvent[Attempt[T]]] = []
-
-    @override
-    def handlers(self) -> dict[Sink[Any], EventHandler]:
-        return {self.sink: self._handle_attempt}
-
-    def _handle_attempt(self, _: Context, event: ReceiveEvent[Attempt[T]]) -> MessagesToSend:
-        self.received_events.append(event)
-        return ()
-
-
-class RetriesExhaustedCollectorActor(Actor):
-    def __init__(
-        self,
-        *,
-        pipe_to_bus: PipeToBus,
-        context_store: ContextStore,
-        name: str = "retries-exhausted-collector",
-    ) -> None:
-        super().__init__(name=name, pipe_to_bus=pipe_to_bus, context_store=context_store)
-        self.sink = Sink[RetriesExhaustedException](f"{name}-sink")
-        self.received_events: list[ReceiveEvent[RetriesExhaustedException]] = []
-
-    @override
-    def handlers(self) -> dict[Sink[Any], EventHandler]:
-        return {self.sink: self._handle}
-
-    def _handle(self, _: Context, event: ReceiveEvent[RetriesExhaustedException]) -> MessagesToSend:
-        self.received_events.append(event)
-        return ()
 
 
 class FailFirstKAttemptsForInputValueActor(Actor):
@@ -114,7 +77,11 @@ def test_retry_strategy_actor_sends_first_attempt_downstream_on_input() -> None:
 
     retry_strategy = RetryStrategy[RetryInput]("retry-strategy", max_attempts=3, delay=timedelta(milliseconds=10))
     retry_actor = retry_strategy.build_actor(pipe_to_bus=pipe_to_bus, context_store=context_store)
-    collector = AttemptCollectorActor[RetryInput](pipe_to_bus=pipe_to_bus, context_store=context_store)
+    collector = CollectorActor[Attempt[RetryInput]](
+        pipe_to_bus=pipe_to_bus,
+        context_store=context_store,
+        name="attempt-collector",
+    )
 
     upstream_source = Source[RetryInput]("retry-input-source")
     piping = Piping()
@@ -201,7 +168,11 @@ def test_retry_strategy_actor_emits_retries_exhausted_after_too_many_failures() 
         failing_input_value="always-fails",
         fail_first_k=10,
     )
-    exhausted_collector = RetriesExhaustedCollectorActor(pipe_to_bus=pipe_to_bus, context_store=context_store)
+    exhausted_collector = CollectorActor[RetriesExhaustedException](
+        pipe_to_bus=pipe_to_bus,
+        context_store=context_store,
+        name="retries-exhausted-collector",
+    )
 
     upstream_source = Source[RetryInput]("retry-input-source")
     piping = Piping()
@@ -249,7 +220,11 @@ def test_retry_strategy_retry_wait_in_one_context_does_not_block_other_context()
         failing_input_value="needs-retries",
         fail_first_k=2,
     )
-    success_collector = AttemptCollectorActor[RetryInput](pipe_to_bus=pipe_to_bus, context_store=context_store)
+    success_collector = CollectorActor[Attempt[RetryInput]](
+        pipe_to_bus=pipe_to_bus,
+        context_store=context_store,
+        name="attempt-collector-success",
+    )
 
     upstream_source = Source[RetryInput]("retry-input-source-multi-context")
     piping = Piping()

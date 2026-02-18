@@ -4,11 +4,11 @@ import http.client
 import queue
 import urllib.parse
 import uuid
-from typing import Any
 
 import boto3
 from botocore.config import Config
 from moto.server import ThreadedMotoServer
+from utils import CollectorActor, Jobs, empty_context_store, wait_until
 
 from nexus.actors.payload_creator import (
     ExecutionRequestInfo,
@@ -18,40 +18,10 @@ from nexus.actors.payload_creator import (
 from nexus.actors.retry_strategy import Attempt, AttemptNumber
 from nexus.actors.s3_config import S3Config
 from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import Sink, Source
+from nexus.core.dsl.nodes import Source
 from nexus.core.dsl.piping import Piping
-from nexus.core.runtime.actor import Actor, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.event_bus import EventBus
-from nexus.core.runtime.events import PipeToBus, ReceiveEvent, SendEvent
-from utils import Jobs, empty_context_store, wait_until
-
-
-class CollectorActor[T](Actor):
-    def __init__(
-        self,
-        *,
-        pipe_to_bus: PipeToBus,
-        context_store: ContextStore,
-        name: str = "created-payload-collector",
-    ) -> None:
-        super().__init__(name=name, pipe_to_bus=pipe_to_bus, context_store=context_store)
-        self.sink = Sink[ExecutionRequestInfo[T, WithS3PresignedUrl[T]]](f"{name}-sink")
-        self.received_events: list[ReceiveEvent[ExecutionRequestInfo[T, WithS3PresignedUrl[T]]]] = []
-
-    def handlers(self) -> dict[Sink[Any], EventHandler]:
-        return {
-            self.sink: self._handle
-        }
-
-
-    def _handle(
-        self,
-        _: Context,
-        event: ReceiveEvent[ExecutionRequestInfo[T, WithS3PresignedUrl[T]]],
-    ) -> tuple[SendEvent[Any], ...]:
-        self.received_events.append(event)
-        return ()
+from nexus.core.runtime.events import PipeToBus, SendEvent
 
 
 def _s3_config(*, endpoint_url: str | None = None) -> S3Config:
@@ -90,7 +60,10 @@ def test_s3_presigned_url_creator_actor_adds_presigned_put_url_and_wraps_attempt
             presigned_url_expiration_seconds=321,
         )
         creator_actor = creator.build_actor(pipe_to_bus=pipe_to_bus, context_store=context_store)
-        collector = CollectorActor[str](pipe_to_bus=pipe_to_bus, context_store=context_store)
+        collector = CollectorActor[ExecutionRequestInfo[str, WithS3PresignedUrl[str]]](
+            pipe_to_bus=pipe_to_bus,
+            context_store=context_store,
+        )
 
         upstream_source = Source[Attempt[str]]("attempt-source")
         piping = Piping()
