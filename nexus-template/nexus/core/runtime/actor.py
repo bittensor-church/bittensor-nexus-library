@@ -13,7 +13,7 @@ logger = get_logger("Actor")
 
 ActorId = NewType("ActorId", str)
 
-EventHandler = Callable[[Context, ReceiveEvent[Any]], tuple[SendEvent[Any], ...]]
+EventHandler = Callable[[Context, ReceiveEvent[Any]], MessagesToSend]
 
 
 class Actor(ABC):
