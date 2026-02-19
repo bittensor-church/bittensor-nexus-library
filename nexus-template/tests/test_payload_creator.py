@@ -6,11 +6,9 @@ import urllib.parse
 import uuid
 
 from nexus.actors.payload_creator import (
-    ExecutionRequestInfo,
     S3PresignedUrlCreator,
     WithS3PresignedUrl,
 )
-from nexus.actors.retry_strategy import Attempt, AttemptNumber
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Source
 from nexus.core.dsl.piping import Piping
@@ -32,12 +30,12 @@ def test_s3_presigned_url_creator_actor_adds_presigned_put_url_and_wraps_attempt
         bucket=default_test_s3_bucket,
     )
     creator_actor = creator.build_actor(pipe_to_bus=pipe_to_bus, context_store=context_store)
-    collector = CollectorActor[ExecutionRequestInfo[str, WithS3PresignedUrl[str]]](
+    collector = CollectorActor[WithS3PresignedUrl[str]](
         pipe_to_bus=pipe_to_bus,
         context_store=context_store,
     )
 
-    upstream_source = Source[Attempt[str]]("attempt-source")
+    upstream_source = Source[str]("attempt-source")
     piping = Piping()
     piping.add_flow(Flow.from_connectable(upstream_source).then(creator.input))
     piping.add_flow(Flow.from_connectable(creator.created_payload).then(collector.sink))
@@ -52,22 +50,19 @@ def test_s3_presigned_url_creator_actor_adds_presigned_put_url_and_wraps_attempt
     with context_store.create_context() as created_ctx:
         ctx_id = created_ctx.id
 
-    attempt = Attempt(original_input="payload-to-upload", attempt_number=AttemptNumber(1))
-
     jobs = Jobs(event_bus.run_loop(), creator_actor.run_loop(), collector.run_loop())
     try:
-        pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_source, payload=attempt))
+        pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_source, payload="input-payload"))
         wait_until(lambda: len(collector.received_events) == 1)
 
         received = collector.received_events[0]
         assert received.ctx_id == ctx_id
         assert received.target == collector.sink
 
-        request_info = received.payload
-        assert request_info.attempt == attempt
-        assert request_info.payload_for_executor.original_input == "payload-to-upload"
+        request_info: WithS3PresignedUrl[str] = received.payload
+        assert request_info.input == "input-payload"
 
-        presigned_url = request_info.payload_for_executor.s3_presigned_url
+        presigned_url = request_info.s3_presigned_url
         assert "X-Amz-Signature=" in presigned_url or "Signature=" in presigned_url
         assert f"/{default_test_s3_bucket}/" in presigned_url
 
