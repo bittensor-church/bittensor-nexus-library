@@ -5,15 +5,14 @@ from .validator import Validator
 
 def main() -> None:
     validator = Validator()
-    validator.run_loop()
+    with validator.running():
+        print("Event bus and actors are running. Press Ctrl+C to stop.")
 
-    print("Event bus and actors are running. Press Ctrl+C to stop.")
-
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        validator.stop_and_wait_for_shutdown()
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == "__main__":

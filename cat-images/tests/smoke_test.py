@@ -49,8 +49,7 @@ def test_validator_integration() -> None:
     validator = Validator(port)
     url = f"http://127.0.0.1:{validator.entry.port}{validator.entry.path}"
 
-    try:
-        validator.run_loop()
+    with validator.running(shutdown_timeout_seconds=5.0):
         _wait_for_port_state(port=validator.entry.port, should_be_open=True)
 
         invalid_status, invalid_body = _post_json(url, {"image_s3_url": "a"})
@@ -67,15 +66,5 @@ def test_validator_integration() -> None:
         assert odd_status == 200
         expected_odd_result = str(SingleCatImageInput.model_validate(odd_payload)).upper()
         assert odd_body == expected_odd_result
-    finally:
-        cleanup_errors = []
-        try:
-            validator.stop_and_wait_for_shutdown(timeout_seconds=5.0)
-        except TimeoutError as exc:
-            cleanup_errors.append(exc)
-        try:
-            _wait_for_port_state(port=validator.entry.port, should_be_open=False)
-        except AssertionError as exc:
-            cleanup_errors.append(RuntimeError(f"Port {validator.entry.port} is still open after stop attempt", exc))
-        if cleanup_errors:
-            raise ExceptionGroup("Errors during cleanup", cleanup_errors)
+
+    _wait_for_port_state(port=validator.entry.port, should_be_open=False)
