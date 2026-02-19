@@ -1,7 +1,7 @@
 import threading
 from datetime import timedelta
 from threading import Timer
-from typing import override, Any, NewType
+from typing import Any, NewType, cast, override
 
 from nexus import get_logger
 from nexus.core.dsl.nodes import Sink, Node, Source, NodeSources, NodeSinks, SourceName, SinkName
@@ -27,7 +27,7 @@ class RetryState[T]:
         return self._attempts
 
     def next_attempt(self) -> None:
-        self._attempts += 1
+        self._attempts = AttemptNumber(int(self._attempts) + 1)
 
 
 class RetriesExhaustedException(NexusException):
@@ -74,7 +74,7 @@ class RetryStrategy[T](Node, ActorBuilder):
         )
 
     @override
-    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore):
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
         return RetryStrategyActor[T](spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
@@ -90,14 +90,14 @@ class RetryStrategyActor[T](Actor):
 
 
     def handle_input(self, ctx: Context, event: ReceiveEvent[T]) -> MessagesToSend:
-        retry_state: RetryState | None = ctx.user_data.get(self.spec.id)
+        retry_state = self._retry_state_from_context(ctx)
         if retry_state is None:
             retry_state = RetryState(event.payload)
         return self._next_attempt_message(ctx, retry_state)
 
 
     def handle_failed_attempt(self, ctx: Context, event: ReceiveEvent[NexusException]) -> MessagesToSend:
-        retry_state: RetryState | None = ctx.user_data.get(self.spec.id)
+        retry_state = self._retry_state_from_context(ctx)
         assert retry_state is not None, f"Received failed attempt without existing retry state? ctx_id: {event.ctx_id}"
         if retry_state.attempts >= self.spec.max_attempts:
             return SendEvent(ctx_id=event.ctx_id, payload=RetriesExhaustedException(
@@ -107,7 +107,7 @@ class RetryStrategyActor[T](Actor):
             return ()
 
 
-    def _schedule_next_attempt(self, ctx: Context, _: RetryState) -> None:
+    def _schedule_next_attempt(self, ctx: Context, _: RetryState[T]) -> None:
         ctx_id = ctx.id # we can't reference the whole Context in the inner function as we lose its ownership
                         # when we leave the scope of the handler
         def trigger_next_attempt():
@@ -120,7 +120,7 @@ class RetryStrategyActor[T](Actor):
                 logger.error("Timer thread not found in timers set when trying to remove it? "
                              "current_thread: %s, timers: %s.", threading.current_thread(), self.timers)
             with self.context_store.get_context(ctx_id) as context:
-                retry_state: RetryState | None = ctx.user_data.get(self.spec.id)
+                retry_state = self._retry_state_from_context(context)
                 if retry_state is None:
                     # this should also never happen, as we should have set the retry state in the previous attempt handler,
                     # but again, let's just log it and not raise an exception
@@ -136,7 +136,7 @@ class RetryStrategyActor[T](Actor):
         self.timers.add(timer)
         timer.start()
 
-    def _next_attempt_message(self, ctx: Context, retry_state: RetryState) -> MessagesToSend:
+    def _next_attempt_message(self, ctx: Context, retry_state: RetryState[T]) -> SendEvent[T]:
         retry_state.next_attempt()
         ctx.set_user_data(self.spec.id, retry_state)
         logger.info("Issuing attempt %d. ctx_id: %s", retry_state.attempts, ctx.id)
@@ -144,7 +144,7 @@ class RetryStrategyActor[T](Actor):
 
 
     def handle_time_for_next_attempt(self, ctx: Context, event: ReceiveEvent[T]) -> MessagesToSend:
-        retry_state: RetryState | None = ctx.user_data.get(self.spec.id)
+        retry_state = self._retry_state_from_context(ctx)
         assert retry_state is not None, f"Received failed attempt without existing retry state? ctx_id: {event.ctx_id}"
         return self._next_attempt_message(ctx, retry_state)
 
@@ -154,3 +154,12 @@ class RetryStrategyActor[T](Actor):
             self.spec.input: self.handle_input,
             self.spec.failed_attempt: self.handle_failed_attempt,
         }
+
+    def _retry_state_from_context(self, ctx: Context) -> RetryState[T] | None:
+        retry_state = ctx.user_data.get(self.spec.id)
+        if retry_state is None:
+            return None
+        assert isinstance(retry_state, RetryState), (
+            f"Unexpected retry state type for key {self.spec.id}: {type(retry_state)!r}"
+        )
+        return cast(RetryState[T], retry_state)
