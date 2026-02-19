@@ -81,6 +81,12 @@ class Actor(ABC):
                     case tuple() as events:
                         for event_to_send in events:
                             self._pipe_to_bus.put(event_to_send)
+                    case _:  # pyright: ignore[reportUnnecessaryComparison]
+                        # Defensive fallback for strict pyright, which can conservatively
+                        # retain an "Unknown" branch for this match.
+                        raise AssertionError(
+                            f"Unexpected handler return type: {type(events_produced_by_the_handler)!r}"
+                        )
                 self.pipe_from_bus.task_done()
 
     @abstractmethod
