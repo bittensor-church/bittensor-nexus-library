@@ -3,7 +3,7 @@ from typing import override
 from nexus.core.dsl.nodes import Transform
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import ContextStore, Context
+from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import PipeToBus
 
 

@@ -1,10 +1,9 @@
 import queue
 from dataclasses import dataclass
-from typing import Any, cast
-
-from .context_store_types import ContextId
+from typing import Any
 
 from ..dsl.nodes import Sink, Source
+from .context_store_types import ContextId
 
 # I somehow feel these should use deep copy on initialization to ~enforce immutability
 

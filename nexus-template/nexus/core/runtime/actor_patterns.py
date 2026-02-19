@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, cast, override
 
-from .actor import Actor, EventHandler
-from .context_store import ContextStore, Context
-from .events import PipeToBus, ReceiveEvent, SendEvent, MessagesToSend
 from ..dsl.nodes import Fork, Sink, Source, Transform
+from .actor import Actor, EventHandler
+from .context_store import Context, ContextStore
+from .events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 
 
 def _safe_invoke[ReturnType](fn: Callable[[], ReturnType]) -> tuple[ReturnType, None] | tuple[None, Exception]:

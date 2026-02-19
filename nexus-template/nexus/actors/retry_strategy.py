@@ -4,13 +4,14 @@ from threading import Timer
 from typing import Any, NewType, cast, override
 
 from nexus import get_logger
-from nexus.core.dsl.nodes import Sink, Node, Source, NodeSources, NodeSinks, SourceName, SinkName
-from nexus.core.runtime.actor import ActorBuilder, Actor, EventHandler
-from nexus.core.runtime.context_store import ContextStore, Context
-from nexus.core.runtime.events import PipeToBus, ReceiveEvent, MessagesToSend, SendEvent
+from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
+from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus.core.runtime.context_store import Context, ContextStore
+from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 from nexus.utils.exceptions import NexusException
 
-AttemptNumber = NewType("AttemptNumber", int)  # 1-based index of the attempt, i.e. 1 for the first attempt, 2 for the second, etc.
+# 1-based index of the attempt: 1 for the first attempt, 2 for the second, etc.
+AttemptNumber = NewType("AttemptNumber", int)
 
 logger = get_logger(__name__)
 
@@ -100,8 +101,11 @@ class RetryStrategyActor[T](Actor):
         retry_state = self._retry_state_from_context(ctx)
         assert retry_state is not None, f"Received failed attempt without existing retry state? ctx_id: {event.ctx_id}"
         if retry_state.attempts >= self.spec.max_attempts:
-            return SendEvent(ctx_id=event.ctx_id, payload=RetriesExhaustedException(
-                f"All {self.spec.max_attempts} retry attempts exhausted when trying to process {retry_state.original_input}."), source=self.spec.error)
+            exhausted_error = RetriesExhaustedException(
+                f"All {self.spec.max_attempts} retry attempts exhausted when trying to process "
+                f"{retry_state.original_input}."
+            )
+            return SendEvent(ctx_id=event.ctx_id, payload=exhausted_error, source=self.spec.error)
         else:
             self._schedule_next_attempt(ctx, retry_state)
             return ()
@@ -117,15 +121,23 @@ class RetryStrategyActor[T](Actor):
             except KeyError:
                 # this should never happen, but since it's not in our hands and we
                 # seem safe to just move on, let's only log it and not raise an exception
-                logger.error("Timer thread not found in timers set when trying to remove it? "
-                             "current_thread: %s, timers: %s.", threading.current_thread(), self.timers)
+                logger.error(
+                    "Timer thread not found in timers set when trying to remove it? "
+                    "current_thread: %s, timers: %s.",
+                    threading.current_thread(),
+                    self.timers,
+                )
             with self.context_store.get_context(ctx_id) as context:
                 retry_state = self._retry_state_from_context(context)
                 if retry_state is None:
-                    # this should also never happen, as we should have set the retry state in the previous attempt handler,
-                    # but again, let's just log it and not raise an exception
-                    logger.error("No retry state found in context user data when trying to trigger next attempt? "
-                                 "ctx_id: %s, context user_data: %s.", ctx_id, context.user_data)
+                    # this should also never happen. Retry state should be set in a
+                    # previous handler, but we only log and continue.
+                    logger.error(
+                        "No retry state found in context user data when trying to trigger next attempt? "
+                        "ctx_id: %s, context user_data: %s.",
+                        ctx_id,
+                        context.user_data,
+                    )
                     return
                 self._pipe_to_bus.put(self._next_attempt_message(context, retry_state))
 

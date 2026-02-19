@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import itertools
-import traceback
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, NewType, TypeVar, override, Literal
+from typing import Any, NewType, TypeVar, override
 
 T = TypeVar("T")
 

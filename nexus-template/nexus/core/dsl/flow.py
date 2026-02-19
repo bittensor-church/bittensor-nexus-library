@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, NewType
 
-from .nodes import Node, NodeSinks, NodeSources, Pipes, Sink, Source, SourceName, SinkNode, SourceNode
+from .nodes import Node, NodeSinks, NodeSources, Pipes, Sink, SinkNode, Source, SourceName, SourceNode
 
 SinkPath = NewType("SinkPath", str)
 SourcePath = NewType("SourcePath", str)
@@ -160,7 +160,8 @@ class Flow:
 
         if targets:
             assert self.exit_sources.default_source, (
-                f"No default exit source to connect the continuation to the provided sinks: exit_sources={self.exit_sources}"
+                "No default exit source to connect the continuation to the provided sinks: "
+                f"exit_sources={self.exit_sources}"
             )
 
             source: Source[Any] = self.exit_sources.default_source
@@ -178,7 +179,8 @@ class Flow:
 
                 if target_flow.exit_sources.sources:
                     assert continuation_exit_sources is None, (
-                        f"multiple continuation targets define exit sources: {continuation_exit_sources} and {target_flow.exit_sources}"
+                        "multiple continuation targets define exit sources: "
+                        f"{continuation_exit_sources} and {target_flow.exit_sources}"
                     )
                     continuation_exit_sources = target_flow.exit_sources
 

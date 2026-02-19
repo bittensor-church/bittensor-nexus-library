@@ -5,6 +5,8 @@ import queue
 import urllib.parse
 import uuid
 
+from utils import CollectorActor, Jobs, empty_context_store, wait_until
+
 from nexus.actors.payload_creator import (
     S3PresignedUrlCreator,
     WithS3PresignedUrl,
@@ -14,7 +16,6 @@ from nexus.core.dsl.nodes import Source
 from nexus.core.dsl.piping import Piping
 from nexus.core.runtime.event_bus import EventBus
 from nexus.core.runtime.events import PipeToBus, SendEvent
-from utils import CollectorActor, Jobs, empty_context_store, wait_until
 
 
 def test_s3_presigned_url_creator_actor_adds_presigned_put_url_and_wraps_attempt(
