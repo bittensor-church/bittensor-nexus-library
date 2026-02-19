@@ -9,18 +9,16 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ValidationError
 
-from nexus.core.dsl.nodes import Sink, Source, Node, NodeSources, NodeSinks, SourceName, SinkName, Pipes
+from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.context_store import ContextId, Context, ContextStore
-from nexus.core.runtime.events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, MessagesToSend
+from nexus.core.runtime.context_store import Context, ContextId, ContextStore
+from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 from nexus.logging_utils import get_logger
 
 logger: logging.Logger = get_logger(__name__)
 
 
 class RestEntryPoint[Model: BaseModel](Node, ActorBuilder):
-    # id: ActorId
-    id: str
     source: Source[Model]
     sink: Sink[str]
     path: str
