@@ -1,11 +1,10 @@
 import threading
-from dataclasses import dataclass
 from datetime import timedelta
 from threading import Timer
 from typing import override, Any, NewType
 
 from nexus import get_logger
-from nexus.core.dsl.nodes import Sink, Node, Source, NodeSources, NodeSinks, SourceName, SinkName, Pipes
+from nexus.core.dsl.nodes import Sink, Node, Source, NodeSources, NodeSinks, SourceName, SinkName
 from nexus.core.runtime.actor import ActorBuilder, Actor, EventHandler
 from nexus.core.runtime.context_store import ContextStore, Context
 from nexus.core.runtime.events import PipeToBus, ReceiveEvent, MessagesToSend, SendEvent
@@ -14,11 +13,6 @@ from nexus.utils.exceptions import NexusException
 AttemptNumber = NewType("AttemptNumber", int)  # 1-based index of the attempt, i.e. 1 for the first attempt, 2 for the second, etc.
 
 logger = get_logger(__name__)
-
-@dataclass
-class Attempt[T]:
-    original_input: T
-    attempt_number: AttemptNumber
 
 class RetryState[T]:
     original_input: T
@@ -32,10 +26,8 @@ class RetryState[T]:
     def attempts(self) -> AttemptNumber:
         return self._attempts
 
-    def next_attempt(self) -> Attempt[T]:
+    def next_attempt(self) -> None:
         self._attempts += 1
-        attempt = Attempt(self.original_input, self._attempts)
-        return attempt
 
 
 class RetriesExhaustedException(NexusException):
@@ -49,7 +41,7 @@ class RetryStrategy[T](Node, ActorBuilder):
     input: Sink[T] # consumes the original input and triggers the first attempt
     failed_attempt: Sink[NexusException] # receives failures from the attempt execution
 
-    next_attempt: Source[Attempt[T]] # emits the next attempt to execute, with the original input and the attempt number (starting from 1)
+    next_attempt: Source[T] # emits the next attempt to execute, with the original input
     error: Source[RetriesExhaustedException] # emits an error when all retry attempts have been exhausted
 
 
@@ -145,16 +137,17 @@ class RetryStrategyActor[T](Actor):
         timer.start()
 
     def _next_attempt_message(self, ctx: Context, retry_state: RetryState) -> MessagesToSend:
-        attempt: Attempt = retry_state.next_attempt()
+        retry_state.next_attempt()
         ctx.set_user_data(self.spec.id, retry_state)
         logger.info("Issuing attempt %d. ctx_id: %s", retry_state.attempts, ctx.id)
-        return SendEvent(ctx_id=ctx.id, payload=attempt, source=self.spec.next_attempt)
+        return SendEvent(ctx_id=ctx.id, payload=retry_state.original_input, source=self.spec.next_attempt)
 
 
     def handle_time_for_next_attempt(self, ctx: Context, event: ReceiveEvent[T]) -> MessagesToSend:
         retry_state: RetryState | None = ctx.user_data.get(self.spec.id)
         assert retry_state is not None, f"Received failed attempt without existing retry state? ctx_id: {event.ctx_id}"
         return self._next_attempt_message(ctx, retry_state)
+
 
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {
