@@ -1,21 +1,15 @@
-from threading import Thread
 from typing import NewType
-
-from nexus.actors.uppercase_or_error import UppercaseOrError
-
-from nexus.actors.stringify import Stringify
 
 from nexus.actors import (
     RestEntryPoint,
 )
+from nexus.actors.stringify import Stringify
+from nexus.actors.uppercase_or_error import UppercaseOrError
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.piping import Piping
-from pydantic import BaseModel
-
-from nexus.core.runtime.actor import Actor
-from nexus.core.runtime.context_store import InMemoryContextStorePersistence, ContextStore
 from nexus.core.runtime.event_bus import EventBus
-from nexus.core.runtime.events import PipeToBus
+from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
+from pydantic import BaseModel
 
 S3Url = NewType("S3Url", str)
 ImageName = NewType("ImageName", str)
@@ -41,8 +35,7 @@ class Validator:
 
     stringify_error: Stringify[Exception]
 
-    piping: Piping
-    event_bus: EventBus
+    runtime: SubnetRuntime
 
     def __init__(self, port: int = 8081) -> None:
         self.entry = RestEntryPoint(
@@ -69,29 +62,11 @@ class Validator:
 
         nodes = [self.entry, self.stringify, self.mining_task, self.stringify_error]
 
-        piping: Piping = Piping()
-        for node in nodes:
-            piping.add_flow(Flow.from_connectable(node))
-        piping.add_flow(subnet_flow)
+        self.runtime = SubnetBuilder(nodes=nodes).add_flows(subnet_flow).build()
 
-        persistence: InMemoryContextStorePersistence = InMemoryContextStorePersistence()
-        context_store: ContextStore = ContextStore.recover_from(persistence).context_store
+    def run_loop(self) -> None:
+        self.runtime.run_loop()
 
-        pipe_to_bus = PipeToBus()
-        actors: list[Actor] = [node.build_actor(pipe_to_bus=pipe_to_bus, context_store=context_store)
-                               for node in nodes]
-
-
-        self.event_bus = EventBus(piping.pipes, pipe_to_bus, actors, context_store)
-
-    def run_loop(self) -> tuple[Thread, ...]:
-        jobs: list[Thread] = []
-        # One actor can own multiple sinks, so deduplicate actor instances before starting loops.
-        for actor in set(self.event_bus.sinks.values()):
-            jobs.append(actor.run_loop())
-
-        jobs.append(self.event_bus.run_loop())
-        return tuple(jobs)
-
-    def stop(self):
-        self.event_bus.request_stop()
+    def stop_and_wait_for_shutdown(self, timeout_seconds: float = 30.0) -> None:
+        self.runtime.request_stop()
+        self.runtime.wait_for_stop(timeout_seconds=timeout_seconds)

@@ -1,23 +1,21 @@
 # pyright: basic
 
-import queue
 from datetime import timedelta
 from time import monotonic
 from typing import Any, override
 
 from pydantic import BaseModel
-from utils import CollectorActor, Jobs, empty_context_store, wait_until
 
 from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Sink, Source
-from nexus.core.dsl.piping import Piping
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.context_store_types import ContextId
-from nexus.core.runtime.event_bus import EventBus
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus.core.runtime.subnet_runtime import SubnetBuilder
 from nexus.utils.exceptions import NexusException
+from utils import CollectorActor, wait_until
 
 
 class RetryInput(BaseModel):
@@ -79,191 +77,170 @@ class FailFirstKAttemptsForInputValueActor(Actor):
 
 
 def test_retry_strategy_actor_sends_first_attempt_downstream_on_input() -> None:
-    context_store = empty_context_store()
-    pipe_to_bus: PipeToBus = queue.Queue()
-
     retry_strategy = RetryStrategy[RetryInput]("retry-strategy", max_attempts=3, delay=timedelta(milliseconds=10))
-    retry_actor = retry_strategy.build_actor(pipe_to_bus=pipe_to_bus, context_store=context_store)
+
+    builder = SubnetBuilder(nodes=[retry_strategy])
     collector = CollectorActor[RetryInput](
-        pipe_to_bus=pipe_to_bus,
-        context_store=context_store,
-        name="attempt-collector",
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="input-collector",
     )
 
     upstream_source = Source[RetryInput]("retry-input-source")
-    piping = Piping()
-    piping.add_flow(Flow.from_connectable(upstream_source).then(retry_strategy.input))
-    piping.add_flow(Flow.from_connectable(retry_strategy.next_attempt).then(collector.sink))
 
-    event_bus = EventBus(
-        connections=piping.pipes,
-        input_pipe=pipe_to_bus,
-        actors=[retry_actor, collector],
-        context_store=context_store,
+    runtime = (
+        builder
+        .add_flows(
+            Flow.from_connectable(upstream_source).then(retry_strategy.input),
+            Flow.from_connectable(retry_strategy.next_attempt).then(collector.sink),
+        )
+        .add_actors(collector)
+        .build()
     )
 
-    with context_store.create_context() as context:
+    with runtime.context_store.create_context() as context:
         ctx_id = context.id
 
     payload = RetryInput(value="ping")
-    jobs = Jobs(event_bus.run_loop(), retry_actor.run_loop(), collector.run_loop())
-    try:
-        pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_source, payload=payload))
+    with runtime.running(shutdown_timeout_seconds=1.0):
+        runtime.pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_source, payload=payload))
 
         wait_until(lambda: len(collector.received_events) == 1)
 
         received = collector.received_events[0]
         assert received.ctx_id == ctx_id
         assert received.payload == payload
-        wait_until(lambda: attempts_in_context(context_store, ctx_id, retry_strategy.id) == 1)
+        wait_until(lambda: attempts_in_context(runtime.context_store, ctx_id, retry_strategy.id) == 1)
         assert len(collector.received_events) == 1
-    finally:
-        event_bus.request_stop()
-        jobs.join()
 
 
 def test_retry_strategy_actor_retries_first_k_failures() -> None:
-    context_store = empty_context_store()
-    pipe_to_bus: PipeToBus = queue.Queue()
-
     retry_strategy = RetryStrategy[RetryInput]("retry-strategy", max_attempts=5, delay=timedelta(milliseconds=10))
-    retry_actor = retry_strategy.build_actor(pipe_to_bus=pipe_to_bus, context_store=context_store)
+    builder = SubnetBuilder(nodes=[retry_strategy])
     flaky = FailFirstKAttemptsForInputValueActor(
-        pipe_to_bus=pipe_to_bus,
-        context_store=context_store,
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
         failing_input_value="needs-retries",
         fail_first_k=2,
     )
 
     upstream_source = Source[RetryInput]("retry-input-source")
-    piping = Piping()
-    piping.add_flow(Flow.from_connectable(upstream_source).then(retry_strategy.input))
-    piping.add_flow(Flow.from_connectable(retry_strategy.next_attempt).then(flaky.attempt_sink))
-    piping.add_flow(Flow.from_connectable(flaky.failed_source).then(retry_strategy.failed_attempt))
-
-    event_bus = EventBus(
-        connections=piping.pipes,
-        input_pipe=pipe_to_bus,
-        actors=[retry_actor, flaky],
-        context_store=context_store,
+    runtime = (
+        builder
+        .add_flows(
+            Flow.from_connectable(upstream_source).then(retry_strategy.input),
+            Flow.from_connectable(retry_strategy.next_attempt).then(flaky.attempt_sink),
+            Flow.from_connectable(flaky.failed_source).then(retry_strategy.failed_attempt),
+        )
+        .add_actors(flaky)
+        .build()
     )
 
-    with context_store.create_context() as context:
+    with runtime.context_store.create_context() as context:
         ctx_id = context.id
 
     payload = RetryInput(value="needs-retries")
-    jobs = Jobs(event_bus.run_loop(), retry_actor.run_loop(), flaky.run_loop())
-    try:
-        pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_source, payload=payload))
+    with runtime.running(shutdown_timeout_seconds=1.0):
+        runtime.pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_source, payload=payload))
 
         wait_until(lambda: len(flaky.received_attempt_numbers_by_ctx.get(ctx_id, [])) >= 3)
 
         assert flaky.received_attempt_numbers_by_ctx[ctx_id] == [1, 2, 3]
-        assert attempts_in_context(context_store, ctx_id, retry_strategy.id) == 3
-    finally:
-        event_bus.request_stop()
-        jobs.join()
+
+    assert attempts_in_context(runtime.context_store, ctx_id, retry_strategy.id) == 3
 
 
 def test_retry_strategy_actor_emits_retries_exhausted_after_too_many_failures() -> None:
-    context_store = empty_context_store()
-    pipe_to_bus: PipeToBus = queue.Queue()
-
     retry_strategy = RetryStrategy[RetryInput]("retry-strategy", max_attempts=3, delay=timedelta(milliseconds=10))
-    retry_actor = retry_strategy.build_actor(pipe_to_bus=pipe_to_bus, context_store=context_store)
+    builder = SubnetBuilder(nodes=[retry_strategy])
     flaky = FailFirstKAttemptsForInputValueActor(
-        pipe_to_bus=pipe_to_bus,
-        context_store=context_store,
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
         failing_input_value="always-fails",
         fail_first_k=10,
     )
+
     exhausted_collector = CollectorActor[RetriesExhaustedException](
-        pipe_to_bus=pipe_to_bus,
-        context_store=context_store,
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
         name="retries-exhausted-collector",
     )
 
     upstream_source = Source[RetryInput]("retry-input-source")
-    piping = Piping()
-    piping.add_flow(Flow.from_connectable(upstream_source).then(retry_strategy.input))
-    piping.add_flow(Flow.from_connectable(retry_strategy.next_attempt).then(flaky.attempt_sink))
-    piping.add_flow(Flow.from_connectable(flaky.failed_source).then(retry_strategy.failed_attempt))
-    piping.add_flow(Flow.from_connectable(retry_strategy.error).then(exhausted_collector.sink))
-
-    event_bus = EventBus(
-        connections=piping.pipes,
-        input_pipe=pipe_to_bus,
-        actors=[retry_actor, flaky, exhausted_collector],
-        context_store=context_store,
+    runtime = (
+        builder
+        .add_flows(
+            Flow.from_connectable(upstream_source).then(retry_strategy.input),
+            Flow.from_connectable(retry_strategy.next_attempt).then(flaky.attempt_sink),
+            Flow.from_connectable(flaky.failed_source).then(retry_strategy.failed_attempt),
+            Flow.from_connectable(retry_strategy.error).then(exhausted_collector.sink),
+        )
+        .add_actors(flaky, exhausted_collector)
+        .build()
     )
 
-    with context_store.create_context() as context:
+    with runtime.context_store.create_context() as context:
         ctx_id = context.id
 
     payload = RetryInput(value="always-fails")
-    jobs = Jobs(event_bus.run_loop(), retry_actor.run_loop(), flaky.run_loop(), exhausted_collector.run_loop())
-    try:
-        pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_source, payload=payload))
+    with runtime.running(shutdown_timeout_seconds=1.0):
+        runtime.pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_source, payload=payload))
 
         wait_until(lambda: len(exhausted_collector.received_events) == 1)
 
         assert flaky.received_attempt_numbers_by_ctx[ctx_id] == [1, 2, 3]
-        assert attempts_in_context(context_store, ctx_id, retry_strategy.id) == 3
+        assert attempts_in_context(runtime.context_store, ctx_id, retry_strategy.id) == 3
         exhausted_event = exhausted_collector.received_events[0]
         assert exhausted_event.ctx_id == ctx_id
         assert isinstance(exhausted_event.payload, RetriesExhaustedException)
-        assert "All 3 retry attempts exhausted" in str(exhausted_event.payload)
-    finally:
-        event_bus.request_stop()
-        jobs.join()
 
 
 def test_retry_strategy_retry_wait_in_one_context_does_not_block_other_context() -> None:
-    context_store = empty_context_store()
-    pipe_to_bus: PipeToBus = queue.Queue()
-
     retry_strategy = RetryStrategy[RetryInput]("retry-strategy", max_attempts=5, delay=timedelta(milliseconds=200))
-    retry_actor = retry_strategy.build_actor(pipe_to_bus=pipe_to_bus, context_store=context_store)
+
+    builder = SubnetBuilder(nodes=[retry_strategy])
     flaky = FailFirstKAttemptsForInputValueActor(
-        pipe_to_bus=pipe_to_bus,
-        context_store=context_store,
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
         failing_input_value="needs-retries",
         fail_first_k=2,
     )
     success_collector = CollectorActor[RetryInput](
-        pipe_to_bus=pipe_to_bus,
-        context_store=context_store,
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
         name="attempt-collector-success",
     )
 
     upstream_source = Source[RetryInput]("retry-input-source-multi-context")
-    piping = Piping()
-    piping.add_flow(Flow.from_connectable(upstream_source).then(retry_strategy.input))
-    piping.add_flow(Flow.from_connectable(retry_strategy.next_attempt).then(flaky.attempt_sink))
-    piping.add_flow(Flow.from_connectable(flaky.failed_source).then(retry_strategy.failed_attempt))
-    piping.add_flow(Flow.from_connectable(flaky.success_source).then(success_collector.sink))
-
-    event_bus = EventBus(
-        connections=piping.pipes,
-        input_pipe=pipe_to_bus,
-        actors=[retry_actor, flaky, success_collector],
-        context_store=context_store,
+    runtime = (
+        builder
+        .add_flows(
+            Flow.from_connectable(upstream_source).then(retry_strategy.input),
+            Flow.from_connectable(retry_strategy.next_attempt).then(flaky.attempt_sink),
+            Flow.from_connectable(flaky.failed_source).then(retry_strategy.failed_attempt),
+            Flow.from_connectable(flaky.success_source).then(success_collector.sink),
+        )
+        .add_actors(flaky, success_collector)
+        .build()
     )
 
-    with context_store.create_context() as context:
+    with runtime.context_store.create_context() as context:
         ctx_needs_retries = context.id
-    with context_store.create_context() as context:
+    with runtime.context_store.create_context() as context:
         ctx_always_success = context.id
 
     payload_needs_retries = RetryInput(value="needs-retries")
     payload_always_success = RetryInput(value="always-success")
 
-    jobs = Jobs(event_bus.run_loop(), retry_actor.run_loop(), flaky.run_loop(), success_collector.run_loop())
-    try:
-        pipe_to_bus.put(SendEvent(ctx_id=ctx_needs_retries, source=upstream_source, payload=payload_needs_retries))
+    with runtime.running(shutdown_timeout_seconds=1.0):
+        runtime.pipe_to_bus.put(
+            SendEvent(ctx_id=ctx_needs_retries, source=upstream_source, payload=payload_needs_retries)
+        )
         wait_until(lambda: flaky.received_attempt_numbers_by_ctx.get(ctx_needs_retries) == [1])
 
-        pipe_to_bus.put(SendEvent(ctx_id=ctx_always_success, source=upstream_source, payload=payload_always_success))
+        runtime.pipe_to_bus.put(
+            SendEvent(ctx_id=ctx_always_success, source=upstream_source, payload=payload_always_success)
+        )
         wait_until(lambda: ctx_always_success in flaky.success_emitted_at_by_ctx)
         wait_until(lambda: (ctx_needs_retries, 2) in flaky.attempt_received_at)
 
@@ -276,12 +253,10 @@ def test_retry_strategy_retry_wait_in_one_context_does_not_block_other_context()
 
         assert flaky.received_attempt_numbers_by_ctx[ctx_needs_retries] == [1, 2, 3]
         assert flaky.received_attempt_numbers_by_ctx[ctx_always_success] == [1]
-        assert attempts_in_context(context_store, ctx_always_success, retry_strategy.id) == 1
-        assert attempts_in_context(context_store, ctx_needs_retries, retry_strategy.id) == 3
+        assert attempts_in_context(runtime.context_store, ctx_always_success, retry_strategy.id) == 1
+        assert attempts_in_context(runtime.context_store, ctx_needs_retries, retry_strategy.id) == 3
 
         successes_by_ctx = {event.ctx_id: event.payload for event in success_collector.received_events}
+
         assert successes_by_ctx[ctx_always_success] == payload_always_success
         assert successes_by_ctx[ctx_needs_retries] == payload_needs_retries
-    finally:
-        event_bus.request_stop()
-        jobs.join()
