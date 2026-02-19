@@ -11,21 +11,21 @@ from typing import Any, cast, override
 
 import deepdiff
 
+from ... import get_logger
+from ..dsl.nodes import Source
 from .context_store_types import (
-    LogEntryData,
+    ChildContextCreated,
+    ContextCompleted,
+    ContextCreated,
     ContextId,
-    MessageSent,
-    UserDataChange,
     InvalidContextIdException,
     LogEntry,
-    ChildContextCreated,
-    ContextCreated,
-    ContextCompleted,
+    LogEntryData,
+    MessageSent,
     StepIdx,
+    UserDataChange,
 )
 from .serialization import unsafe_pickle_load
-from ..dsl.nodes import Source
-from ... import get_logger
 
 type LastMessages = dict[ContextId, MessageSent]
 
@@ -85,7 +85,9 @@ class ThreadContextStoreLocks(ContextStoreLocks):
     @override
     def register_context(self, ctx: ContextId) -> None:
         with self.__registry_lock:
-            assert ctx not in self.__locks, f"Context {ctx} already registered in locks? It should have been created first."
+            assert ctx not in self.__locks, (
+                f"Context {ctx} already registered in locks? It should have been created first."
+            )
             self.__locks[ctx] = threading.RLock()
 
     @override
@@ -102,7 +104,10 @@ class ThreadContextStoreLocks(ContextStoreLocks):
         # concurrent processing of the same context, deadlocks etc.
         acquired = context_lock.acquire(blocking=False)
         if not acquired:
-            logger.error(f"Context {ctx} is already locked?; this This is unexpected and may suggest a bug. Attempting to acquire lock in a blocking way...")
+            logger.error(
+                f"Context {ctx} is already locked?; this This is unexpected and may suggest a bug. "
+                "Attempting to acquire lock in a blocking way..."
+            )
             context_lock.acquire()
         try:
             logger.info(f"Context {ctx} locked for processing.")
@@ -129,7 +134,8 @@ def _assert_recovery(old_value: Any, delta: bytes, new_value: Any):
     recovered_value = old_value + parsed_delta
     diff = deepdiff.DeepDiff(recovered_value, new_value)
     assert len(diff) == 0, (
-        f"delta application did not recover the new value? recovered value: {recovered_value!r} != new value: {new_value!r};\n"
+        "delta application did not recover the new value? "
+        f"recovered value: {recovered_value!r} != new value: {new_value!r};\n"
         f"old value: {old_value!r}\napplied delta = {parsed_delta!r}\n"
         f"detected differences: {diff!r}"
     )
@@ -303,7 +309,8 @@ class ContextStore:
             previous_step = steps.get(ctx, None)
             assert (previous_step is None and log_entry.step_idx == StepIdx(0)) or \
                    (previous_step is not None and log_entry.step_idx == previous_step + 1), (
-                f"log entry step idx out of order for context {ctx}: expected {log_entry.step_idx} to be after {previous_step}"
+                f"log entry step idx out of order for context {ctx}: "
+                f"expected {log_entry.step_idx} to be after {previous_step}"
             )
             steps[ctx] = log_entry.step_idx
             assert ctx not in completed_contexts, (
@@ -354,6 +361,10 @@ class ContextStore:
 
         Parents get locked for the duration of the context creation to ensure that no new log entries
         are appended to them during the creation process
+
+        Raises:
+            InvalidContextIdException: if one of the provided parent context ids does not exist.
+            ContextCompletedException: if one of the provided parent contexts is already completed.
         """
         parent_ids = tuple(dict.fromkeys(parents))
         with self._lock_contexts(parent_ids):
@@ -415,7 +426,7 @@ class InMemoryContextStorePersistence(ContextStorePersistence):
         log_entry = LogEntry(
             ctx=ctx,
             step_idx=StepIdx(len(self.__data[ctx])),
-            creation_time=datetime.datetime.now(tz=datetime.timezone.utc),
+            creation_time=datetime.datetime.now(tz=datetime.UTC),
             data=entry,
         )
         self.__data[ctx].append(log_entry)
@@ -434,7 +445,7 @@ class InMemoryContextStorePersistence(ContextStorePersistence):
             )
 
         child_ctx = ContextId(str(uuid.uuid7()))
-        context_creation_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        context_creation_time = datetime.datetime.now(tz=datetime.UTC)
 
         for parent_ctx in parents:
             log_entry = LogEntry(

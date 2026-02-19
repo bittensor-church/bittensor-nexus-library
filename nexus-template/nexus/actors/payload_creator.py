@@ -1,13 +1,13 @@
 import uuid
-from typing import Any, NewType, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, NewType
 
 from pydantic import BaseModel
 
-from nexus.actors.s3_client_provider import S3ClientProvider, DEFAULT_S3_CLIENT_PROVIDER
+from nexus.actors.s3_client_provider import DEFAULT_S3_CLIENT_PROVIDER, S3ClientProvider
 from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus, ReceiveEvent, SendEvent, MessagesToSend
+from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client

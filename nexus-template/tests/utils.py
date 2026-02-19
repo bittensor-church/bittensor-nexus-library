@@ -7,7 +7,7 @@ from tenacity import RetryError, retry, stop_after_delay, wait_fixed
 from nexus.core.dsl.nodes import Sink
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
-from nexus.core.runtime.events import PipeToBus, ReceiveEvent, MessagesToSend
+from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
 
 
 def wait_until(condition, *, timeout=1.0, interval=0.05):

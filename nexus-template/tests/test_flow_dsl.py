@@ -1,7 +1,8 @@
 # pyright: basic
 
+from typing import override
+
 import pytest
-from typing_extensions import override
 
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import (
@@ -14,7 +15,7 @@ from nexus.core.dsl.nodes import (
     SinkName,
     Source,
     SourceName,
-    Transform, Pipes,
+    Transform,
 )
 
 
