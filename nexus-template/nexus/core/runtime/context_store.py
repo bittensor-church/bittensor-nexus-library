@@ -4,12 +4,12 @@ import logging
 import threading
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Iterable, Iterator
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
-from typing import override, Iterable, Any, Iterator, Callable, cast
+from typing import Any, cast, override
 
 import deepdiff
-import deepdiff.serialization
 
 from .context_store_types import (
     LogEntryData,
@@ -32,7 +32,7 @@ type LastMessages = dict[ContextId, MessageSent]
 
 logger: logging.Logger = get_logger(__name__)
 
-DELTA_DESERIALIZER=unsafe_pickle_load
+DELTA_DESERIALIZER = unsafe_pickle_load
 
 
 class ContextStorePersistence(ABC):
@@ -125,12 +125,12 @@ class ContextCompletedException(Exception):
 def _assert_recovery(old_value: Any, delta: bytes, new_value: Any):
     # not sure if we should have that assert in production code...
 
-    delta = deepdiff.Delta(delta, deserializer=DELTA_DESERIALIZER)
-    recovered_value = old_value + delta
+    parsed_delta = deepdiff.Delta(delta, deserializer=DELTA_DESERIALIZER)
+    recovered_value = old_value + parsed_delta
     diff = deepdiff.DeepDiff(recovered_value, new_value)
     assert len(diff) == 0, (
         f"delta application did not recover the new value? recovered value: {recovered_value!r} != new value: {new_value!r};\n"
-        f"old value: {old_value!r}\napplied delta = {delta!r}\n"
+        f"old value: {old_value!r}\napplied delta = {parsed_delta!r}\n"
         f"detected differences: {diff!r}"
     )
 
@@ -195,7 +195,7 @@ class Context:
     def append_message[T](self, source: Source[T], payload: T):
         self._assert_mutable()
         delta = deepdiff.Delta(deepdiff.DeepDiff(self._payload, payload))
-        payload_delta: bytes = delta.dumps()
+        payload_delta = cast(bytes, delta.dumps())
         self._context_store._append_entry(  # pyright: ignore[reportPrivateUsage]
             self._id, MessageSent(source=source.id, payload_delta=payload_delta)
         )
@@ -208,7 +208,7 @@ class Context:
         self._assert_mutable()
         old_value = self._user_data.get(key, None)
         delta = deepdiff.Delta(deepdiff.DeepDiff(old_value, value))
-        value_delta: bytes = delta.dumps()
+        value_delta = cast(bytes, delta.dumps())
         self._context_store._append_entry(self._id, UserDataChange(key=key, value_delta=value_delta)) # pyright: ignore[reportPrivateUsage]
 
         _assert_recovery(old_value, value_delta, value)
