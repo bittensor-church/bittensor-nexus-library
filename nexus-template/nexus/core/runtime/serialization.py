@@ -1,6 +1,7 @@
 import io
 import pickle
-from typing import Any
+from typing import Any, BinaryIO
+
 
 class _UnsafeDeepDiffUnpickler(pickle.Unpickler):
     # Needed because deepdiff.pickle_dump writes this persistent id.
@@ -9,12 +10,22 @@ class _UnsafeDeepDiffUnpickler(pickle.Unpickler):
             return type(None)
         raise pickle.UnpicklingError(f"Unsupported persistent id: {pid!r}")
 
-def unsafe_pickle_load(content: bytes | str | None = None, file_obj=None, safe_to_import=None):
+
+def unsafe_pickle_load(
+    content: bytes | str | None = None,
+    file_obj: BinaryIO | None = None,
+    safe_to_import: object | None = None,
+) -> Any:
     # safe_to_import intentionally ignored (unsafe mode)
+    _ = safe_to_import
     if content is None and file_obj is None:
         raise ValueError("Pass content or file_obj")
     if isinstance(content, str):
         content = content.encode("utf-8")
+    data_stream: BinaryIO
     if content is not None:
-        file_obj = io.BytesIO(content)
-    return _UnsafeDeepDiffUnpickler(file_obj).load()
+        data_stream = io.BytesIO(content)
+    else:
+        assert file_obj is not None
+        data_stream = file_obj
+    return _UnsafeDeepDiffUnpickler(data_stream).load()
