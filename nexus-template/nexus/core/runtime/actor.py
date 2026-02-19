@@ -5,9 +5,10 @@ from threading import Thread
 from typing import Any, NewType
 
 from nexus.logging_utils import get_logger
-from .context_store import ContextStore, Context
-from .events import PipeFromBus, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, MessagesToSend
+
 from ..dsl.nodes import Sink
+from .context_store import Context, ContextStore
+from .events import MessagesToSend, PipeFromBus, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
 
 logger = get_logger("Actor")
 
@@ -17,10 +18,17 @@ EventHandler = Callable[[Context, ReceiveEvent[Any]], MessagesToSend]
 
 
 class Actor(ABC):
+    """
+    Base runtime processing unit.
+
+    Actor instances are one-off: their event loop can be started only once.
+    """
+
     actor_id: ActorId
     context_store: ContextStore
     pipe_from_bus: PipeFromBus  # transport for incoming events
     _pipe_to_bus: PipeToBus  # transport for outgoing events
+    thread: Thread | None
 
     actor_counter: itertools.count[int] = itertools.count()
 
@@ -33,11 +41,14 @@ class Actor(ABC):
         self.pipe_from_bus = PipeFromBus()
         self._pipe_to_bus = pipe_to_bus
         self.context_store = context_store
+        self.thread = None
 
     def run_loop(self) -> Thread:
-        t: Thread = Thread(target=self._loop, daemon=True, name=f"ActorLoop-{self.actor_id}")
-        t.start()
-        return t
+        if self.thread is not None:
+            raise RuntimeError(f"Actor {self.actor_id} is already running in thread {self.thread.name}")
+        self.thread = Thread(target=self._loop, daemon=True, name=f"ActorLoop-{self.actor_id}")
+        self.thread.start()
+        return self.thread
 
     def _loop(self) -> None:
         while True:
@@ -55,7 +66,10 @@ class Actor(ABC):
                             events_produced_by_the_handler = handler(context, event_to_handle)
                     except Exception as exc:
                         logger.error(
-                            f"Error while handling event {event_to_handle} in actor {self.actor_id} for target {event_to_handle.target}",
+                            "Error while handling event %s in actor %s for target %s",
+                            event_to_handle,
+                            self.actor_id,
+                            event_to_handle.target,
                             exc_info=exc,
                         )
                 else:

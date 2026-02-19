@@ -1,7 +1,6 @@
 import json
 import socket
 import time
-from threading import Thread
 from urllib import error, request
 
 from cat_images.validator import SingleCatImageInput, Validator
@@ -50,10 +49,8 @@ def test_validator_integration() -> None:
     validator = Validator(port)
     url = f"http://127.0.0.1:{validator.entry.port}{validator.entry.path}"
 
-    jobs: tuple[Thread, ...] = ()
-
     try:
-        jobs = validator.run_loop()
+        validator.run_loop()
         _wait_for_port_state(port=validator.entry.port, should_be_open=True)
 
         invalid_status, invalid_body = _post_json(url, {"image_s3_url": "a"})
@@ -71,16 +68,11 @@ def test_validator_integration() -> None:
         expected_odd_result = str(SingleCatImageInput.model_validate(odd_payload)).upper()
         assert odd_body == expected_odd_result
     finally:
-        validator.stop()
         cleanup_errors = []
-        for job in jobs:
-            try:
-                job.join(5.0)
-            except RuntimeError as exc:
-                cleanup_errors.append(exc)
-        for job in jobs:
-            if job.is_alive():
-                cleanup_errors.append(RuntimeError(f"Job {job.name} is still alive after join attempt"))
+        try:
+            validator.stop_and_wait_for_shutdown(timeout_seconds=5.0)
+        except TimeoutError as exc:
+            cleanup_errors.append(exc)
         try:
             _wait_for_port_state(port=validator.entry.port, should_be_open=False)
         except AssertionError as exc:

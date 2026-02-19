@@ -13,7 +13,7 @@ def main() -> None:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        validator.stop()
+        validator.stop_and_wait_for_shutdown()
 
 
 if __name__ == "__main__":

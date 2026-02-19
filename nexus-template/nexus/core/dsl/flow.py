@@ -93,7 +93,7 @@ SourcePath = NewType("SourcePath", str)
 """
 
 
-type Connectable = Node | Sink | Source
+type Connectable = Node | Sink[Any] | Source[Any]
 
 
 class Flow:
