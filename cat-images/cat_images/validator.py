@@ -1,3 +1,5 @@
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import NewType
 
 from nexus.actors import (
@@ -64,9 +66,7 @@ class Validator:
 
         self.runtime = SubnetBuilder(nodes=nodes).add_flows(subnet_flow).build()
 
-    def run_loop(self) -> None:
-        self.runtime.run_loop()
-
-    def stop_and_wait_for_shutdown(self, timeout_seconds: float = 30.0) -> None:
-        self.runtime.request_stop()
-        self.runtime.wait_for_stop(timeout_seconds=timeout_seconds)
+    @contextmanager
+    def running(self, shutdown_timeout_seconds: float = 30.0) -> Generator[SubnetRuntime]:
+        with self.runtime.running(shutdown_timeout_seconds=shutdown_timeout_seconds) as runtime:
+            yield runtime
