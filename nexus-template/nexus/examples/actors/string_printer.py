@@ -1,6 +1,6 @@
 from typing import override
 
-from nexus.core.runtime.context_store import ContextId, ContextStore
+from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.dsl.nodes import Sink
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import ConsumerActor
@@ -24,5 +24,5 @@ class StringPrinterActor(ConsumerActor[str]):
     def __init__(self, *, spec: StringPrinter, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
         super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
-    def _consume(self, ctx: ContextId, payload: str) -> None:
+    def _consume(self, ctx: Context, payload: str) -> None:
         print(payload)
