@@ -1,6 +1,6 @@
 from typing import override
 
-from nexus.core.runtime.context_store import ContextId, ContextStore
+from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.dsl.nodes import DoubleTransform
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import DoubleTransformActor
@@ -31,9 +31,9 @@ class UppercaseInputLowercaseOutputActor(DoubleTransformActor[str, str, str, str
         )
 
     @override
-    def _transform_input(self, ctx: ContextId, payload: str) -> str:
+    def _transform_input(self, ctx: Context, payload: str) -> str:
         return payload.upper()
 
     @override
-    def _transform_output(self, ctx: ContextId, payload: str) -> str:
+    def _transform_output(self, ctx: Context, payload: str) -> str:
         return payload.lower()

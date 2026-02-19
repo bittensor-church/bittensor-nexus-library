@@ -1,6 +1,6 @@
 from typing import override
 
-from nexus.core.runtime.context_store import ContextId, ContextStore
+from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.dsl.nodes import Transform
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import TransformActor
@@ -25,7 +25,7 @@ class UppercaseOrErrorActor(TransformActor[str, str]):
         super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     @override
-    def _transform(self, ctx: ContextId, payload: str) -> str:
+    def _transform(self, ctx: Context, payload: str) -> str:
         if len(payload) % 2 == 0:
             raise EvenSucks(f"The input string has an even number of characters: {len(payload)}")
         else:
