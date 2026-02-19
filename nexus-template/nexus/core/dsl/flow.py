@@ -133,19 +133,22 @@ class Flow:
 
     @classmethod
     def from_connectable(cls, connectable: Connectable) -> Flow:
+        node: Node
         match connectable:
-            case Sink() as s:
-                connectable = SinkNode(s)
-            case Source() as s:
-                connectable = SourceNode(s)
-        sinks = connectable.sinks()
-        sources = connectable.sources()
+            case Sink() as sink:
+                node = SinkNode(sink)
+            case Source() as source:
+                node = SourceNode(source)
+            case Node() as node:
+                pass
+        sinks = node.sinks()
+        sources = node.sources()
 
         flow_object = cls(
             entry_sinks=sinks,
             exit_sources=sources,
             pipes=Pipes(),
-            nodes={connectable},
+            nodes={node},
             sinks=set(sinks.sinks.values()),
             sources=set(sources.sources.values()),
         )
@@ -191,7 +194,9 @@ class Flow:
                 )
                 source = self.exit_sources.sources[source_name]
 
-                targets_to_connect: Iterable[Node | Flow] = list(target) if isinstance(target, Iterable) else [target]
+                targets_to_connect: Iterable[Connectable | Flow] = (
+                    list(target) if isinstance(target, Iterable) else [target]
+                )
 
                 for target_item in targets_to_connect:
                     target_flow = Flow._as_flow(target_item)
