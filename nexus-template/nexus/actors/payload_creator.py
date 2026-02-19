@@ -1,12 +1,10 @@
 import uuid
 from typing import Any, NewType, Protocol, cast
 
-import boto3
-from botocore.config import Config
 from pydantic import BaseModel
 
 from nexus.actors.retry_strategy import Attempt
-from nexus.actors.s3_config import S3Config
+from nexus.actors.s3_client_provider import S3ClientProvider, DefaultS3ClientProvider
 from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore
@@ -51,20 +49,23 @@ class WithS3PresignedUrl[Input](BaseModel):
     s3_presigned_url: S3PresignedUrl
 
 class S3PresignedUrlCreator[Input](PayloadCreator[Input, WithS3PresignedUrl[Input]], ActorBuilder):
-    s3_config: S3Config
+    s3_client_provider: S3ClientProvider
     presigned_url_expiration_seconds: int
+    bucket: str
 
     def __init__(
         self,
         _id: str,
         *,
-        s3_config: S3Config,
+        bucket: str,
+        s3_client_provider: S3ClientProvider = DefaultS3ClientProvider(),
         presigned_url_expiration_seconds: int = 900,
     ) -> None:
         super().__init__(_id)
         assert presigned_url_expiration_seconds > 0, "presigned_url_expiration_seconds must be > 0"
-        self.s3_config = s3_config
+        self.s3_client_provider = s3_client_provider
         self.presigned_url_expiration_seconds = presigned_url_expiration_seconds
+        self.bucket = bucket
 
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
         return S3PresignedUrlCreatorActor[Input](spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
@@ -99,17 +100,7 @@ class S3PresignedUrlCreatorActor[Input](Actor):
         self.spec = spec
         self._s3_client = cast(
             S3PresignedUrlCreatorActor._PresigningClient,
-            boto3.client(  # pyright: ignore[reportUnknownMemberType]
-                "s3",
-                aws_access_key_id=self.spec.s3_config.aws_access_key_id,
-                aws_secret_access_key=self.spec.s3_config.aws_secret_access_key,
-                region_name=self.spec.s3_config.region_name,
-                endpoint_url=self.spec.s3_config.endpoint_url,
-                config=Config(
-                    signature_version="s3v4",
-                    s3={"addressing_style": self.spec.s3_config.s3_addressing_style},
-                ),
-            ),
+            self.spec.s3_client_provider.get_client(),
         )
 
     def handlers(self) -> dict[Sink[Any], EventHandler]:
@@ -127,7 +118,7 @@ class S3PresignedUrlCreatorActor[Input](Actor):
 
         url = self._s3_client.generate_presigned_url(
             ClientMethod="put_object",
-            Params={"Bucket": self.spec.s3_config.bucket_name, "Key": s3_key},
+            Params={"Bucket": self.spec.bucket, "Key": s3_key},
             ExpiresIn=self.spec.presigned_url_expiration_seconds,
             HttpMethod="PUT",
         )
