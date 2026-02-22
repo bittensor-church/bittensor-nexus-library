@@ -8,12 +8,20 @@ import boto3
 import pytest
 from moto.server import ThreadedMotoServer
 
+from nexus.utils.types import SubnetId
+
 DEFAULT_TEST_S3_BUCKET = "uploads"
+DEFAULT_TEST_NETUID = SubnetId(1)
 
 
 @pytest.fixture
 def default_test_s3_bucket() -> str:
     return DEFAULT_TEST_S3_BUCKET
+
+
+@pytest.fixture
+def default_test_netuid() -> SubnetId:
+    return DEFAULT_TEST_NETUID
 
 
 @pytest.fixture

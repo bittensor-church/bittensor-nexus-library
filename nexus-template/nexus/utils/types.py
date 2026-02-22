@@ -9,5 +9,5 @@ SubnetId = NewType("SubnetId", int)
 
 
 class Epoch(NamedTuple):
-    start: BlockNumber
-    end: BlockNumber
+    first_block: BlockNumber
+    last_block: BlockNumber

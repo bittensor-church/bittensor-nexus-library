@@ -22,4 +22,4 @@ def get_epoch_containing_block(block: BlockNumber, netuid: SubnetId, tempo: Temp
     else:
         prev_epoch = next_epoch - interval
 
-    return Epoch(BlockNumber(prev_epoch), BlockNumber(next_epoch))
+    return Epoch(BlockNumber(prev_epoch), BlockNumber(next_epoch - 1))

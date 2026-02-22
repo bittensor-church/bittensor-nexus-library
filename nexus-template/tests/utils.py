@@ -4,10 +4,14 @@ from typing import Any
 
 from tenacity import RetryError, retry, stop_after_delay, wait_fixed
 
+from nexus.actors.chain_beat.block_beat import BlockBeat
+from nexus.actors.chain_beat.epoch_beat import EpochBeat
 from nexus.core.dsl.nodes import Sink
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
+from nexus.utils.chain import get_epoch_containing_block
+from nexus.utils.types import BlockNumber, BlockTimestamp, BlockHash, SubnetId
 
 
 def wait_until(condition, *, timeout=1.0, interval=0.05):
@@ -64,3 +68,15 @@ class CollectorActor[T](Actor):
 def empty_context_store() -> ContextStore:
     persistence = InMemoryContextStorePersistence()
     return ContextStore.recover_from(persistence).context_store
+
+
+def dummy_epoch_beat(block_number: BlockNumber, netuid: SubnetId) -> EpochBeat:
+    return EpochBeat(epoch=get_epoch_containing_block(block_number, netuid=netuid))
+
+
+def dummy_block_beat(block_number: BlockNumber) -> BlockBeat:
+    return BlockBeat(
+        block_number=BlockNumber(block_number),
+        block_timestamp=BlockTimestamp(block_number * 1000),
+        block_hash=BlockHash(f"0x{block_number:064x}"),
+    )
