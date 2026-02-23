@@ -27,7 +27,7 @@ uv run ruff check --fix && uv run ruff format
 uv run basedpyright
 
 # Tests
-uv run pytest -q --tb=line -r f
+uv run pytest
 ```
 
 ## Project structure
@@ -38,7 +38,7 @@ nexus/
 │   ├── dsl/          # Flow DSL — nodes, pipes, flow definitions
 │   └── runtime/      # Event bus, actors, context store, serialization
 ├── actors/           # Built-in actors (scheduler, retry, REST, S3, etc.)
-├── examples/         # Example actors for reference
+├── examples/         # Examples of actor usage
 └── utils/            # Shared utilities
 tests/                # pytest suite
 ```
