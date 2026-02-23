@@ -39,6 +39,9 @@ class Jobs:
 
 
 class CollectorActor[T](Actor):
+    sink: Sink[T]
+    received_events: list[ReceiveEvent[T]]
+
     def __init__(
         self,
         *,
@@ -48,7 +51,7 @@ class CollectorActor[T](Actor):
     ) -> None:
         super().__init__(name=name, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.sink = Sink[T](f"{name}-sink")
-        self.received_events: list[ReceiveEvent[T]] = []
+        self.received_events = []
 
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {self.sink: self._handle}
