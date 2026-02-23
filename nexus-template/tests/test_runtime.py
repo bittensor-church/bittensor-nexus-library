@@ -24,6 +24,7 @@ from nexus.core.runtime.events import (
     StopActorEvent,
     StopBusEvent,
 )
+from nexus.utils.exceptions import NexusException, SafeInvokeWrappedException
 
 
 class DualSinkActor(Actor):
@@ -476,8 +477,10 @@ def test_double_transform_actor_routes_input_output_and_errors():
     assert input_ok.ctx_id == ctx_input_ok.id
 
     assert input_error.source == actor.input_spec.error
-    assert isinstance(input_error.payload, ValueError)
-    assert str(input_error.payload) == "input-failed"
+    assert isinstance(input_error.payload, SafeInvokeWrappedException)
+    assert input_error.payload.__cause__ is not None
+    assert isinstance(input_error.payload.__cause__, ValueError)
+    assert str(input_error.payload.__cause__) == "input-failed"
     assert input_error.ctx_id == ctx_input_error.id
 
     assert output_ok.source == actor.output_spec.ok
@@ -485,8 +488,10 @@ def test_double_transform_actor_routes_input_output_and_errors():
     assert output_ok.ctx_id == ctx_output_ok.id
 
     assert output_error.source == actor.output_spec.error
-    assert isinstance(output_error.payload, ValueError)
-    assert str(output_error.payload) == "output-failed"
+    assert isinstance(output_error.payload, SafeInvokeWrappedException)
+    assert output_error.payload.__cause__ is not None
+    assert isinstance(output_error.payload.__cause__, ValueError)
+    assert str(output_error.payload.__cause__) == "output-failed"
     assert output_error.ctx_id == ctx_output_error.id
 
     assert pipe_to_bus.empty()

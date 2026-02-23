@@ -41,6 +41,7 @@ format = [
 test = [
     "basedpyright",
     "boto3-stubs[s3]",
+    "polyfactory",
     "pytest",
     "tenacity",
     "pytest-cov",

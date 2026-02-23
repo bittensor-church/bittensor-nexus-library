@@ -53,6 +53,7 @@ version = "0.1.0"
 source = { editable = "../nexus-template" }
 dependencies = [
     { name = "bittensor-pylon-client" },
+    { name = "boto3" },
     { name = "deepdiff" },
     { name = "litestar", extra = ["prometheus", "standard"] },
     { name = "pydantic" },
@@ -63,23 +64,31 @@ dependencies = [
 requires-dist = [
     { name = "basedpyright", marker = "extra == 'test'" },
     { name = "bittensor-pylon-client" },
+    { name = "boto3" },
+    { name = "boto3-stubs", extras = ["s3"], marker = "extra == 'test'" },
     { name = "deepdiff" },
     { name = "litestar", extras = ["standard", "prometheus"] },
+    { name = "moto", extras = ["server"], marker = "extra == 'test'" },
+    { name = "polyfactory", marker = "extra == 'test'" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-cov", marker = "extra == 'test'" },
+    { name = "requests", marker = "extra == 'test'" },
     { name = "ruff", marker = "extra == 'format'" },
     { name = "tenacity", marker = "extra == 'test'" },
 ]
 provides-extras = ["format", "test"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "basedpyright", specifier = ">=1.36.1" }]
+dev = [
+    { name = "basedpyright", specifier = ">=1.36.1" },
+    { name = "boto3-stubs", extras = ["s3"] },
+]
 
 [[package]]
 name = "bittensor-pylon-client"
-version = "1.7.0"
+version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apscheduler" },
@@ -89,9 +98,36 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/22/2f/fe0104d6d2a820172ad6c2108b0add1bfe7dbad0b233ed83d9e8a19be943/bittensor_pylon_client-1.7.0.tar.gz", hash = "sha256:8041413b29e368cfc7edbd19526cfbd5479006da923dc2e7c9628ecc7127e335", size = 24668, upload-time = "2026-02-12T09:58:58.54Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5d/31/4398bf68255ef256d3dc3992f1ee3f50ceecad0410c90ef1fa6c2a3b8a75/bittensor_pylon_client-1.8.0.tar.gz", hash = "sha256:d43a65742a15d8b43311f22616360fd72e134f470225a719b5235b6746a840f3", size = 22436, upload-time = "2026-02-20T08:43:53.649Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/58/029cc473947789d43ede525d0ed6d0bc19f88e5b7146b902ee6d03bbd8b2/bittensor_pylon_client-1.7.0-py3-none-any.whl", hash = "sha256:9b7bf189476204dd9f1fc18d3bfe36f0f63123e1a6ff41f7cd06eae5dc07297a", size = 34744, upload-time = "2026-02-12T09:58:57.048Z" },
+    { url = "https://files.pythonhosted.org/packages/75/c7/e8037067d3b87ad6e4ac876375cdbd4844fdc581ea958133724c3f81139a/bittensor_pylon_client-1.8.0-py3-none-any.whl", hash = "sha256:4c0f500dd27d02f880b41532a0ca663bae30a1bb98e29a91b641e57b10914ad4", size = 47761, upload-time = "2026-02-20T08:43:52.128Z" },
+]
+
+[[package]]
+name = "boto3"
+version = "1.42.56"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "botocore" },
+    { name = "jmespath" },
+    { name = "s3transfer" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/59/bb/a7fd6f4f38cf0f6cd91c152442cbe5b5f270275a60a5c7147ae5560f2f25/boto3-1.42.56-py3-none-any.whl", hash = "sha256:e09f91170b19e0ecd5e514321d99323be3e91a58dfa73fd58cf73b7b8b179c84", size = 140556, upload-time = "2026-02-24T20:28:49.815Z" },
+]
+
+[[package]]
+name = "botocore"
+version = "1.42.56"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jmespath" },
+    { name = "python-dateutil" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/2f/f6351cca2e3a087fb82a5c19e4d60e93a5dae27e9a085cc5fcb7faca8bd4/botocore-1.42.56.tar.gz", hash = "sha256:b1d7d3cf2fbe4cc1804a6567a051fc7141d21bcdcfde0336257b8dd2085272c2", size = 14939515, upload-time = "2026-02-24T20:28:40.55Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/09/dcc3f79de57f684d844ca853eeebff1786e5d672cf600f8ee6a118a9f015/botocore-1.42.56-py3-none-any.whl", hash = "sha256:111089dea212438a5197e909e5b528e7c30fd8cbd02c8c7d469359b368929343", size = 14612466, upload-time = "2026-02-24T20:28:36.379Z" },
 ]
 
 [[package]]
@@ -359,6 +395,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
+]
+
+[[package]]
+name = "jmespath"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/59/322338183ecda247fb5d1763a6cbe46eff7222eaeebafd9fa65d4bf5cb11/jmespath-1.1.0.tar.gz", hash = "sha256:472c87d80f36026ae83c6ddd0f1d05d4e510134ed462851fd5f754c8c3cbb88d", size = 27377, upload-time = "2026-01-22T16:35:26.279Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/14/2f/967ba146e6d58cf6a652da73885f52fc68001525b4197effc174321d70b4/jmespath-1.1.0-py3-none-any.whl", hash = "sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64", size = 20419, upload-time = "2026-01-22T16:35:24.919Z" },
 ]
 
 [[package]]
@@ -862,6 +907,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5d/93/2a5063341fa17054e5c86582136e9895db773e3c2ffb770dde50a09f35f0/ruff-0.14.8-py3-none-win32.whl", hash = "sha256:15f04cb45c051159baebb0f0037f404f1dc2f15a927418f29730f411a79bc4e7", size = 13151890, upload-time = "2025-12-04T15:06:11.668Z" },
     { url = "https://files.pythonhosted.org/packages/02/1c/65c61a0859c0add13a3e1cbb6024b42de587456a43006ca2d4fd3d1618fe/ruff-0.14.8-py3-none-win_amd64.whl", hash = "sha256:9eeb0b24242b5bbff3011409a739929f497f3fb5fe3b5698aba5e77e8c833097", size = 14537826, upload-time = "2025-12-04T15:06:26.409Z" },
     { url = "https://files.pythonhosted.org/packages/6d/63/8b41cea3afd7f58eb64ac9251668ee0073789a3bc9ac6f816c8c6fef986d/ruff-0.14.8-py3-none-win_arm64.whl", hash = "sha256:965a582c93c63fe715fd3e3f8aa37c4b776777203d8e1d8aa3cc0c14424a4b99", size = 13634522, upload-time = "2025-12-04T15:06:43.212Z" },
+]
+
+[[package]]
+name = "s3transfer"
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "botocore" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/05/04/74127fc843314818edfa81b5540e26dd537353b123a4edc563109d8f17dd/s3transfer-0.16.0.tar.gz", hash = "sha256:8e990f13268025792229cd52fa10cb7163744bf56e719e0b9cb925ab79abf920", size = 153827, upload-time = "2025-12-01T02:30:59.114Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/51/727abb13f44c1fcf6d145979e1535a35794db0f6e450a0cb46aa24732fe2/s3transfer-0.16.0-py3-none-any.whl", hash = "sha256:18e25d66fed509e3868dc1572b3f427ff947dd2c56f844a5bf09481ad3f3b2fe", size = 86830, upload-time = "2025-12-01T02:30:57.729Z" },
 ]
 
 [[package]]

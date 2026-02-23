@@ -5,6 +5,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, NewType, TypeVar, override
 
+from nexus.utils.exceptions import NexusException
+
 T = TypeVar("T")
 
 # globally unique IDs for Sources, Sinks and Actors, to be used to identify them in the system
@@ -159,10 +161,10 @@ class Fork[From, ToLeft, ToRight](Node):
         )
 
 
-class Transform[From, To](Fork[From, To, Exception]):
+class Transform[From, To](Fork[From, To, NexusException]):
     # convenient aliases
     ok: Source[To]
-    error: Source[Exception]
+    error: Source[NexusException]
     """
         A logical data processing unit that consumes data from a Sink and produces data to the ok Source or
         reports errors to the error Source.
@@ -199,11 +201,11 @@ class DoubleTransform[InputFrom, InputTo, OutputFrom, OutputTo](Node):
     # convenient aliases
     input_sink: Sink[InputFrom]
     input_ok: Source[InputTo]
-    input_error: Source[Exception]
+    input_error: Source[NexusException]
 
     output_sink: Sink[OutputFrom]
     output_ok: Source[OutputTo]
-    output_error: Source[Exception]
+    output_error: Source[NexusException]
 
     def __init__(self, _id: str):
         super().__init__(_id)

@@ -2,16 +2,23 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, cast, override
 
+from nexus.utils.exceptions import NexusException, SafeInvokeWrappedException
+
 from ..dsl.nodes import Fork, Sink, Source, Transform
 from .actor import Actor, EventHandler
 from .context_store import Context, ContextStore
 from .events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 
 
-def _safe_invoke[ReturnType](fn: Callable[[], ReturnType]) -> tuple[ReturnType, None] | tuple[None, Exception]:
+def _safe_invoke[ReturnType](fn: Callable[[], ReturnType]) -> tuple[ReturnType, None] | tuple[None, NexusException]:
     try:
-        return fn(), None
-    except Exception as exception:
+        try:
+            return fn(), None
+        except NexusException:
+            raise
+        except Exception as exception:
+            raise SafeInvokeWrappedException() from exception
+    except NexusException as exception:
         return None, exception
 
 
@@ -68,14 +75,14 @@ class ForkActor[From, ToLeft, ToRight](Actor, ABC):
         pass
 
 
-class TransformActor[From, To](ForkActor[From, To, Exception], ABC):
+class TransformActor[From, To](ForkActor[From, To, NexusException], ABC):
     spec: Transform[From, To]
 
     def __init__(self, spec: Transform[From, To], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
         super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     @override
-    def _process(self, ctx: Context, payload: From) -> tuple[To, None] | tuple[None, Exception]:
+    def _process(self, ctx: Context, payload: From) -> tuple[To, None] | tuple[None, NexusException]:
         return _safe_invoke(lambda: self._transform(ctx, payload))
 
     @abstractmethod
