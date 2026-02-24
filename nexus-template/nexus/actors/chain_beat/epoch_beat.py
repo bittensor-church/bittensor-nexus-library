@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import time
@@ -60,7 +61,7 @@ class EpochBeatNode(Node, ActorBuilder):
         self.source = Source[EpochBeat](_id)
 
     @override
-    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> "EpochBeatActor":
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> EpochBeatActor:
         return EpochBeatActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     def sinks(self) -> NodeSinks:

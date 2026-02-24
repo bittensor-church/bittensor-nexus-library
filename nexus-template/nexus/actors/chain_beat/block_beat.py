@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import time
@@ -59,7 +60,7 @@ class BlockBeatNode(Node, ActorBuilder):
         self.pylon_client: PylonClient = pylon_client
 
     @override
-    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> "BlockBeatActor":
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> BlockBeatActor:
         return BlockBeatActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
     def sinks(self) -> NodeSinks:
