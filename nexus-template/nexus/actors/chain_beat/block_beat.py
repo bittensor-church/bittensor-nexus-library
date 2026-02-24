@@ -38,6 +38,11 @@ class BlockBeatNode(Node, ActorBuilder):
        object contains the block timestamp if you need to know it.
     """
 
+    source: Source[BlockBeat]
+    every_nth: BlockCount
+    polling_interval: timedelta
+    pylon_client: PylonClient
+
     def __init__(
         self,
         _id: str,
@@ -57,7 +62,7 @@ class BlockBeatNode(Node, ActorBuilder):
         self.source = Source(_id)
         self.every_nth = every_nth
         self.polling_interval = polling_interval
-        self.pylon_client: PylonClient = pylon_client
+        self.pylon_client = pylon_client
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> BlockBeatActor:
@@ -71,6 +76,9 @@ class BlockBeatNode(Node, ActorBuilder):
 
 
 class BlockBeatActor(ProducerActor[BlockBeat]):
+    spec: BlockBeatNode
+    _stop_event: Event
+
     def __init__(self, spec: BlockBeatNode, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
         super().__init__(source=spec.source, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.spec = spec

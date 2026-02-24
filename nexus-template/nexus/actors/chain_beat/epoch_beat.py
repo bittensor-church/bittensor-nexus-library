@@ -36,6 +36,13 @@ class EpochBeatNode(Node, ActorBuilder):
        waiting until an epoch is safely finalized.
     """
 
+    source: Source[EpochBeat]
+    netuid: SubnetId
+    delay_blocks: BlockCount
+    polling_interval: timedelta
+    pylon_client: PylonClient
+
+
     def __init__(
         self,
         _id: str,
@@ -54,11 +61,11 @@ class EpochBeatNode(Node, ActorBuilder):
             pylon_client: The Pylon client to use for polling
         """
         super().__init__(_id)
+        self.source = Source[EpochBeat](_id)
         self.netuid = netuid
         self.delay_blocks = delay
-        self.pylon_client: PylonClient = pylon_client
         self.polling_interval = polling_interval
-        self.source = Source[EpochBeat](_id)
+        self.pylon_client: PylonClient = pylon_client
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> EpochBeatActor:
@@ -72,6 +79,9 @@ class EpochBeatNode(Node, ActorBuilder):
 
 
 class EpochBeatActor(ProducerActor[EpochBeat]):
+    spec: EpochBeatNode
+    _stop_event: Event
+
     def __init__(self, spec: EpochBeatNode, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
         super().__init__(source=spec.source, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.spec = spec

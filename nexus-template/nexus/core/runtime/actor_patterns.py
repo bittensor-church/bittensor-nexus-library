@@ -56,11 +56,15 @@ class ProducerActor[Product](Actor, ABC):
     The produce thread is a daemon and will be killed on process exit if _stop() fails to unblock it.
     """
 
+    source: Source[Product]
+    _pipe_to_bus: PipeToBus
+    producer_thread: Thread | None
+
     def __init__(self, source: Source[Product], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
         super().__init__(name=source.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.source = source
         self._pipe_to_bus = pipe_to_bus
-        self.producer_thread: Thread | None = None
+        self.producer_thread = None
 
     @override
     def handlers(self) -> dict[Sink[Any], EventHandler]:
