@@ -1,20 +1,21 @@
 from __future__ import annotations
-from dataclasses import dataclass
+
 import logging
 import time
+from dataclasses import dataclass
 from datetime import timedelta
 from threading import Event
-from typing import override, Generator
+from typing import Generator, override
 
 from pylon_client.v1 import PylonClient, PylonResponseException
 
-from nexus.core.dsl.nodes import Source, Node, NodeSources, NodeSinks, SourceName
+from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Source, SourceName
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import ProducerActor
 from nexus.core.runtime.context_store import ContextStore
 from nexus.core.runtime.events import PipeToBus
 from nexus.logging_utils import get_logger
-from nexus.utils.types import BlockNumber, BlockTimestamp, BlockHash, BlockCount
+from nexus.utils.types import BlockCount, BlockHash, BlockNumber, BlockTimestamp
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -98,6 +99,8 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
             poll_start = time.monotonic()
 
             try:
+                # 1. Retry on PylonResponseException - these may be transient
+                # 2. Bubble up all other exceptions - ProducerActor will handle that
                 response = pylon.open_access.get_latest_block_info()
 
             except PylonResponseException as exc:
