@@ -1,14 +1,18 @@
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from threading import Thread
 from typing import Any, Generator, cast, override
 
+from nexus.logging_utils import get_logger
 from nexus.utils.exceptions import InternalFrameworkException, NexusException, SafeInvokeWrappedException
 
 from ..dsl.nodes import Fork, Sink, Source, Transform
 from .actor import Actor, EventHandler
 from .context_store import Context, ContextId, ContextStore
 from .events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
+
+logger: logging.Logger = get_logger(__name__)
 
 
 def _safe_invoke[ReturnType](fn: Callable[[], ReturnType]) -> tuple[ReturnType, None] | tuple[None, NexusException]:
@@ -50,10 +54,10 @@ class ProducerActor[Product](Actor, ABC):
     Runs _produce() in a background daemon thread while the main actor thread watches for the framework stop signal.
 
     It is expected that it will loop and sleep as necessary while respecting some form of a stop signal:
-     - For a blocking resource-backed producer like a WS listener, _stop() may close the underlying resource.
-     - For polling-based producers, the loop may sleep on a threading.Event while _stop() should set the event.
+     - For a blocking resource-backed producer like a WS listener, on_stop() may close the underlying resource.
+     - For sleep-based polling producers, the loop may sleep on a threading.Event while on_stop() should set the event.
 
-    The produce thread is a daemon and will be killed on process exit if _stop() fails to unblock it.
+    The producer thread is a daemon and will be killed on process exit if on_stop() fails to unblock it.
     """
 
     source: Source[Product]
@@ -75,15 +79,22 @@ class ProducerActor[Product](Actor, ABC):
         self.producer_thread = Thread(
             target=self._producer_loop,
             daemon=True,
-            name=f"{type(self).__name__}-{self.actor_id}-producer",
+            name=f"{self.thread.name}-producer",  # Inherit main actor thread name as a prefix
         )
         self.producer_thread.start()
 
     def _producer_loop(self) -> None:
-        for product in self._produce():
-            with self.context_store.create_context() as ctx:
-                ctx_id = ctx.id
-            self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.source, payload=product))
+        try:
+            for product in self._produce():
+                with self.context_store.create_context() as ctx:
+                    ctx_id = ctx.id
+                self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.source, payload=product))
+
+        except Exception as exc:
+            # As this is a side thread, let's always leave a mark when it exits unexpectedly as we don't know whether
+            # the parent will be listening for failures.
+            logger.error(f"{self.actor_id} producer thread failed", exc_info=exc)
+            raise
 
     @abstractmethod
     def _produce(self) -> Generator[Product]:
