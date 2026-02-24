@@ -20,7 +20,7 @@ logger: logging.Logger = get_logger(__name__)
 
 
 @dataclass
-class BlockBeat:
+class BlockBeat(frozen=True):
     block_number: BlockNumber
     block_timestamp: BlockTimestamp
     block_hash: BlockHash

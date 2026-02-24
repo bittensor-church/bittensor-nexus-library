@@ -20,7 +20,7 @@ from nexus.utils.types import BlockNumber, BlockCount, Epoch, SubnetId
 logger: logging.Logger = get_logger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class EpochBeat:
     epoch: Epoch
 
