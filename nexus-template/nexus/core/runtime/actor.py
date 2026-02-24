@@ -22,6 +22,9 @@ class Actor(ABC):
     Base runtime processing unit.
 
     Actor instances are one-off: their event loop can be started only once.
+
+    The on_start and on_stop methods can be overridden to perform custom initialization and teardown logic.
+    Both will be called from the actor's thread.
     """
 
     actor_id: ActorId
@@ -51,11 +54,13 @@ class Actor(ABC):
         return self.thread
 
     def _loop(self) -> None:
+        self.on_start()
         while True:
             event_to_handle: ReceiveEvent[Any] = self.pipe_from_bus.get()
             events_produced_by_the_handler: MessagesToSend = ()
             if isinstance(event_to_handle, StopActorEvent):
                 logger.info(f"Stop event received in actor: {self.actor_id}; stopping loop.")
+                self.on_stop()
                 self.pipe_from_bus.task_done()
                 break
             else:
@@ -91,6 +96,12 @@ class Actor(ABC):
 
     @abstractmethod
     def handlers(self) -> dict[Sink[Any], EventHandler]:
+        pass
+
+    def on_start(self) -> None:  # noqa: B027
+        pass
+
+    def on_stop(self) -> None:  # noqa: B027
         pass
 
 

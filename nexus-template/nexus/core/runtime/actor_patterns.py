@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from threading import Thread
-from typing import Any, cast, override, Generator
+from typing import Any, Generator, cast, override
 
 from nexus.utils.exceptions import InternalFrameworkException, NexusException, SafeInvokeWrappedException
 
@@ -60,41 +60,29 @@ class ProducerActor[Product](Actor, ABC):
         super().__init__(name=source.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.source = source
         self._pipe_to_bus = pipe_to_bus
+        self.producer_thread: Thread | None = None
 
     @override
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {}
 
     @override
-    def _loop(self) -> None:
-        """
-        Main actor loop; to implement your producer, override the _produce method.
-        """
-        produce_thread = Thread(target=self._producer_loop, daemon=True, name=f"{type(self).__name__}-{self.actor_id}")
-        produce_thread.start()
-        while True:
-            event = self.pipe_from_bus.get()
-            self.pipe_from_bus.task_done()
-            if isinstance(event, StopActorEvent):
-                break
-        self._stop()
+    def on_start(self) -> None:
+        self.producer_thread = Thread(
+            target=self._producer_loop,
+            daemon=True,
+            name=f"{type(self).__name__}-{self.actor_id}-producer",
+        )
+        self.producer_thread.start()
 
     def _producer_loop(self) -> None:
         for product in self._produce():
-            self._emit(product)
-
-    def _emit(self, product: Product) -> ContextId:
-        with self.context_store.create_context() as ctx:
-            ctx_id = ctx.id
-        self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.source, payload=product))
-        return ctx_id
+            with self.context_store.create_context() as ctx:
+                ctx_id = ctx.id
+            self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.source, payload=product))
 
     @abstractmethod
     def _produce(self) -> Generator[Product]:
-        pass
-
-    @abstractmethod
-    def _stop(self) -> None:
         pass
 
 

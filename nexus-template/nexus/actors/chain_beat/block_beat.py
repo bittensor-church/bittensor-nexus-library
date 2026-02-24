@@ -19,8 +19,8 @@ from nexus.utils.types import BlockNumber, BlockTimestamp, BlockHash, BlockCount
 logger: logging.Logger = get_logger(__name__)
 
 
-@dataclass
-class BlockBeat(frozen=True):
+@dataclass(frozen=True)
+class BlockBeat:
     block_number: BlockNumber
     block_timestamp: BlockTimestamp
     block_hash: BlockHash
@@ -77,7 +77,7 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
         self._stop_event = Event()
 
     @override
-    def _stop(self) -> None:
+    def on_stop(self) -> None:
         self._stop_event.set()
 
     @override

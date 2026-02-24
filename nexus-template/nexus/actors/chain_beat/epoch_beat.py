@@ -78,7 +78,7 @@ class EpochBeatActor(ProducerActor[EpochBeat]):
         self._stop_event = Event()
 
     @override
-    def _stop(self) -> None:
+    def on_stop(self) -> None:
         self._stop_event.set()
 
     @override
