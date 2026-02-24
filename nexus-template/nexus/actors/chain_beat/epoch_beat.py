@@ -6,7 +6,7 @@ from datetime import timedelta
 from threading import Event
 from typing import override, Generator
 
-from pylon_client.v1 import PylonClient
+from pylon_client.v1 import PylonClient, PylonResponseException
 
 from nexus.core.dsl.nodes import Source, Node, NodeSources, NodeSinks, SourceName
 from nexus.core.runtime.actor import ActorBuilder
@@ -94,21 +94,32 @@ class EpochBeatActor(ProducerActor[EpochBeat]):
     @override
     def _produce(self) -> Generator[EpochBeat]:
         last_emitted: Epoch | None = None
+        pylon = self.spec.pylon_client
+        interval_seconds = self.spec.polling_interval.total_seconds()
+        delay_blocks = self.spec.delay_blocks
+        netuid = self.spec.netuid
+
         while not self._stop_event.is_set():
             poll_start = time.monotonic()
 
-            response = self.spec.pylon_client.open_access.get_latest_block_info()
-            current_block_number = BlockNumber(response.number)
-            epoch = get_epoch_containing_block(
-                block=BlockNumber(current_block_number - self.spec.delay_blocks),
-                netuid=self.spec.netuid,
-            )
+            try:
+                response = pylon.open_access.get_latest_block_info()
 
-            if epoch != last_emitted:
-                logger.info(f"New epoch: {epoch}")
-                last_emitted = epoch
-                yield EpochBeat(epoch=epoch)
+            except PylonResponseException as exc:
+                logger.error("Failed to poll for latest block info", exc_info=exc)
 
-            remaining = self.spec.polling_interval.total_seconds() - (time.monotonic() - poll_start)
+            else:
+                current_block_number = BlockNumber(response.number)
+                epoch = get_epoch_containing_block(
+                    block=BlockNumber(current_block_number - delay_blocks),
+                    netuid=netuid,
+                )
+
+                if epoch != last_emitted:
+                    logger.info(f"New epoch: {epoch}")
+                    last_emitted = epoch
+                    yield EpochBeat(epoch=epoch)
+
+            remaining = interval_seconds - (time.monotonic() - poll_start)
             if remaining > 0:
                 self._stop_event.wait(timeout=remaining)

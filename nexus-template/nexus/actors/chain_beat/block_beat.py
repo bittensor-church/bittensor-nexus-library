@@ -6,7 +6,7 @@ from datetime import timedelta
 from threading import Event
 from typing import override, Generator
 
-from pylon_client.v1 import PylonClient
+from pylon_client.v1 import PylonClient, PylonResponseException
 
 from nexus.core.dsl.nodes import Source, Node, NodeSources, NodeSinks, SourceName
 from nexus.core.runtime.actor import ActorBuilder
@@ -96,17 +96,24 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
 
         while not self._stop_event.is_set():
             poll_start = time.monotonic()
-            response = pylon.open_access.get_latest_block_info()
-            block_number = BlockNumber(response.number)
 
-            if block_number != last_emitted and block_number % self.spec.every_nth == 0:
-                logger.info(f"New block: {block_number}")
-                last_emitted = block_number
-                yield BlockBeat(
-                    block_number=block_number,
-                    block_timestamp=BlockTimestamp(response.timestamp),
-                    block_hash=BlockHash(response.hash),
-                )
+            try:
+                response = pylon.open_access.get_latest_block_info()
+
+            except PylonResponseException as exc:
+                logger.error("Failed to poll for latest block info", exc_info=exc)
+
+            else:
+                block_number = BlockNumber(response.number)
+
+                if block_number != last_emitted and block_number % self.spec.every_nth == 0:
+                    logger.info(f"New block: {block_number}")
+                    last_emitted = block_number
+                    yield BlockBeat(
+                        block_number=block_number,
+                        block_timestamp=BlockTimestamp(response.timestamp),
+                        block_hash=BlockHash(response.hash),
+                    )
 
             remaining = interval_seconds - (time.monotonic() - poll_start)
             if remaining > 0:
