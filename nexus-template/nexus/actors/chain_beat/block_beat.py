@@ -9,7 +9,7 @@ from typing import Generator, override
 
 from pylon_client.v1 import PylonClient, PylonResponseException
 
-from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Source, SourceName
+from nexus.core.dsl.nodes import Producer
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import ProducerActor
 from nexus.core.runtime.context_store import ContextStore
@@ -27,7 +27,7 @@ class BlockBeat:
     block_hash: BlockHash
 
 
-class BlockBeatNode(Node, ActorBuilder):
+class BlockBeatNode(Producer[BlockBeat], ActorBuilder):
     """
     Uses pylon, polling it in a loop to retrieve the latest block info.
     Emits a message - the current block info - whenever it changes.
@@ -39,7 +39,6 @@ class BlockBeatNode(Node, ActorBuilder):
        object contains the block timestamp if you need to know it.
     """
 
-    source: Source[BlockBeat]
     every_nth: BlockCount
     polling_interval: timedelta
     pylon_client: PylonClient
@@ -60,7 +59,6 @@ class BlockBeatNode(Node, ActorBuilder):
             pylon_client: The Pylon client to use for polling
         """
         super().__init__(_id)
-        self.source = Source(_id)
         self.every_nth = every_nth
         self.polling_interval = polling_interval
         self.pylon_client = pylon_client
@@ -69,20 +67,13 @@ class BlockBeatNode(Node, ActorBuilder):
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> BlockBeatActor:
         return BlockBeatActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
-    def sinks(self) -> NodeSinks:
-        return NodeSinks({})
-
-    def sources(self) -> NodeSources:
-        return NodeSources({SourceName("block-beat"): self.source})
-
 
 class BlockBeatActor(ProducerActor[BlockBeat]):
     spec: BlockBeatNode
     _stop_event: Event
 
     def __init__(self, spec: BlockBeatNode, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
-        super().__init__(source=spec.source, pipe_to_bus=pipe_to_bus, context_store=context_store)
-        self.spec = spec
+        super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self._stop_event = Event()
 
     @override

@@ -7,7 +7,7 @@ from typing import Any, Generator, cast, override
 from nexus.logging_utils import get_logger
 from nexus.utils.exceptions import InternalFrameworkException, NexusException, SafeInvokeWrappedException
 
-from ..dsl.nodes import Fork, Sink, Source, Transform
+from ..dsl.nodes import Fork, Producer, Sink, Source, Transform
 from .actor import Actor, EventHandler
 from .context_store import Context, ContextId, ContextStore
 from .events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
@@ -60,19 +60,21 @@ class ProducerActor[Product](Actor, ABC):
     The producer thread is a daemon and will be killed on process exit if on_stop() fails to unblock it.
     """
 
-    source: Source[Product]
+    spec: Producer[Product]
     _pipe_to_bus: PipeToBus
     producer_thread: Thread | None
 
-    def __init__(self, source: Source[Product], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
-        super().__init__(name=source.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
-        self.source = source
+    def __init__(self, spec: Producer[Product], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
+        super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
+        self.spec = spec
         self._pipe_to_bus = pipe_to_bus
         self.producer_thread = None
 
     @override
     def handlers(self) -> dict[Sink[Any], EventHandler]:
-        return {}
+        # Control sink makes the actor visible to the event bus for lifecycle signals (e.g. StopActorEvent)
+        # but isn't used for anything else
+        return {self.spec.sink: lambda _ctx, _event: ()}
 
     @override
     def on_start(self) -> None:
@@ -88,7 +90,7 @@ class ProducerActor[Product](Actor, ABC):
             for product in self._produce():
                 with self.context_store.create_context() as ctx:
                     ctx_id = ctx.id
-                self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.source, payload=product))
+                self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.spec.source, payload=product))
 
         except Exception as exc:
             # As this is a side thread, let's always leave a mark when it exits unexpectedly as we don't know whether

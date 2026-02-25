@@ -9,7 +9,7 @@ from typing import Generator, override
 
 from pylon_client.v1 import PylonClient, PylonResponseException
 
-from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Source, SourceName
+from nexus.core.dsl.nodes import Producer
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import ProducerActor
 from nexus.core.runtime.context_store import ContextStore
@@ -26,7 +26,7 @@ class EpochBeat:
     epoch: Epoch
 
 
-class EpochBeatNode(Node, ActorBuilder):
+class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
     """
     Uses pylon, polling it in a loop to determine the current epoch for a given subnet.
     Emits a beat whenever the epoch changes.
@@ -37,7 +37,6 @@ class EpochBeatNode(Node, ActorBuilder):
        waiting until an epoch is safely finalized.
     """
 
-    source: Source[EpochBeat]
     netuid: SubnetId
     delay_blocks: BlockCount
     polling_interval: timedelta
@@ -61,7 +60,6 @@ class EpochBeatNode(Node, ActorBuilder):
             pylon_client: The Pylon client to use for polling
         """
         super().__init__(_id)
-        self.source = Source[EpochBeat](_id)
         self.netuid = netuid
         self.delay_blocks = delay
         self.polling_interval = polling_interval
@@ -71,20 +69,13 @@ class EpochBeatNode(Node, ActorBuilder):
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> EpochBeatActor:
         return EpochBeatActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
-    def sinks(self) -> NodeSinks:
-        return NodeSinks({})
-
-    def sources(self) -> NodeSources:
-        return NodeSources({SourceName("epoch-beat"): self.source})
-
 
 class EpochBeatActor(ProducerActor[EpochBeat]):
     spec: EpochBeatNode
     _stop_event: Event
 
     def __init__(self, spec: EpochBeatNode, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
-        super().__init__(source=spec.source, pipe_to_bus=pipe_to_bus, context_store=context_store)
-        self.spec = spec
+        super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self._stop_event = Event()
 
     @override
