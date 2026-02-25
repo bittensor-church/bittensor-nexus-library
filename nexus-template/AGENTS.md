@@ -52,7 +52,7 @@ can use to store persistent per-flow information. Contexts survive restarts — 
 framework diffs context state to enable tracing and event replayability.
 Contexts are always linear. If there is a scatter point during processing multiple children contexts should be created. Conversely, when there's a gather point where multiple contexts are aggregated a new child context with multiple parents should be created.
 **Naming matters** — node and actor IDs/names are used for identification across persistence, tracing, and routing. Pick
-descriptive, stable names.
+descriptive, stable, unique names.
 
 Always use `uv run`, never bare `python` or `pip`.
 
