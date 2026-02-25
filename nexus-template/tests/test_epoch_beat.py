@@ -1,17 +1,15 @@
-import queue
 from datetime import timedelta
-from typing import Generator
+from itertools import chain, repeat
 from unittest.mock import MagicMock, seal
 
 import pytest
 from pylon_client import v1 as pylon
+from utils import CollectorActor, dummy_epoch_beat, wait_until
 
-from nexus.actors.chain_beat.epoch_beat import EpochBeatNode
-from nexus.core.runtime.events import PipeToBus, StopActorEvent
+from nexus.actors.chain_beat.epoch_beat import EpochBeat, EpochBeatNode
+from nexus.core.dsl.flow import Flow
+from nexus.core.runtime.subnet_runtime import SubnetBuilder
 from nexus.utils.types import BlockCount, BlockNumber
-
-from utils import empty_context_store, dummy_epoch_beat
-
 
 # Netuid 1 epochs for reference:
 # -3 -> 357 (yes, it goes negative)
@@ -31,7 +29,8 @@ from utils import empty_context_store, dummy_epoch_beat
         [500, 501, 502, 800, 805, 810],
         [358, 719],
         BlockCount(0),
-        id="emits-only-once"),
+        id="emits-only-once",
+    ),
     pytest.param(
         [368, 718, 719, 720, 728],
         [358],  # With delay 10, should not emit epoch 719 until block 729
@@ -43,18 +42,11 @@ def test_epoch_beat(blocks: list[BlockNumber], beats: list[BlockNumber], delay: 
     block_infos = [_dummy_block_info_response(block_number) for block_number in blocks]
     expected_beats = [dummy_epoch_beat(block_number, default_test_netuid) for block_number in beats]
 
-    def get_latest() -> Generator[pylon.GetLatestBlockInfoResponse]:
-        for idx, block in enumerate(block_infos):
-            if idx == len(blocks) - 1:
-                actor.pipe_from_bus.put(StopActorEvent())
-            yield block
-        raise Exception("Consumed more blocks than expected!")
-
+    # Repeat the last block forever so the producer doesn't crash on exhaustion; dedup prevents extra emissions
     client = MagicMock()
-    client.open_access.get_latest_block_info.side_effect = get_latest()
+    client.open_access.get_latest_block_info.side_effect = chain(block_infos, repeat(block_infos[-1]))
     seal(client)
 
-    pipe_to_bus: PipeToBus = queue.Queue()
     node = EpochBeatNode(
         "test",
         netuid=default_test_netuid,
@@ -62,17 +54,23 @@ def test_epoch_beat(blocks: list[BlockNumber], beats: list[BlockNumber], delay: 
         polling_interval=timedelta(seconds=0.01),
         pylon_client=client,
     )
-    actor = node.build_actor(pipe_to_bus=pipe_to_bus, context_store=empty_context_store())
+    builder = SubnetBuilder(nodes=[node])
+    collector = CollectorActor[EpochBeat](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+    )
 
-    actor_thread = actor.run_loop()
-    actor_thread.join(timeout=1)
+    runtime = (
+        builder
+        .add_flows(Flow.from_connectable(node.source).then(collector.sink))
+        .add_actors(collector)
+        .build()
+    )
 
-    emitted_beats = []
-    while not pipe_to_bus.empty():
-        emitted_beats.append(pipe_to_bus.get_nowait().payload)
+    with runtime.running(shutdown_timeout_seconds=1.0):
+        wait_until(lambda: len(collector.received_events) >= len(expected_beats))
 
-    assert emitted_beats == expected_beats
-    assert not actor_thread.is_alive()
+    assert [event.payload for event in collector.received_events] == expected_beats
 
 
 def _dummy_block_info_response(block_number: BlockNumber) -> pylon.GetLatestBlockInfoResponse:

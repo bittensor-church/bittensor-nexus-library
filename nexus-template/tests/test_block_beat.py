@@ -1,15 +1,15 @@
-import queue
 from datetime import timedelta
-from typing import Generator
+from itertools import chain, repeat
 from unittest.mock import MagicMock, seal
 
 import pytest
 from pylon_client import v1 as pylon
+from utils import CollectorActor, dummy_block_beat, wait_until
 
-from nexus.actors.chain_beat.block_beat import BlockBeatNode
-from nexus.core.runtime.events import PipeToBus, StopActorEvent
-from nexus.utils.types import BlockNumber, BlockCount
-from utils import empty_context_store, dummy_block_beat
+from nexus.actors.chain_beat.block_beat import BlockBeat, BlockBeatNode
+from nexus.core.dsl.flow import Flow
+from nexus.core.runtime.subnet_runtime import SubnetBuilder
+from nexus.utils.types import BlockCount, BlockNumber
 
 
 @pytest.mark.parametrize("blocks, beats, nth", [
@@ -42,30 +42,29 @@ def test_block_beat(blocks: list[BlockNumber], beats: list[BlockNumber], nth: Bl
     block_infos = [_dummy_block_info_response(block_number) for block_number in blocks]
     expected_beats = [dummy_block_beat(block_number) for block_number in beats]
 
-    def get_latest() -> Generator[pylon.GetLatestBlockInfoResponse]:
-        for idx, block in enumerate(block_infos):
-            if idx == len(blocks) - 1:
-                actor.pipe_from_bus.put(StopActorEvent())
-            yield block
-        raise Exception("Consumed more blocks than expected!")
-
+    # Repeat the last block forever so the producer doesn't crash on exhaustion; dedup prevents extra emissions
     client = MagicMock()
-    client.open_access.get_latest_block_info.side_effect = get_latest()
+    client.open_access.get_latest_block_info.side_effect = chain(block_infos, repeat(block_infos[-1]))
     seal(client)
 
-    pipe_to_bus: PipeToBus = queue.Queue()
-    node = BlockBeatNode("test", pylon_client=client, polling_interval=timedelta(seconds=0.01), every_nth=nth)
-    actor = node.build_actor(pipe_to_bus=pipe_to_bus, context_store=empty_context_store())
+    beat = BlockBeatNode("test", pylon_client=client, polling_interval=timedelta(seconds=0.01), every_nth=nth)
+    builder = SubnetBuilder(nodes=[beat])
+    collector = CollectorActor[BlockBeat](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+    )
 
-    actor_thread = actor.run_loop()
-    actor_thread.join(timeout=1)
+    runtime = (
+        builder
+        .add_flows(Flow.from_connectable(beat.source).then(collector.sink))
+        .add_actors(collector)
+        .build()
+    )
 
-    emitted_beats = []
-    while not pipe_to_bus.empty():
-        emitted_beats.append(pipe_to_bus.get_nowait().payload)
+    with runtime.running(shutdown_timeout_seconds=1.0):
+        wait_until(lambda: len(collector.received_events) >= len(expected_beats))
 
-    assert emitted_beats == expected_beats
-    assert not actor_thread.is_alive()
+    assert [event.payload for event in collector.received_events] == expected_beats
 
 
 def _dummy_block_info_response(block_number: BlockNumber) -> pylon.GetLatestBlockInfoResponse:
