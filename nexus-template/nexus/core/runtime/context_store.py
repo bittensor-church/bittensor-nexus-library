@@ -12,6 +12,7 @@ from typing import Any, cast, override
 import deepdiff
 
 from ... import get_logger
+from ...utils.exceptions import InternalFrameworkException, InternalStateCorruptionException
 from ..dsl.nodes import Source
 from .context_store_types import (
     ChildContextCreated,
@@ -85,9 +86,10 @@ class ThreadContextStoreLocks(ContextStoreLocks):
     @override
     def register_context(self, ctx: ContextId) -> None:
         with self.__registry_lock:
-            assert ctx not in self.__locks, (
-                f"Context {ctx} already registered in locks? It should have been created first."
-            )
+            if ctx in self.__locks:
+                raise InternalFrameworkException(
+                    f"Context {ctx} already registered in locks? It should have been created first."
+                )
             self.__locks[ctx] = threading.RLock()
 
     @override
@@ -128,17 +130,18 @@ class ContextCompletedException(Exception):
 
 
 def _assert_recovery(old_value: Any, delta: bytes, new_value: Any):
-    # not sure if we should have that assert in production code...
+    # Not sure if we should enforce this check in production code...
 
     parsed_delta = deepdiff.Delta(delta, deserializer=DELTA_DESERIALIZER)
     recovered_value = old_value + parsed_delta
     diff = deepdiff.DeepDiff(recovered_value, new_value)
-    assert len(diff) == 0, (
-        "delta application did not recover the new value? "
-        f"recovered value: {recovered_value!r} != new value: {new_value!r};\n"
-        f"old value: {old_value!r}\napplied delta = {parsed_delta!r}\n"
-        f"detected differences: {diff!r}"
-    )
+    if len(diff) != 0:
+        raise InternalFrameworkException(
+            "delta application did not recover the new value? "
+            f"recovered value: {recovered_value!r} != new value: {new_value!r};\n"
+            f"old value: {old_value!r}\napplied delta = {parsed_delta!r}\n"
+            f"detected differences: {diff!r}"
+        )
 
 
 class Context:
@@ -295,6 +298,9 @@ class ContextStore:
 
             pyright exclusions on Context private members is intentional; this is recovery code
             which we want to be able to mutate the context's payload directly
+
+            Raises:
+                InternalFrameworkException: if recovered log entries violate framework invariants.
         """
         contexts: dict[ContextId, Context] = {}
         last_messages: LastMessages = {}
@@ -307,36 +313,44 @@ class ContextStore:
         for log_entry in persistence.log_entries():
             ctx = log_entry.ctx
             previous_step = steps.get(ctx, None)
-            assert (previous_step is None and log_entry.step_idx == StepIdx(0)) or \
-                   (previous_step is not None and log_entry.step_idx == previous_step + 1), (
-                f"log entry step idx out of order for context {ctx}: "
-                f"expected {log_entry.step_idx} to be after {previous_step}"
-            )
+            if not (
+                (previous_step is None and log_entry.step_idx == StepIdx(0))
+                or (previous_step is not None and log_entry.step_idx == previous_step + 1)
+            ):
+                raise InternalStateCorruptionException(
+                    f"log entry step idx out of order for context {ctx}: "
+                    f"expected {log_entry.step_idx} to be after {previous_step}"
+                )
             steps[ctx] = log_entry.step_idx
-            assert ctx not in completed_contexts, (
-                f"Log entry {log_entry.step_idx} for context {ctx} appears after completion."
-            )
+            if ctx in completed_contexts:
+                raise InternalStateCorruptionException(
+                    f"Log entry {log_entry.step_idx} for context {ctx} appears after completion."
+                )
             match log_entry.data:
                 case ContextCreated():
-                    assert ctx not in contexts, f"Context {ctx} already exists during recovery."
+                    if ctx in contexts:
+                        raise InternalStateCorruptionException(f"Context {ctx} already exists during recovery.")
                     context = Context(_id=ctx, payload=None, user_data={}, context_store=context_store)
                     contexts[ctx] = context
                 case ChildContextCreated():
                     pass
                 case MessageSent(payload_delta=payload_delta) as message:
                     context = contexts.get(ctx, None)
-                    assert context is not None, f"MessageSent for missing context {ctx} during recovery."
+                    if context is None:
+                        raise InternalStateCorruptionException(f"MessageSent for missing context {ctx} during recovery.")
                     context._payload += deepdiff.Delta(payload_delta, deserializer=DELTA_DESERIALIZER) # pyright: ignore[reportPrivateUsage]
                     last_messages[ctx] = message
                 case UserDataChange(key=key, value_delta=value_delta):
                     context = contexts.get(ctx, None)
-                    assert context is not None, f"UserDataChange for missing context {ctx} during recovery."
+                    if context is None:
+                        raise InternalStateCorruptionException(f"UserDataChange for missing context {ctx} during recovery.")
                     context._user_data[key] = context._user_data.get(key, None) + deepdiff.Delta(  # pyright: ignore[reportPrivateUsage]
                         value_delta, deserializer=DELTA_DESERIALIZER
                     )
                 case ContextCompleted():
                     context = contexts.pop(ctx, None)
-                    assert context is not None, f"ContextCompleted for missing context {ctx} during recovery."
+                    if context is None:
+                        raise InternalStateCorruptionException(f"ContextCompleted for missing context {ctx} during recovery.")
                     context._is_completed = True  # pyright: ignore[reportPrivateUsage]
                     completed_contexts.add(ctx)
                     last_messages.pop(ctx, None)
@@ -351,7 +365,10 @@ class ContextStore:
         return RecoveredContextStore(context_store, last_messages)
 
     def __init__(self, token: str = "intialize_using_factory_methods_not_directly") -> None:
-        assert token == "factory_method", "ContextStore should be initialized using factory methods, not directly."
+        if token != "factory_method":
+            raise InternalFrameworkException(
+                "ContextStore should be initialized using factory methods, not directly."
+            )
 
     @contextmanager
     def create_context(self, *, parents: tuple[ContextId, ...] = ()) -> Iterator[Context]:
@@ -395,7 +412,10 @@ class ContextStore:
 
     def _append_entry(self, ctx: ContextId, entry: LogEntryData) -> None:
         context = self.__contexts.get(ctx, None)
-        assert context is not None, f"Context {ctx} not found in store? It should have been created first."
+        if context is None:
+            raise InternalFrameworkException(
+                f"Context {ctx} not found in store? It should have been created first."
+            )
         if context.is_completed:
             raise ContextCompletedException(f"Context {ctx} is completed and cannot be mutated.")
         self.__persistence.append_entry(ctx, entry)
@@ -422,7 +442,8 @@ class InMemoryContextStorePersistence(ContextStorePersistence):
 
     @override
     def append_entry(self, ctx: ContextId, entry: LogEntryData) -> None:
-        assert ctx in self.__data, f"Context {ctx} does not exist? It should have been created first."
+        if ctx not in self.__data:
+            raise InternalFrameworkException(f"Context {ctx} does not exist? It should have been created first.")
         log_entry = LogEntry(
             ctx=ctx,
             step_idx=StepIdx(len(self.__data[ctx])),
@@ -435,14 +456,19 @@ class InMemoryContextStorePersistence(ContextStorePersistence):
     def create_context(self, parents: tuple[ContextId, ...]) -> ContextId:
         """
         Creates a new context that has a parent-child relationship with the given parent contexts.
+
+        Raises:
+            InternalFrameworkException: if one of the parent contexts is missing internal state.
         """
         for parent_ctx in parents:
-            assert parent_ctx in self.__context_tree, (
-                f"Context {parent_ctx} does not exist? It should have been created first."
-            )
-            assert parent_ctx in self.__data, (
-                f"Context {parent_ctx} data does not exist? It should have been created first."
-            )
+            if parent_ctx not in self.__context_tree:
+                raise InternalFrameworkException(
+                    f"Context {parent_ctx} does not exist? It should have been created first."
+                )
+            if parent_ctx not in self.__data:
+                raise InternalFrameworkException(
+                    f"Context {parent_ctx} data does not exist? It should have been created first."
+                )
 
         child_ctx = ContextId(str(uuid.uuid7()))
         context_creation_time = datetime.datetime.now(tz=datetime.UTC)

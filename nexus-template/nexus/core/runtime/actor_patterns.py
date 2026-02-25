@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, cast, override
 
-from nexus.utils.exceptions import NexusException, SafeInvokeWrappedException
+from nexus.utils.exceptions import InternalFrameworkException, NexusException, SafeInvokeWrappedException
 
 from ..dsl.nodes import Fork, Sink, Source, Transform
 from .actor import Actor, EventHandler
@@ -31,11 +31,15 @@ def _fork_handler[From, ToLeft, ToRight](
 ) -> tuple[SendEvent[ToLeft] | SendEvent[ToRight]]:
     left_payload, right_payload = process(ctx, event.payload)
     if right_payload is None:
-        assert left_payload is not None
+        if left_payload is None:
+            raise InternalFrameworkException("no payload to process in fork handler")
         return (SendEvent(ctx_id=event.ctx_id, source=left, payload=left_payload),)
     if left_payload is None:
         return (SendEvent(ctx_id=event.ctx_id, source=right, payload=right_payload),)
-    raise AssertionError(f"Unexpected fork handler output for event {event}: {(left_payload, right_payload)}")
+    raise InternalFrameworkException(
+        f"Unexpected fork handler output for event {event}: "
+        f"{(left_payload, right_payload)}"
+    )
 
 
 class ConsumerActor[From](Actor, ABC):
@@ -48,7 +52,8 @@ class ConsumerActor[From](Actor, ABC):
         return {self.spec: self.handle}
 
     def handle(self, ctx: Context, event: ReceiveEvent[Any]) -> MessagesToSend:
-        assert event.target == self.spec
+        if event.target != self.spec:
+            raise InternalFrameworkException("event target does not match consumer actor's sink")
         self._consume(ctx, event.payload)
         return ()
 
@@ -67,7 +72,8 @@ class ForkActor[From, ToLeft, ToRight](Actor, ABC):
         return {self.spec.sink: self.handle}
 
     def handle(self, ctx: Context, event: ReceiveEvent[From]) -> MessagesToSend:
-        assert event.target == self.spec.sink
+        if event.target != self.spec.sink:
+            raise InternalFrameworkException("event target does not mach fork actor sink")
         return _fork_handler(ctx, event, self._process, self.spec.left, self.spec.right)
 
     @abstractmethod
@@ -122,7 +128,8 @@ class DoubleTransformActor[InputFrom, InputTo, OutputFrom, OutputTo](Actor, ABC)
     def handle(self, pipe: Input | Output, ctx: Context, event: ReceiveEvent[Any]) -> MessagesToSend:
         match pipe:
             case DoubleTransformActor.Input():
-                assert event.target == self.input_spec.sink
+                if event.target != self.input_spec.sink:
+                    raise InternalFrameworkException("event target does not match double transform actor input sink")
                 return _fork_handler(
                     ctx,
                     cast(ReceiveEvent[InputFrom], event),
@@ -131,7 +138,8 @@ class DoubleTransformActor[InputFrom, InputTo, OutputFrom, OutputTo](Actor, ABC)
                     self.input_spec.error,
                 )
             case DoubleTransformActor.Output():
-                assert event.target == self.output_spec.sink
+                if event.target != self.output_spec.sink:
+                    raise InternalFrameworkException("event target does not match double transform actor output sink")
                 return _fork_handler(
                     ctx,
                     cast(ReceiveEvent[OutputFrom], event),

@@ -24,7 +24,7 @@ from nexus.core.runtime.events import (
     StopActorEvent,
     StopBusEvent,
 )
-from nexus.utils.exceptions import NexusException, SafeInvokeWrappedException
+from nexus.utils.exceptions import SafeInvokeWrappedException
 
 
 class DualSinkActor(Actor):

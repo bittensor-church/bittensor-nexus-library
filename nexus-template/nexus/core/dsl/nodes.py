@@ -5,7 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, NewType, TypeVar, override
 
-from nexus.utils.exceptions import NexusException
+from nexus.utils.exceptions import InternalFrameworkException, NexusException
 
 T = TypeVar("T")
 
@@ -26,9 +26,11 @@ class NodeSources:
     default_source: Source[Any] | None = None
 
     def __post_init__(self) -> None:
-        assert self.default_source is None or self.default_source in self.sources.values(), (
-            f"primary_source {self.default_source!r} must be None or a key in sources; available: {list(self.sources)}"
-        )
+        if not (self.default_source is None or self.default_source in self.sources.values()):
+            raise InternalFrameworkException(
+                f"primary_source {self.default_source!r} must be None or a key in sources; "
+                f"available: {list(self.sources)}"
+            )
         if len(self.sources) == 1:
             self.default_source = next(iter(self.sources.values()))
 
@@ -42,9 +44,11 @@ class NodeSinks:
     default_sink: Sink[Any] | None = None
 
     def __post_init__(self) -> None:
-        assert self.default_sink is None or self.default_sink in self.sinks, (
-            f"primary_sink {self.default_sink!r} must be None or a key in sinks; available: {list(self.sinks.keys())}"
-        )
+        if not (self.default_sink is None or self.default_sink in self.sinks):
+            raise InternalFrameworkException(
+                f"primary_sink {self.default_sink!r} must be None or a key in sinks; "
+                f"available: {list(self.sinks.keys())}"
+            )
         if len(self.sinks) == 1:
             self.default_sink = next(iter(self.sinks.values()))
 

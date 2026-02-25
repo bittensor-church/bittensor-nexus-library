@@ -25,7 +25,11 @@ from nexus.core.runtime.actor import Actor, ActorBuilder
 from nexus.core.runtime.actor_patterns import TransformActor
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import PipeToBus
-from nexus.utils.exceptions import InternalStateCorruptionException, NoRoutableNeuronsException
+from nexus.utils.exceptions import (
+    ActorMisconfiguredException,
+    InternalStateCorruptionException,
+    NoRoutableNeuronsException,
+)
 
 type NeuronFilter = Callable[[Sequence[Neuron]], Sequence[Neuron]]
 
@@ -67,7 +71,8 @@ class NeuronRouter[Input](Transform[Input, Routed[Input]]):
         neuron_filter: NeuronFilter = keep_all_neurons,
     ) -> None:
         super().__init__(_id)
-        assert netuid >= 0, "netuid must be >= 0"
+        if netuid < 0:
+            raise ActorMisconfiguredException("netuid must be >= 0")
         self.netuid = netuid
         self.neuron_filter = neuron_filter
         self.pylon_client_provider = pylon_client_provider

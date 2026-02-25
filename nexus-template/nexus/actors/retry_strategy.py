@@ -8,7 +8,11 @@ from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, S
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.utils.exceptions import NexusException
+from nexus.utils.exceptions import (
+    InternalFrameworkException,
+    InternalStateCorruptionException,
+    NexusException,
+)
 
 # 1-based index of the attempt: 1 for the first attempt, 2 for the second, etc.
 AttemptNumber = NewType("AttemptNumber", int)
@@ -99,7 +103,10 @@ class RetryStrategyActor[T](Actor):
 
     def handle_failed_attempt(self, ctx: Context, event: ReceiveEvent[NexusException]) -> MessagesToSend:
         retry_state = self._retry_state_from_context(ctx)
-        assert retry_state is not None, f"Received failed attempt without existing retry state? ctx_id: {event.ctx_id}"
+        if retry_state is None:
+            raise InternalStateCorruptionException(
+                f"Received failed attempt without existing retry state? ctx_id: {event.ctx_id}"
+            )
         if retry_state.attempts >= self.spec.max_attempts:
             exhausted_error = RetriesExhaustedException(
                 f"All {self.spec.max_attempts} retry attempts exhausted when trying to process "
@@ -154,13 +161,6 @@ class RetryStrategyActor[T](Actor):
         logger.info("Issuing attempt %d. ctx_id: %s", retry_state.attempts, ctx.id)
         return SendEvent(ctx_id=ctx.id, payload=retry_state.original_input, source=self.spec.next_attempt)
 
-
-    def handle_time_for_next_attempt(self, ctx: Context, event: ReceiveEvent[T]) -> MessagesToSend:
-        retry_state = self._retry_state_from_context(ctx)
-        assert retry_state is not None, f"Received failed attempt without existing retry state? ctx_id: {event.ctx_id}"
-        return self._next_attempt_message(ctx, retry_state)
-
-
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {
             self.spec.input: self.handle_input,
@@ -171,7 +171,8 @@ class RetryStrategyActor[T](Actor):
         retry_state = ctx.user_data.get(self.spec.id)
         if retry_state is None:
             return None
-        assert isinstance(retry_state, RetryState), (
-            f"Unexpected retry state type for key {self.spec.id}: {type(retry_state)!r}"
-        )
+        if not isinstance(retry_state, RetryState):
+            raise InternalFrameworkException(
+                f"Unexpected retry state type for key {self.spec.id}: {type(retry_state)!r}"
+            )
         return cast(RetryState[T], retry_state)

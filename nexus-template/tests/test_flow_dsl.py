@@ -17,6 +17,7 @@ from nexus.core.dsl.nodes import (
     SourceName,
     Transform,
 )
+from nexus.utils.exceptions import FlowMisconfiguredException
 
 
 class DualSinkPreferred(Node):
@@ -43,13 +44,13 @@ class DualSinkPreferred(Node):
 
 def test_then_requires_targets() -> None:
     flow = Flow.from_connectable(Source("start"))
-    with pytest.raises(AssertionError, match="expected continuation"):
+    with pytest.raises(FlowMisconfiguredException, match="expected continuation"):
         flow.then()
 
 
 def test_then_rejects_mixed_positional_and_keyword() -> None:
     flow = Flow.from_connectable(Source("start"))
-    with pytest.raises(AssertionError, match="either positional or keyword"):
+    with pytest.raises(FlowMisconfiguredException, match="either positional or keyword"):
         flow.then(Sink("a"), ok=Sink("b"))
 
 
@@ -147,7 +148,7 @@ def test_error_when_source_cannot_be_implied() -> None:
     fork = Fork[str, str, str]("fork")
     target = Sink("target")
 
-    with pytest.raises(AssertionError, match="No default exit source"):
+    with pytest.raises(FlowMisconfiguredException, match="No default exit source"):
         Flow.from_connectable(fork).then(target)
 
 
@@ -155,21 +156,21 @@ def test_error_when_sink_cannot_be_implied() -> None:
     start = Source("start")
     ambiguous = DoubleTransform[str, str, str, str]("double")
 
-    with pytest.raises(AssertionError, match="No default entry sink"):
+    with pytest.raises(FlowMisconfiguredException, match="No default entry sink"):
         Flow.from_connectable(start).then(ambiguous)
 
 
 def test_error_if_fork_branch_is_misnamed() -> None:
     fork = Fork[str, str, str]("fork")
 
-    with pytest.raises(AssertionError, match="Unexpected connection"):
+    with pytest.raises(FlowMisconfiguredException, match="Unexpected connection"):
         Flow.from_connectable(fork).then(ok=Sink("sink"))
 
 
 def test_error_if_keyword_route_uses_unknown_source_name() -> None:
     start = Source("start")
 
-    with pytest.raises(AssertionError, match="Unexpected connection"):
+    with pytest.raises(FlowMisconfiguredException, match="Unexpected connection"):
         Flow.from_connectable(start).then(ok=Sink("sink"))
 
 
@@ -178,7 +179,7 @@ def test_error_when_keyword_routes_used_after_flow_has_no_exit_sources() -> None
     end = Sink("end")
     flow = Flow.from_connectable(start).then(end)
 
-    with pytest.raises(AssertionError, match="Unexpected connection"):
+    with pytest.raises(FlowMisconfiguredException, match="Unexpected connection"):
         flow.then(ok=Sink("another"))
 
 
@@ -216,7 +217,7 @@ def test_positional_then_raises_when_multiple_targets_have_sources() -> None:
     right = Transform[str, str]("right")
 
     flow = Flow.from_connectable(start)
-    with pytest.raises(AssertionError, match="multiple continuation targets define exit sources"):
+    with pytest.raises(FlowMisconfiguredException, match="multiple continuation targets define exit sources"):
         flow.then(left, right)
 
 
@@ -248,5 +249,5 @@ def test_routes_to_flow_without_entry_sink_should_error_cleanly() -> None:
     start = Source("start")
     subflow = Flow.from_connectable(Source("sub-start"))  # no entry sink
 
-    with pytest.raises(AssertionError, match="No default entry sink"):
+    with pytest.raises(FlowMisconfiguredException, match="No default entry sink"):
         Flow.from_connectable(start).then(subflow)

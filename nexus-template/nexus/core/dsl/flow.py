@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, NewType
 
+from nexus.utils.exceptions import FlowMisconfiguredException
+
 from .nodes import Node, NodeSinks, NodeSources, Pipes, Sink, SinkNode, Source, SourceName, SourceNode
 
 SinkPath = NewType("SinkPath", str)
@@ -155,33 +157,41 @@ class Flow:
         return flow_object
 
     def then(self, *targets: Connectable | Flow, **routes: Connectable | Flow | Iterable[Connectable | Flow]) -> Flow:
-        assert targets or routes, "expected continuation of the flow as either positional or keyword parameters"
-        assert not targets or not routes, "expected continuation of the flow as either positional or keyword paramters"
-
-        if targets:
-            assert self.exit_sources.default_source, (
-                "No default exit source to connect the continuation to the provided sinks: "
-                f"exit_sources={self.exit_sources}"
+        if not targets and not routes:
+            raise FlowMisconfiguredException(
+                "expected continuation of the flow as either positional or keyword parameters"
+            )
+        if targets and routes:
+            raise FlowMisconfiguredException(
+                "expected continuation of the flow as either positional or keyword paramters"
             )
 
-            source: Source[Any] = self.exit_sources.default_source
+        if targets:
+            source = self.exit_sources.default_source
+            if source is None:
+                raise FlowMisconfiguredException(
+                    "No default exit source to connect the continuation to the provided sinks: "
+                    f"exit_sources={self.exit_sources}"
+                )
 
             continuation_exit_sources: NodeSources | None = None
 
             for target in targets:
                 target_flow = Flow._as_flow(target)
-                assert target_flow.entry_sinks.default_sink, (
-                    f"No default entry sink to connect the source to the provided flow: target_flow={target_flow}"
-                )
+                if target_flow.entry_sinks.default_sink is None:
+                    raise FlowMisconfiguredException(
+                        f"No default entry sink to connect the source to the provided flow: target_flow={target_flow}"
+                    )
 
                 self._absorb(target_flow)
                 self._connect(source, target_flow.entry_sinks.default_sink)
 
                 if target_flow.exit_sources.sources:
-                    assert continuation_exit_sources is None, (
-                        "multiple continuation targets define exit sources: "
-                        f"{continuation_exit_sources} and {target_flow.exit_sources}"
-                    )
+                    if continuation_exit_sources is not None:
+                        raise FlowMisconfiguredException(
+                            "multiple continuation targets define exit sources: "
+                            f"{continuation_exit_sources} and {target_flow.exit_sources}"
+                        )
                     continuation_exit_sources = target_flow.exit_sources
 
             # continuation only if there is exactly one source among the target flows
@@ -191,9 +201,10 @@ class Flow:
         elif routes:
             for source_str, target in routes.items():
                 source_name = SourceName(source_str)
-                assert source_name in self.exit_sources.sources, (
-                    f"Unexpected connection from {source_name}; available sources: {self.exit_sources.sources}"
-                )
+                if source_name not in self.exit_sources.sources:
+                    raise FlowMisconfiguredException(
+                        f"Unexpected connection from {source_name}; available sources: {self.exit_sources.sources}"
+                    )
                 source = self.exit_sources.sources[source_name]
 
                 targets_to_connect: Iterable[Connectable | Flow] = (
@@ -202,9 +213,11 @@ class Flow:
 
                 for target_item in targets_to_connect:
                     target_flow = Flow._as_flow(target_item)
-                    assert target_flow.entry_sinks.default_sink, (
-                        f"No default entry sink to connect the source to the provided flow: target_flow={target_flow}"
-                    )
+                    if target_flow.entry_sinks.default_sink is None:
+                        raise FlowMisconfiguredException(
+                            "No default entry sink to connect the source to the provided flow: "
+                            f"target_flow={target_flow}"
+                        )
 
                     self._absorb(target_flow)
                     self._connect(source, target_flow.entry_sinks.default_sink)
