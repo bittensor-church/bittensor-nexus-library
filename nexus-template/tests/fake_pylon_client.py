@@ -6,13 +6,15 @@ from dataclasses import dataclass
 from typing import override
 
 from pylon_client.artanis import BlockHash, BlockNumber, NetUid, Timestamp
-from pylon_client.artanis.v1 import Block, GetLatestBlockInfoResponse, GetNeuronsResponse, Neuron
+from pylon_client.artanis.v1 import Block, GetLatestBlockInfoResponse, GetNeuronsResponse, Neuron, SetWeightsResponse
 
 from nexus.actors.pylon_client_provider import (
+    IdentityPylonApiLike,
     OpenAccessPylonApiLike,
     PylonClientProvider,
     SyncPylonClientLike,
 )
+from nexus.utils.types import Hotkey, Weight
 
 
 @dataclass(frozen=True)
@@ -43,14 +45,24 @@ class FakeOpenAccessApi(OpenAccessPylonApiLike):
         )
 
 
+class FakeIdentityApi(IdentityPylonApiLike):
+    def put_weights(self, weights: dict[Hotkey, Weight]) -> SetWeightsResponse:
+        return SetWeightsResponse()
+
+
 class FakePylonClient(SyncPylonClientLike):
     def __init__(self, *, neurons: list[Neuron], netuid_calls: list[int]) -> None:
         self._open_access = FakeOpenAccessApi(neurons=neurons, netuid_calls=netuid_calls)
+        self._identity = FakeIdentityApi()
         self.v1 = FakeClientNamespace(open_access=self._open_access)
 
     @property
     def open_access(self) -> FakeOpenAccessApi:
         return self._open_access
+
+    @property
+    def identity(self) -> FakeIdentityApi:
+        return self._identity
 
     def __enter__(self) -> FakePylonClient:
         return self

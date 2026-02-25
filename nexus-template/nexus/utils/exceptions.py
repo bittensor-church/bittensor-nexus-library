@@ -111,3 +111,10 @@ class ResponseValidationException(AsyncHttpNeuronCommunicatorException):
 class RemoteExecutionException(AsyncHttpNeuronCommunicatorException):
     """Raised when remote service explicitly reports execution failure via callback error field."""
     pass
+
+
+class WeightSettingException(NexusException):
+    """Raised when the weight setting actor fails when executing the weighing
+    function or has trouble reaching pylon"""
+
+    pass
