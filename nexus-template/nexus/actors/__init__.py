@@ -1,3 +1,5 @@
+from nexus.actors.chain_beat.block_beat import BlockBeatNode, BlockBeatActor
+from nexus.actors.chain_beat.epoch_beat import EpochBeatNode, EpochBeatActor
 from nexus.actors.pylon_client_provider import (
     PylonClientProvider,
     StaticConfigPylonClientProvider,
@@ -17,6 +19,10 @@ from nexus.actors.neuron_router import (
 )
 
 __all__ = [
+    "BlockBeatNode",
+    "BlockBeatActor",
+    "EpochBeatNode",
+    "EpochBeatActor",
     "NeuronFilter",
     "NoRoutableNeuronsException",
     "PylonClientProvider",

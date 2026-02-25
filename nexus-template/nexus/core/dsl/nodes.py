@@ -132,6 +132,28 @@ class SinkNode[T](Node):
         return NodeSinks({SinkName("self"): self.sink})
 
 
+class Producer[T](Node):
+    """
+    A source-only node with a control sink for lifecycle signals (e.g. shutdown).
+    """
+
+    source: Source[T]
+    sink: Sink[None]
+
+    def __init__(self, _id: str):
+        super().__init__(_id)
+        self.source = Source[T](_id)
+        self.sink = Sink(f"{_id}-sink")
+
+    @override
+    def sinks(self) -> NodeSinks:
+        return NodeSinks({SinkName("sink"): self.sink})
+
+    @override
+    def sources(self) -> NodeSources:
+        return NodeSources({SourceName("source"): self.source})
+
+
 class Fork[From, ToLeft, ToRight](Node):
     """
     A logical data processing unit that forks data from a Sink to two Sources.
