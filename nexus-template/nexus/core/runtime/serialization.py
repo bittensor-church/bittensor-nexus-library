@@ -2,6 +2,8 @@ import io
 import pickle
 from typing import Any, BinaryIO
 
+from nexus.utils.exceptions import InternalFrameworkException
+
 
 class _UnsafeDeepDiffUnpickler(pickle.Unpickler):
     # Needed because deepdiff.pickle_dump writes this persistent id.
@@ -26,6 +28,7 @@ def unsafe_pickle_load(
     if content is not None:
         data_stream = io.BytesIO(content)
     else:
-        assert file_obj is not None
+        if file_obj is None:
+            raise InternalFrameworkException("nothing to deserialize from")
         data_stream = file_obj
     return _UnsafeDeepDiffUnpickler(data_stream).load()

@@ -6,6 +6,8 @@ from typing import Protocol, override
 from pylon_client.artanis import Config, NetUid, PylonAuthToken, PylonClient
 from pylon_client.artanis.v1 import GetNeuronsResponse
 
+from nexus.utils.exceptions import InternalFrameworkException
+
 
 class OpenAccessPylonApiLike(Protocol):
     def get_recent_neurons(self, netuid: NetUid) -> GetNeuronsResponse:
@@ -47,10 +49,12 @@ class StaticConfigPylonClientProvider(PylonClientProvider):
     address: str
     open_access_token: str
 
-    def __init__(self, *, address: str, open_access_token: str) -> None:
-        assert address, "address cannot be empty"
-        assert open_access_token, "open_access_token cannot be empty"
-        self.address = address
+    def __init__(self, *, pylon_service_address: str, open_access_token: str) -> None:
+        if not pylon_service_address:
+            raise InternalFrameworkException("pylon service address cannot be empty")
+        if not open_access_token:
+            raise InternalFrameworkException("open_access_token cannot be empty")
+        self.address = pylon_service_address
         self.open_access_token = open_access_token
 
     @override

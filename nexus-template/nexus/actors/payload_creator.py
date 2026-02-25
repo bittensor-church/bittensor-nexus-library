@@ -8,6 +8,7 @@ from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, S
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus.utils.exceptions import ActorMisconfiguredException
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
@@ -56,7 +57,8 @@ class S3PresignedUrlCreator[Input](PayloadCreator[Input, WithS3PresignedUrl[Inpu
         presigned_url_expiration_seconds: int = 900,
     ) -> None:
         super().__init__(_id)
-        assert presigned_url_expiration_seconds > 0, "presigned_url_expiration_seconds must be > 0"
+        if presigned_url_expiration_seconds <= 0:
+            raise ActorMisconfiguredException("presigned_url_expiration_seconds must be > 0")
         self.s3_client_provider = s3_client_provider
         self.presigned_url_expiration_seconds = presigned_url_expiration_seconds
         self.bucket = bucket
