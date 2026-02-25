@@ -1,6 +1,5 @@
 from nexus.actors.chain_beat.block_beat import BlockBeatNode, BlockBeatActor
 from nexus.actors.chain_beat.epoch_beat import EpochBeatNode, EpochBeatActor
-from nexus.actors.chain_schedule import BlockNumber, BlockScheduler, BlockSchedulerActor
 from nexus.actors.pylon_client_provider import (
     PylonClientProvider,
     StaticConfigPylonClientProvider,

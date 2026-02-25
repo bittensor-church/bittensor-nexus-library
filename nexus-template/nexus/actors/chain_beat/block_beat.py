@@ -7,7 +7,7 @@ from datetime import timedelta
 from threading import Event
 from typing import Generator, override
 
-from pylon_client.v1 import PylonClient, PylonResponseException
+from pylon_client.artanis import PylonClient, PylonResponseException
 
 from nexus.core.dsl.nodes import Producer
 from nexus.core.runtime.actor import ActorBuilder
