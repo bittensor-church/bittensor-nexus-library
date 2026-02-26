@@ -1,13 +1,26 @@
-from typing import NewType, NamedTuple
+"""
+For convenience, pylon types are reused to avoid "casting" stuff like block numbers on nexus-pylon interface.
+There are a ton more available - check them out before creating new types here.
+"""
 
-BlockNumber = NewType("BlockNumber", int)
+from typing import NamedTuple, NewType
+
+from pylon_client.artanis import BlockHash, BlockNumber, NetUid, Tempo, Timestamp
+
 BlockCount = NewType("BlockCount", int)
-BlockTimestamp = NewType("BlockTimestamp", int)
-BlockHash = NewType("BlockHash", str)
-Tempo = NewType("Tempo", int)
-SubnetId = NewType("SubnetId", int)
 
 
 class Epoch(NamedTuple):
     first_block: BlockNumber
     last_block: BlockNumber
+
+
+__all__ = [
+    "BlockCount",
+    "BlockHash",
+    "BlockNumber",
+    "Epoch",
+    "NetUid",
+    "Tempo",
+    "Timestamp",
+]

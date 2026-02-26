@@ -15,7 +15,7 @@ from nexus.core.runtime.actor_patterns import ProducerActor
 from nexus.core.runtime.context_store import ContextStore
 from nexus.core.runtime.events import PipeToBus
 from nexus.logging_utils import get_logger
-from nexus.utils.types import BlockCount, BlockHash, BlockNumber, BlockTimestamp
+from nexus.utils.types import BlockCount, BlockHash, BlockNumber, Timestamp
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -23,7 +23,7 @@ logger: logging.Logger = get_logger(__name__)
 @dataclass(frozen=True)
 class BlockBeat:
     block_number: BlockNumber
-    block_timestamp: BlockTimestamp
+    block_timestamp: Timestamp
     block_hash: BlockHash
 
 
@@ -105,7 +105,7 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
                     last_emitted = block_number
                     yield BlockBeat(
                         block_number=block_number,
-                        block_timestamp=BlockTimestamp(response.timestamp),
+                        block_timestamp=Timestamp(response.timestamp),
                         block_hash=BlockHash(response.hash),
                     )
 
