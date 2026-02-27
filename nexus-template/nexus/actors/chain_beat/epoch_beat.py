@@ -8,8 +8,9 @@ from datetime import timedelta
 from threading import Event
 from typing import override
 
-from pylon_client.artanis import PylonClient, PylonResponseException
+from pylon_client.artanis import PylonResponseException
 
+from nexus.actors.pylon_client_provider import PylonClientProvider
 from nexus.core.dsl.nodes import Producer
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import ProducerActor
@@ -41,7 +42,7 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
     netuid: NetUid
     delay_blocks: BlockCount
     polling_interval: timedelta
-    pylon_client: PylonClient
+    pylon_client_provider: PylonClientProvider
 
     def __init__(
         self,
@@ -50,7 +51,7 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
         netuid: NetUid,
         delay: BlockCount = BlockCount(0),  # noqa: B008
         polling_interval: timedelta = timedelta(seconds=1),
-        pylon_client: PylonClient,
+        pylon_client_provider: PylonClientProvider,
     ) -> None:
         """
         Args:
@@ -58,13 +59,13 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
             netuid: The subnet number for which to monitor the epoch
             delay: How many blocks after the start of an epoch to emit the beat
             polling_interval: How often to poll for the latest block number
-            pylon_client: The Pylon client to use for polling
+            pylon_client_provider: Provider for pylon client instances
         """
         super().__init__(_id)
         self.netuid = netuid
         self.delay_blocks = delay
         self.polling_interval = polling_interval
-        self.pylon_client: PylonClient = pylon_client
+        self.pylon_client_provider = pylon_client_provider
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> EpochBeatActor:
@@ -87,16 +88,17 @@ class EpochBeatActor(ProducerActor[EpochBeat]):
     @override
     def _produce(self) -> Generator[EpochBeat]:
         last_emitted: Epoch | None = None
-        pylon = self.beat_spec.pylon_client
         interval_seconds = self.beat_spec.polling_interval.total_seconds()
         delay_blocks = self.beat_spec.delay_blocks
         netuid = self.beat_spec.netuid
+        pylon = self.beat_spec.pylon_client_provider.get_client()
 
         while not self._stop_event.is_set():
             poll_start = time.monotonic()
 
             try:
-                response = pylon.open_access.get_latest_block_info()
+                with pylon:
+                    response = pylon.open_access.get_latest_block_info()
 
             except PylonResponseException as exc:
                 # 1. Retry on PylonResponseException - these may be transient

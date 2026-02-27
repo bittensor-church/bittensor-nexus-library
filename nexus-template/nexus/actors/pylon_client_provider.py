@@ -4,13 +4,15 @@ from abc import ABC, abstractmethod
 from typing import Protocol, override
 
 from pylon_client.artanis import Config, NetUid, PylonAuthToken, PylonClient
-from pylon_client.artanis.v1 import GetNeuronsResponse
+from pylon_client.artanis.v1 import GetLatestBlockInfoResponse, GetNeuronsResponse
 
 from nexus.utils.exceptions import InternalFrameworkException
 
 
 class OpenAccessPylonApiLike(Protocol):
     def get_recent_neurons(self, netuid: NetUid) -> GetNeuronsResponse: ...
+
+    def get_latest_block_info(self) -> GetLatestBlockInfoResponse: ...
 
 
 class SyncPylonClientLike(Protocol):
