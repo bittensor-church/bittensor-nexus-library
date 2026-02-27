@@ -66,15 +66,16 @@ class BlockBeatNode(Producer[BlockBeat], ActorBuilder):
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> BlockBeatActor:
-        return BlockBeatActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
+        return BlockBeatActor(beat_spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
 class BlockBeatActor(ProducerActor[BlockBeat]):
-    spec: BlockBeatNode
+    beat_spec: BlockBeatNode
     _stop_event: Event
 
-    def __init__(self, spec: BlockBeatNode, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
-        super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
+    def __init__(self, beat_spec: BlockBeatNode, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
+        super().__init__(spec=beat_spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
+        self.beat_spec = beat_spec
         self._stop_event = Event()
 
     @override
@@ -84,8 +85,8 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
     @override
     def _produce(self) -> Generator[BlockBeat]:
         last_emitted: BlockNumber | None = None
-        pylon = self.spec.pylon_client
-        interval_seconds = self.spec.polling_interval.total_seconds()
+        pylon = self.beat_spec.pylon_client
+        interval_seconds = self.beat_spec.polling_interval.total_seconds()
 
         while not self._stop_event.is_set():
             poll_start = time.monotonic()
@@ -101,7 +102,7 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
             else:
                 block_number = BlockNumber(response.number)
 
-                if block_number != last_emitted and block_number % self.spec.every_nth == 0:
+                if block_number != last_emitted and block_number % self.beat_spec.every_nth == 0:
                     logger.info(f"New block: {block_number}")
                     last_emitted = block_number
                     yield BlockBeat(

@@ -68,15 +68,16 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> EpochBeatActor:
-        return EpochBeatActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
+        return EpochBeatActor(beat_spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
 class EpochBeatActor(ProducerActor[EpochBeat]):
-    spec: EpochBeatNode
+    beat_spec: EpochBeatNode
     _stop_event: Event
 
-    def __init__(self, spec: EpochBeatNode, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
-        super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
+    def __init__(self, beat_spec: EpochBeatNode, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
+        super().__init__(spec=beat_spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
+        self.beat_spec = beat_spec
         self._stop_event = Event()
 
     @override
@@ -86,10 +87,10 @@ class EpochBeatActor(ProducerActor[EpochBeat]):
     @override
     def _produce(self) -> Generator[EpochBeat]:
         last_emitted: Epoch | None = None
-        pylon = self.spec.pylon_client
-        interval_seconds = self.spec.polling_interval.total_seconds()
-        delay_blocks = self.spec.delay_blocks
-        netuid = self.spec.netuid
+        pylon = self.beat_spec.pylon_client
+        interval_seconds = self.beat_spec.polling_interval.total_seconds()
+        delay_blocks = self.beat_spec.delay_blocks
+        netuid = self.beat_spec.netuid
 
         while not self._stop_event.is_set():
             poll_start = time.monotonic()
