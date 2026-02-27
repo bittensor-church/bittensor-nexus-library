@@ -3,7 +3,7 @@ from itertools import chain, repeat
 from unittest.mock import MagicMock, seal
 
 import pytest
-from pylon_client import v1 as pylon
+from pylon_client import artanis as pylon
 from utils import CollectorActor, dummy_block_beat, wait_until
 
 from nexus.actors.chain_beat.block_beat import BlockBeat, BlockBeatNode
@@ -68,7 +68,7 @@ def test_block_beat(blocks: list[BlockNumber], beats: list[BlockNumber], nth: Bl
 
 
 def _dummy_block_info_response(block_number: BlockNumber) -> pylon.GetLatestBlockInfoResponse:
-    return pylon.GetLatestBlockInfoResponse(
+    return pylon.v1.GetLatestBlockInfoResponse(
         number=pylon.BlockNumber(block_number),
         timestamp=pylon.Timestamp(block_number * 1000),
         hash=pylon.BlockHash(f"0x{block_number:064x}"),
