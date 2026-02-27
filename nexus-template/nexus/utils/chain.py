@@ -1,9 +1,9 @@
-from nexus.utils.types import BlockNumber, Epoch, Tempo, SubnetId
+from nexus.utils.types import BlockNumber, Epoch, Tempo, NetUid
 
 DEFAULT_TEMPO = Tempo(360)  # This is actually a subnet hyperparam. It's rare for it to be changed, but possible.
 
 
-def get_epoch_containing_block(block: BlockNumber, netuid: SubnetId, tempo: Tempo = DEFAULT_TEMPO) -> Epoch:
+def get_epoch_containing_block(block: BlockNumber, netuid: NetUid, tempo: Tempo = DEFAULT_TEMPO) -> Epoch:
     """
     Reimplementing the logic from subtensor's Rust function:
         pub fn blocks_until_next_epoch(netuid: u16, tempo: u16, block_number: u64) -> u64

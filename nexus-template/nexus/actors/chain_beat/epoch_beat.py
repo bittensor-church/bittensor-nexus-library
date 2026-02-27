@@ -16,7 +16,7 @@ from nexus.core.runtime.context_store import ContextStore
 from nexus.core.runtime.events import PipeToBus
 from nexus.logging_utils import get_logger
 from nexus.utils.chain import get_epoch_containing_block
-from nexus.utils.types import BlockCount, BlockNumber, Epoch, SubnetId
+from nexus.utils.types import BlockCount, BlockNumber, Epoch, NetUid
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -37,7 +37,7 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
        waiting until an epoch is safely finalized.
     """
 
-    netuid: SubnetId
+    netuid: NetUid
     delay_blocks: BlockCount
     polling_interval: timedelta
     pylon_client: PylonClient
@@ -46,7 +46,7 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
         self,
         _id: str,
         *,
-        netuid: SubnetId,
+        netuid: NetUid,
         delay: BlockCount = BlockCount(0),
         polling_interval: timedelta = timedelta(seconds=1),
         pylon_client: PylonClient,

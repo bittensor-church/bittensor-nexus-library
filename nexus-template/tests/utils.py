@@ -11,7 +11,7 @@ from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
 from nexus.utils.chain import get_epoch_containing_block
-from nexus.utils.types import BlockNumber, BlockTimestamp, BlockHash, SubnetId
+from nexus.utils.types import BlockNumber, Timestamp, BlockHash, NetUid
 
 
 def wait_until(condition, *, timeout=1.0, interval=0.05):
@@ -70,13 +70,13 @@ def empty_context_store() -> ContextStore:
     return ContextStore.recover_from(persistence).context_store
 
 
-def dummy_epoch_beat(block_number: BlockNumber, netuid: SubnetId) -> EpochBeat:
+def dummy_epoch_beat(block_number: BlockNumber, netuid: NetUid) -> EpochBeat:
     return EpochBeat(epoch=get_epoch_containing_block(block_number, netuid=netuid))
 
 
 def dummy_block_beat(block_number: BlockNumber) -> BlockBeat:
     return BlockBeat(
         block_number=BlockNumber(block_number),
-        block_timestamp=BlockTimestamp(block_number * 1000),
+        block_timestamp=Timestamp(block_number * 1000),
         block_hash=BlockHash(f"0x{block_number:064x}"),
     )
