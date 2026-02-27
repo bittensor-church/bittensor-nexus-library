@@ -26,7 +26,7 @@ class RestEntryPoint[Model: BaseModel](Node, ActorBuilder):
     user_data_model: type[Model]
 
     def __init__(self, *, _id: str, path: str, port: int, user_data_model: type[Model]) -> None:
-        super().__init__(_id = _id)
+        super().__init__(_id=_id)
         self.path = path if path.startswith("/") else f"/{path}"
         self.port = port
         self.user_data_model = user_data_model
@@ -77,7 +77,7 @@ class RestEntryPointActor[Model: BaseModel](Actor):
             super()._loop()
         finally:
             self._stop_server()
-            
+
     def _ensure_server_started(self) -> None:
         if self._server_thread is not None:
             return

@@ -12,8 +12,7 @@ if TYPE_CHECKING:
 
 class S3ClientProvider(ABC):
     @abstractmethod
-    def get_client(self) -> S3Client:
-        ...
+    def get_client(self) -> S3Client: ...
 
 
 class DefaultS3ClientProvider(S3ClientProvider):

@@ -66,6 +66,7 @@ class ContextStoreLocks(ABC):
     provides primitives for mutual exclusion on contexts, to ensure that only
     one entity can access a context at a time
     """
+
     @abstractmethod
     def register_context(self, ctx: ContextId) -> None:
         pass
@@ -218,7 +219,7 @@ class Context:
         old_value = self._user_data.get(key, None)
         delta = deepdiff.Delta(deepdiff.DeepDiff(old_value, value))
         value_delta = cast(bytes, delta.dumps())
-        self._context_store._append_entry(self._id, UserDataChange(key=key, value_delta=value_delta)) # pyright: ignore[reportPrivateUsage]
+        self._context_store._append_entry(self._id, UserDataChange(key=key, value_delta=value_delta))  # pyright: ignore[reportPrivateUsage]
 
         _assert_recovery(old_value, value_delta, value)
 
@@ -226,7 +227,7 @@ class Context:
 
     def complete(self) -> None:
         self._assert_mutable()
-        self._context_store._append_entry(self._id, ContextCompleted()) # pyright: ignore[reportPrivateUsage]
+        self._context_store._append_entry(self._id, ContextCompleted())  # pyright: ignore[reportPrivateUsage]
         self._is_completed = True
 
     def _assert_mutable(self) -> None:
@@ -294,13 +295,13 @@ class ContextStore:
     @classmethod
     def recover_from(cls: type[ContextStore], persistence: ContextStorePersistence) -> RecoveredContextStore:
         """
-            Recovers a ContextStore from the given persistence layer by replaying all log entries.
+        Recovers a ContextStore from the given persistence layer by replaying all log entries.
 
-            pyright exclusions on Context private members is intentional; this is recovery code
-            which we want to be able to mutate the context's payload directly
+        pyright exclusions on Context private members is intentional; this is recovery code
+        which we want to be able to mutate the context's payload directly
 
-            Raises:
-                InternalFrameworkException: if recovered log entries violate framework invariants.
+        Raises:
+            InternalFrameworkException: if recovered log entries violate framework invariants.
         """
         contexts: dict[ContextId, Context] = {}
         last_messages: LastMessages = {}
@@ -337,20 +338,26 @@ class ContextStore:
                 case MessageSent(payload_delta=payload_delta) as message:
                     context = contexts.get(ctx, None)
                     if context is None:
-                        raise InternalStateCorruptionException(f"MessageSent for missing context {ctx} during recovery.")
-                    context._payload += deepdiff.Delta(payload_delta, deserializer=DELTA_DESERIALIZER) # pyright: ignore[reportPrivateUsage]
+                        raise InternalStateCorruptionException(
+                            f"MessageSent for missing context {ctx} during recovery."
+                        )
+                    context._payload += deepdiff.Delta(payload_delta, deserializer=DELTA_DESERIALIZER)  # pyright: ignore[reportPrivateUsage]
                     last_messages[ctx] = message
                 case UserDataChange(key=key, value_delta=value_delta):
                     context = contexts.get(ctx, None)
                     if context is None:
-                        raise InternalStateCorruptionException(f"UserDataChange for missing context {ctx} during recovery.")
+                        raise InternalStateCorruptionException(
+                            f"UserDataChange for missing context {ctx} during recovery."
+                        )
                     context._user_data[key] = context._user_data.get(key, None) + deepdiff.Delta(  # pyright: ignore[reportPrivateUsage]
                         value_delta, deserializer=DELTA_DESERIALIZER
                     )
                 case ContextCompleted():
                     context = contexts.pop(ctx, None)
                     if context is None:
-                        raise InternalStateCorruptionException(f"ContextCompleted for missing context {ctx} during recovery.")
+                        raise InternalStateCorruptionException(
+                            f"ContextCompleted for missing context {ctx} during recovery."
+                        )
                     context._is_completed = True  # pyright: ignore[reportPrivateUsage]
                     completed_contexts.add(ctx)
                     last_messages.pop(ctx, None)
@@ -366,9 +373,7 @@ class ContextStore:
 
     def __init__(self, token: str = "intialize_using_factory_methods_not_directly") -> None:
         if token != "factory_method":
-            raise InternalFrameworkException(
-                "ContextStore should be initialized using factory methods, not directly."
-            )
+            raise InternalFrameworkException("ContextStore should be initialized using factory methods, not directly.")
 
     @contextmanager
     def create_context(self, *, parents: tuple[ContextId, ...] = ()) -> Iterator[Context]:
@@ -413,9 +418,7 @@ class ContextStore:
     def _append_entry(self, ctx: ContextId, entry: LogEntryData) -> None:
         context = self.__contexts.get(ctx, None)
         if context is None:
-            raise InternalFrameworkException(
-                f"Context {ctx} not found in store? It should have been created first."
-            )
+            raise InternalFrameworkException(f"Context {ctx} not found in store? It should have been created first.")
         if context.is_completed:
             raise ContextCompletedException(f"Context {ctx} is completed and cannot be mutated.")
         self.__persistence.append_entry(ctx, entry)

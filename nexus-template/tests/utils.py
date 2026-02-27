@@ -11,7 +11,7 @@ from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
 from nexus.utils.chain import get_epoch_containing_block
-from nexus.utils.types import BlockNumber, Timestamp, BlockHash, NetUid
+from nexus.utils.types import BlockHash, BlockNumber, NetUid, Timestamp
 
 
 def wait_until(condition, *, timeout=1.0, interval=0.05):

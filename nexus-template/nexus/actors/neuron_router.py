@@ -36,6 +36,7 @@ type NeuronFilter = Callable[[Sequence[Neuron]], Sequence[Neuron]]
 
 logger = get_logger(__name__)
 
+
 def keep_all_neurons(neurons: Sequence[Neuron]) -> Sequence[Neuron]:
     return neurons
 
@@ -159,12 +160,11 @@ class RoundRobinNeuronRouterActor[Input](NeuronRouterActor[Input]):
     for load balancing across contexts, but stable as long
     as the set of neurons doesn't change.
     """
+
     @override
     def select_neuron(self, *, ctx: Context, neurons: Collection[Neuron]) -> Neuron:
         if len(neurons) == 0:
-            raise NoRoutableNeuronsException(
-                f"Cannot route input in {self.router_spec.id}: no neurons available"
-            )
+            raise NoRoutableNeuronsException(f"Cannot route input in {self.router_spec.id}: no neurons available")
 
         ordered_neurons = self._ordered_neurons_for_context(ctx, neurons)
 

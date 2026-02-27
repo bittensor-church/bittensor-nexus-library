@@ -42,8 +42,7 @@ def _build_runtime(
     )
     upstream_source = Source[str]("router-input-source")
     runtime = (
-        builder
-        .add_flows(
+        builder.add_flows(
             Flow.from_connectable(upstream_source).then(router.input),
             Flow.from_connectable(router.routed).then(routed_collector.sink),
             Flow.from_connectable(router.error).then(error_collector.sink),

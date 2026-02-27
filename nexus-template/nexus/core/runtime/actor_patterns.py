@@ -1,16 +1,16 @@
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from threading import Thread
-from typing import Any, Generator, cast, override
+from typing import Any, cast, override
 
 from nexus.logging_utils import get_logger
 from nexus.utils.exceptions import InternalFrameworkException, NexusException, SafeInvokeWrappedException
 
 from ..dsl.nodes import Fork, Producer, Sink, Source, Transform
 from .actor import Actor, EventHandler
-from .context_store import Context, ContextId, ContextStore
-from .events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
+from .context_store import Context, ContextStore
+from .events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -42,8 +42,7 @@ def _fork_handler[From, ToLeft, ToRight](
     if left_payload is None:
         return (SendEvent(ctx_id=event.ctx_id, source=right, payload=right_payload),)
     raise InternalFrameworkException(
-        f"Unexpected fork handler output for event {event}: "
-        f"{(left_payload, right_payload)}"
+        f"Unexpected fork handler output for event {event}: {(left_payload, right_payload)}"
     )
 
 

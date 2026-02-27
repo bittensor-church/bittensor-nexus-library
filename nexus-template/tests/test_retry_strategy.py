@@ -58,9 +58,7 @@ class FailFirstKAttemptsForInputValueActor(Actor):
         self.received_attempt_numbers_by_ctx[event.ctx_id].append(attempt_number)
         self.attempt_received_at[(event.ctx_id, attempt_number)] = monotonic()
 
-        should_fail = (
-            event.payload.value == self.failing_input_value and attempt_number <= self.fail_first_k
-        )
+        should_fail = event.payload.value == self.failing_input_value and attempt_number <= self.fail_first_k
         if should_fail:
             return SendEvent(
                 ctx_id=event.ctx_id,
@@ -89,8 +87,7 @@ def test_retry_strategy_actor_sends_first_attempt_downstream_on_input() -> None:
     upstream_source = Source[RetryInput]("retry-input-source")
 
     runtime = (
-        builder
-        .add_flows(
+        builder.add_flows(
             Flow.from_connectable(upstream_source).then(retry_strategy.input),
             Flow.from_connectable(retry_strategy.next_attempt).then(collector.sink),
         )
@@ -126,8 +123,7 @@ def test_retry_strategy_actor_retries_first_k_failures() -> None:
 
     upstream_source = Source[RetryInput]("retry-input-source")
     runtime = (
-        builder
-        .add_flows(
+        builder.add_flows(
             Flow.from_connectable(upstream_source).then(retry_strategy.input),
             Flow.from_connectable(retry_strategy.next_attempt).then(flaky.attempt_sink),
             Flow.from_connectable(flaky.failed_source).then(retry_strategy.failed_attempt),
@@ -168,8 +164,7 @@ def test_retry_strategy_actor_emits_retries_exhausted_after_too_many_failures() 
 
     upstream_source = Source[RetryInput]("retry-input-source")
     runtime = (
-        builder
-        .add_flows(
+        builder.add_flows(
             Flow.from_connectable(upstream_source).then(retry_strategy.input),
             Flow.from_connectable(retry_strategy.next_attempt).then(flaky.attempt_sink),
             Flow.from_connectable(flaky.failed_source).then(retry_strategy.failed_attempt),
@@ -213,8 +208,7 @@ def test_retry_strategy_retry_wait_in_one_context_does_not_block_other_context()
 
     upstream_source = Source[RetryInput]("retry-input-source-multi-context")
     runtime = (
-        builder
-        .add_flows(
+        builder.add_flows(
             Flow.from_connectable(upstream_source).then(retry_strategy.input),
             Flow.from_connectable(retry_strategy.next_attempt).then(flaky.attempt_sink),
             Flow.from_connectable(flaky.failed_source).then(retry_strategy.failed_attempt),

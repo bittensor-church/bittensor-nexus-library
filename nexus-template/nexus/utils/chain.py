@@ -1,4 +1,4 @@
-from nexus.utils.types import BlockNumber, Epoch, Tempo, NetUid
+from nexus.utils.types import BlockNumber, Epoch, NetUid, Tempo
 
 DEFAULT_TEMPO = Tempo(360)  # This is actually a subnet hyperparam. It's rare for it to be changed, but possible.
 
@@ -11,7 +11,8 @@ def get_epoch_containing_block(block: BlockNumber, netuid: NetUid, tempo: Tempo 
 
     See also: https://github.com/opentensor/bittensor/pull/2168/commits/9e8745447394669c03d9445373920f251630b6b8
     """
-    if tempo <= 0: raise ValueError("tempo must be positive")
+    if tempo <= 0:
+        raise ValueError("tempo must be positive")
 
     interval = tempo + 1
     next_epoch = block + tempo - (block + netuid + 1) % interval

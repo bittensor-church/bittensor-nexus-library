@@ -10,8 +10,7 @@ from nexus.utils.exceptions import InternalFrameworkException
 
 
 class OpenAccessPylonApiLike(Protocol):
-    def get_recent_neurons(self, netuid: NetUid) -> GetNeuronsResponse:
-        ...
+    def get_recent_neurons(self, netuid: NetUid) -> GetNeuronsResponse: ...
 
 
 class SyncPylonClientLike(Protocol):
@@ -23,26 +22,23 @@ class SyncPylonClientLike(Protocol):
     This should be removed once pylon client provides a full-fledged mock
     to be used in contexts like this.
     """
-    @property
-    def open_access(self) -> OpenAccessPylonApiLike:
-        ...
 
-    def __enter__(self) -> SyncPylonClientLike:
-        ...
+    @property
+    def open_access(self) -> OpenAccessPylonApiLike: ...
+
+    def __enter__(self) -> SyncPylonClientLike: ...
 
     def __exit__(
         self,
         exc_type: object,
         exc_val: object,
         exc_tb: object,
-    ) -> object:
-        ...
+    ) -> object: ...
 
 
 class PylonClientProvider(ABC):
     @abstractmethod
-    def get_client(self) -> SyncPylonClientLike:
-        ...
+    def get_client(self) -> SyncPylonClientLike: ...
 
 
 class StaticConfigPylonClientProvider(PylonClientProvider):

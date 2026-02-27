@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import timedelta
 from threading import Event
-from typing import Generator, override
+from typing import override
 
 from pylon_client.artanis import PylonClient, PylonResponseException
 

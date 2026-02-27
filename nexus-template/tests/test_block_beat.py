@@ -12,32 +12,35 @@ from nexus.core.runtime.subnet_runtime import SubnetBuilder
 from nexus.utils.types import BlockCount, BlockNumber
 
 
-@pytest.mark.parametrize("blocks, beats, nth", [
-    pytest.param(
-        [0, 1, 2],
-        [0, 1, 2],
-        BlockCount(1),
-        id="all-consecutive-blocks-emitted",
-    ),
-    pytest.param(
-        [0, 0, 0, 1, 1, 1],
-        [0, 1],
-        BlockCount(1),
-        id="no-duplicates",
-    ),
-    pytest.param(
-        [0, 1, 5, 7],
-        [0, 1, 5, 7],
-        BlockCount(1),
-        id="no-hole-filling",
-    ),
-    pytest.param(
-        [*range(15, 55)],
-        [20, 30, 40, 50],
-        BlockCount(10),
-        id="every-nth-block",
-    ),
-])
+@pytest.mark.parametrize(
+    "blocks, beats, nth",
+    [
+        pytest.param(
+            [0, 1, 2],
+            [0, 1, 2],
+            BlockCount(1),
+            id="all-consecutive-blocks-emitted",
+        ),
+        pytest.param(
+            [0, 0, 0, 1, 1, 1],
+            [0, 1],
+            BlockCount(1),
+            id="no-duplicates",
+        ),
+        pytest.param(
+            [0, 1, 5, 7],
+            [0, 1, 5, 7],
+            BlockCount(1),
+            id="no-hole-filling",
+        ),
+        pytest.param(
+            [*range(15, 55)],
+            [20, 30, 40, 50],
+            BlockCount(10),
+            id="every-nth-block",
+        ),
+    ],
+)
 def test_block_beat(blocks: list[BlockNumber], beats: list[BlockNumber], nth: BlockCount):
     block_infos = [_dummy_block_info_response(block_number) for block_number in blocks]
     expected_beats = [dummy_block_beat(block_number) for block_number in beats]
@@ -54,12 +57,7 @@ def test_block_beat(blocks: list[BlockNumber], beats: list[BlockNumber], nth: Bl
         context_store=builder.context_store,
     )
 
-    runtime = (
-        builder
-        .add_flows(Flow.from_connectable(beat.source).then(collector.sink))
-        .add_actors(collector)
-        .build()
-    )
+    runtime = builder.add_flows(Flow.from_connectable(beat.source).then(collector.sink)).add_actors(collector).build()
 
     with runtime.running(shutdown_timeout_seconds=1.0):
         wait_until(lambda: len(collector.received_events) >= len(expected_beats))

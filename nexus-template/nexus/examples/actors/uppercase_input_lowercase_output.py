@@ -12,9 +12,7 @@ class UppercaseInputLowercaseOutput(DoubleTransform[str, str, str, str], ActorBu
         super().__init__(_id)
 
     @override
-    def build_actor(
-        self, *, pipe_to_bus: PipeToBus, context_store: ContextStore
-    ) -> UppercaseInputLowercaseOutputActor:
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> UppercaseInputLowercaseOutputActor:
         return UppercaseInputLowercaseOutputActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 

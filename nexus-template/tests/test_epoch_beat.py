@@ -18,26 +18,30 @@ from nexus.utils.types import BlockCount, BlockNumber
 # 1080 -> 1440
 # 1441 -> 1801
 
-@pytest.mark.parametrize("blocks, beats, delay", [
-    pytest.param(
-        [500, 800, 1200],
-        [358, 719, 1080],  # Identify an epoch by its first block
-        BlockCount(0),
-        id="emits-epochs",
-    ),
-    pytest.param(
-        [500, 501, 502, 800, 805, 810],
-        [358, 719],
-        BlockCount(0),
-        id="emits-only-once",
-    ),
-    pytest.param(
-        [368, 718, 719, 720, 728],
-        [358],  # With delay 10, should not emit epoch 719 until block 729
-        BlockCount(10),
-        id="respects-delay",
-    ),
-])
+
+@pytest.mark.parametrize(
+    "blocks, beats, delay",
+    [
+        pytest.param(
+            [500, 800, 1200],
+            [358, 719, 1080],  # Identify an epoch by its first block
+            BlockCount(0),
+            id="emits-epochs",
+        ),
+        pytest.param(
+            [500, 501, 502, 800, 805, 810],
+            [358, 719],
+            BlockCount(0),
+            id="emits-only-once",
+        ),
+        pytest.param(
+            [368, 718, 719, 720, 728],
+            [358],  # With delay 10, should not emit epoch 719 until block 729
+            BlockCount(10),
+            id="respects-delay",
+        ),
+    ],
+)
 def test_epoch_beat(blocks: list[BlockNumber], beats: list[BlockNumber], delay: BlockCount, default_test_netuid):
     block_infos = [_dummy_block_info_response(block_number) for block_number in blocks]
     expected_beats = [dummy_epoch_beat(block_number, default_test_netuid) for block_number in beats]
@@ -60,12 +64,7 @@ def test_epoch_beat(blocks: list[BlockNumber], beats: list[BlockNumber], delay: 
         context_store=builder.context_store,
     )
 
-    runtime = (
-        builder
-        .add_flows(Flow.from_connectable(node.source).then(collector.sink))
-        .add_actors(collector)
-        .build()
-    )
+    runtime = builder.add_flows(Flow.from_connectable(node.source).then(collector.sink)).add_actors(collector).build()
 
     with runtime.running(shutdown_timeout_seconds=1.0):
         wait_until(lambda: len(collector.received_events) >= len(expected_beats))

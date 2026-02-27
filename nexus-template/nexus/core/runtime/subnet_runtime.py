@@ -74,9 +74,7 @@ class SubnetRuntime:
     @contextmanager
     def running(self, shutdown_timeout_seconds: float = 30.0) -> Generator[SubnetRuntime]:
         if shutdown_timeout_seconds < 0:
-            raise ValueError(
-                f"Expected non-negative shutdown_timeout_seconds, got {shutdown_timeout_seconds}."
-            )
+            raise ValueError(f"Expected non-negative shutdown_timeout_seconds, got {shutdown_timeout_seconds}.")
 
         self.run_loop()
         try:
