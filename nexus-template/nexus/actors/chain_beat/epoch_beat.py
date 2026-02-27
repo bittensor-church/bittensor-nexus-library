@@ -48,7 +48,7 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
         _id: str,
         *,
         netuid: NetUid,
-        delay: BlockCount = BlockCount(0),
+        delay: BlockCount = BlockCount(0),  # noqa: B008
         polling_interval: timedelta = timedelta(seconds=1),
         pylon_client: PylonClient,
     ) -> None:

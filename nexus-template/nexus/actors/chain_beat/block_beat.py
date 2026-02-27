@@ -48,7 +48,7 @@ class BlockBeatNode(Producer[BlockBeat], ActorBuilder):
         self,
         _id: str,
         *,
-        every_nth: BlockCount = BlockCount(1),
+        every_nth: BlockCount = BlockCount(1),  # noqa: B008
         polling_interval: timedelta = timedelta(seconds=1),
         pylon_client: PylonClient,
     ) -> None:

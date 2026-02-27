@@ -10,6 +10,9 @@ def get_epoch_containing_block(block: BlockNumber, netuid: NetUid, tempo: Tempo 
     See https://github.com/opentensor/subtensor.
 
     See also: https://github.com/opentensor/bittensor/pull/2168/commits/9e8745447394669c03d9445373920f251630b6b8
+
+    Raises:
+        ValueError: If tempo is not positive (tempo <= 0).
     """
     if tempo <= 0:
         raise ValueError("tempo must be positive")
