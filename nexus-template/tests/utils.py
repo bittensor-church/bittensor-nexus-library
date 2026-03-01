@@ -95,7 +95,7 @@ def dummy_epoch_beat(block_number: BlockNumber, netuid: NetUid) -> EpochBeat:
     return EpochBeat(epoch=get_epoch_containing_block(block_number, netuid=netuid))
 
 
-def dummy_block_beat(block_number: BlockNumber) -> BlockBeat:
+def dummy_block_beat(block_number: BlockNumber | int) -> BlockBeat:
     return BlockBeat(
         block_number=BlockNumber(block_number),
         block_timestamp=Timestamp(block_number * 1000),
