@@ -61,6 +61,9 @@ Always use `uv run`, never bare `python` or `pip`.
 - All imports MUST go at the top of a file. No inline imports.
 - Prefer short and concise code. Avoid deeply nested code.
 - Code MUST be well-typed. Prefer typed structures over dictionaries.
+- Be strict with domain types: avoid bare `str`/`int`/`float` for domain values when a stronger type exists.
+- For durations use `datetime.timedelta` (not raw numeric seconds) unless there is a strong reason not to.
+- Introduce `NewType` or small typed wrappers for semantically distinct values (paths, ports, IDs, timeouts) to prevent argument mix-ups and make APIs self-explanatory.
 - Use short and descriptive variable, function, and class names.
 - Comments MUST NOT reiterate what the code does. If the code is descriptive enough - skip comments.
 - DO write comments that explain non-obvious code, gotchas.
@@ -68,6 +71,8 @@ Always use `uv run`, never bare `python` or `pip`.
 - Do NOT double-check for things that are already handled by the project's QA tools - use the tools instead.
 - Do NOT leave dead code in the codebase.
 - You are allowed to restructure code. Prefer this over introducing workarounds.
+- Do NOT use assertions in production code for runtime invariants. Raise a specific exception instead.
+- `InternalFrameworkException` is a common default for invariant breaches, but choose context-specific exceptions when appropriate (for example `InternalStateCorruptionException`, `FlowMisconfiguredException`, `ActorMisconfiguredException`).
 
 ## Documentation guidelines
 

@@ -4,6 +4,16 @@ from nexus.actors.pylon_client_provider import (
     PylonClientProvider,
     StaticConfigPylonClientProvider,
 )
+from nexus.actors.executor_communicator import (
+    AsyncHttpNeuronCommunicator,
+    AsyncHttpNeuronCommunicatorActor,
+    AsyncHttpNeuronService,
+    ExecutorCommunicator,
+    HttpBindEndpoint,
+    InMemoryPendingAsyncHttpRequestStore,
+    PendingAsyncHttpRequest,
+    PendingAsyncHttpRequestStore,
+)
 from nexus.actors.rest_entry_point import RestEntryPoint, RestEntryPointActor
 from nexus.actors.neuron_router import (
     NoRoutableNeuronsException,
@@ -17,15 +27,42 @@ from nexus.actors.neuron_router import (
     miners_only,
     validators_only,
 )
+from nexus.utils.exceptions import (
+    AsyncHttpNeuronCommunicatorException,
+    NeuronAddressInvalidException,
+    RemoteRequestFailedException,
+    RemoteRequestRejectedException,
+    ResponseInvalidException,
+    RemoteResponseTimeoutException,
+    ResponseValidationException,
+    RemoteExecutionException,
+    UnsupportedAxonProtocolException,
+)
 
 __all__ = [
     "BlockBeatNode",
     "BlockBeatActor",
     "EpochBeatNode",
     "EpochBeatActor",
+    "AsyncHttpNeuronCommunicator",
+    "AsyncHttpNeuronCommunicatorActor",
+    "AsyncHttpNeuronCommunicatorException",
+    "AsyncHttpNeuronService",
+    "ExecutorCommunicator",
+    "HttpBindEndpoint",
+    "InMemoryPendingAsyncHttpRequestStore",
+    "NeuronAddressInvalidException",
     "NeuronFilter",
+    "RemoteRequestFailedException",
+    "RemoteRequestRejectedException",
+    "ResponseInvalidException",
+    "RemoteResponseTimeoutException",
+    "ResponseValidationException",
     "NoRoutableNeuronsException",
+    "PendingAsyncHttpRequest",
+    "PendingAsyncHttpRequestStore",
     "PylonClientProvider",
+    "RemoteExecutionException",
     "RoundRobinNeuronRouter",
     "RestEntryPoint",
     "RestEntryPointActor",
@@ -34,6 +71,7 @@ __all__ = [
     "NeuronRouterActor",
     "Neuron",
     "StaticConfigPylonClientProvider",
+    "UnsupportedAxonProtocolException",
     "keep_all_neurons",
     "miners_only",
     "validators_only",

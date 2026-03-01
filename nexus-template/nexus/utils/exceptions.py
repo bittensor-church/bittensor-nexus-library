@@ -42,3 +42,72 @@ class ActorMisconfiguredException(NexusException):
     is invalid."""
 
     pass
+
+
+class UnsupportedAxonProtocolException(NexusException):
+    """Raised when an operation expects one axon protocol but receives another one.
+
+    Stores both `expected_protocol` and `actual_protocol` for downstream handling.
+    """
+
+    expected_protocol: object | None
+    actual_protocol: object | None
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        expected_protocol: object | None = None,
+        actual_protocol: object | None = None,
+    ) -> None:
+        self.expected_protocol = expected_protocol
+        self.actual_protocol = actual_protocol
+        if message is None:
+            if expected_protocol is None and actual_protocol is None:
+                message = "Unsupported axon protocol."
+            else:
+                message = (
+                    "Unsupported axon protocol: "
+                    f"expected={expected_protocol!r}, actual={actual_protocol!r}."
+                )
+        super().__init__(message)
+
+
+class AsyncHttpNeuronCommunicatorException(NexusException):
+    """Base class for failures specific to AsyncHttpNeuronCommunicator."""
+    pass
+
+
+class NeuronAddressInvalidException(AsyncHttpNeuronCommunicatorException):
+    """Raised when target neuron HTTP address data (IP/port) is invalid."""
+    pass
+
+
+class RemoteRequestFailedException(AsyncHttpNeuronCommunicatorException):
+    """Raised when sending the outbound HTTP request fails due to network/transport issues."""
+    pass
+
+
+class RemoteRequestRejectedException(AsyncHttpNeuronCommunicatorException):
+    """Raised when target service responds to the outbound request with non-2xx HTTP status."""
+    pass
+
+
+class RemoteResponseTimeoutException(AsyncHttpNeuronCommunicatorException):
+    """Raised when no callback response is received before total processing timeout."""
+    pass
+
+
+class ResponseInvalidException(AsyncHttpNeuronCommunicatorException):
+    """Raised when callback message is protocol-invalid, e.g. missing both output and error."""
+    pass
+
+
+class ResponseValidationException(AsyncHttpNeuronCommunicatorException):
+    """Raised when callback has output data, but that output fails expected Output model validation."""
+    pass
+
+
+class RemoteExecutionException(AsyncHttpNeuronCommunicatorException):
+    """Raised when remote service explicitly reports execution failure via callback error field."""
+    pass
