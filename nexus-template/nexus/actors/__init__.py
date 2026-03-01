@@ -1,5 +1,6 @@
 from nexus.actors.chain_beat.block_beat import BlockBeatNode, BlockBeatActor
 from nexus.actors.chain_beat.epoch_beat import EpochBeatNode, EpochBeatActor
+from nexus.actors.timestamper import TimestamperNode, TimestamperActor, Timestamped
 from nexus.actors.pylon_client_provider import (
     PylonClientProvider,
     StaticConfigPylonClientProvider,
@@ -44,6 +45,9 @@ __all__ = [
     "BlockBeatActor",
     "EpochBeatNode",
     "EpochBeatActor",
+    "TimestamperNode",
+    "TimestamperActor",
+    "Timestamped",
     "AsyncHttpNeuronCommunicator",
     "AsyncHttpNeuronCommunicatorActor",
     "AsyncHttpNeuronCommunicatorException",
