@@ -3,7 +3,8 @@ from itertools import chain, repeat
 from unittest.mock import MagicMock, seal
 
 import pytest
-from pylon_client import artanis as pylon
+from pylon_client import artanis
+from pylon_client.artanis import v1 as artanis_v1
 from utils import CollectorActor, dummy_epoch_beat, wait_until
 
 from nexus.actors.chain_beat.epoch_beat import EpochBeat, EpochBeatNode
@@ -72,9 +73,9 @@ def test_epoch_beat(blocks: list[BlockNumber], beats: list[BlockNumber], delay: 
     assert [event.payload for event in collector.received_events] == expected_beats
 
 
-def _dummy_block_info_response(block_number: BlockNumber) -> pylon.GetLatestBlockInfoResponse:
-    return pylon.v1.GetLatestBlockInfoResponse(
-        number=pylon.BlockNumber(block_number),
-        timestamp=pylon.Timestamp(block_number * 1000),
-        hash=pylon.BlockHash(f"0x{block_number:064x}"),
+def _dummy_block_info_response(block_number: BlockNumber) -> artanis_v1.GetLatestBlockInfoResponse:
+    return artanis_v1.GetLatestBlockInfoResponse(
+        number=artanis.BlockNumber(block_number),
+        timestamp=artanis.Timestamp(block_number * 1000),
+        hash=artanis.BlockHash(f"0x{block_number:064x}"),
     )

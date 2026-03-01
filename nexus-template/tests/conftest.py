@@ -7,7 +7,13 @@ from unittest.mock import patch
 import boto3
 import pytest
 from moto.server import ThreadedMotoServer
+from transform_test_utils import (
+    TransformActorTestSetup,
+    TransformActorTestSetupFactory,
+    build_runtime,
+)
 
+from nexus.core.dsl.nodes import Transform
 from nexus.utils.types import NetUid
 
 DEFAULT_TEST_S3_BUCKET = "uploads"
@@ -52,3 +58,17 @@ def default_s3_storage_client(
         admin_client = boto3.client("s3")
         admin_client.create_bucket(Bucket=default_test_s3_bucket)
         yield admin_client
+
+
+@pytest.fixture
+def transform_actor_test_setup_factory() -> TransformActorTestSetupFactory:
+    def _build[Input, Output](transform: Transform[Input, Output]) -> TransformActorTestSetup[Input, Output]:
+        runtime, processed_collector, error_collector, upstream_source = build_runtime(transform=transform)
+        return TransformActorTestSetup(
+            runtime=runtime,
+            processed_collector=processed_collector,
+            error_collector=error_collector,
+            upstream_source=upstream_source,
+        )
+
+    return _build
