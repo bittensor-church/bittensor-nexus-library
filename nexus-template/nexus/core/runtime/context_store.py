@@ -302,7 +302,7 @@ class ContextStore:
 
         Raises:
             InternalFrameworkException: if recovered log entries violate framework invariants.
-            InternalStateCorruptionException: when the state cannot be properly recovered from the log entries.
+            InternalStateCorruptionException: if log entries violate context history consistency.
         """
         contexts: dict[ContextId, Context] = {}
         last_messages: LastMessages = {}

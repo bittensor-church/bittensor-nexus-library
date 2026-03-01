@@ -10,21 +10,12 @@ requires-python = ">=3.14"
 dependencies = [
     "pydantic-settings",
     "pydantic",
+    "httpx",
     "litestar[standard,prometheus]",
+    "sniffio",
     "deepdiff",
     "bittensor-pylon-client",
     "boto3",
-#    "cachetools",
-#    "docker",
-#    "requests",
-#    "bittensor_wallet",
-#    "sqlalchemy",
-#    "aiosqlite",
-#    "alembic",
-#    "tenacity",
-#    "sentry-sdk[litestar]",
-#    "greenlet",
-#    "flask",
 ]
 
 license = { text = "../LICENSE" }
