@@ -1,12 +1,16 @@
 # pyright: basic
 
 import os
-from collections.abc import Iterator
+import socket
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field
+from threading import Lock
 from unittest.mock import patch
 
 import boto3
 import pytest
 from moto.server import ThreadedMotoServer
+from pylon_client.artanis import Port
 from transform_test_utils import (
     TransformActorTestSetup,
     TransformActorTestSetupFactory,
@@ -20,6 +24,69 @@ DEFAULT_TEST_S3_BUCKET = "uploads"
 DEFAULT_TEST_NETUID = NetUid(1)
 
 
+@dataclass
+class PortBlockAllocator:
+    """
+    Session-scoped allocator that gives each test process a distinct local port range.
+
+    Strategy:
+    - try to bind a "guard" port at `base`, then `base + block_size`, and so on
+    - successful guard bind claims that block for the process lifetime
+    - hand out subsequent ports from that block (`guard + 1 .. guard + block_size - 1`)
+
+    This reduces cross-process collisions for tests running in parallel.
+    It does not guarantee every returned port is globally free at bind time.
+    """
+
+    base: int = 9000
+    block_size: int = 100
+    _guard_socket: socket.socket | None = None
+    _next_port: int = field(init=False, default=0)
+    _end_port: int = field(init=False, default=0)
+    _lock: Lock = field(init=False, default_factory=Lock)
+
+    def __post_init__(self) -> None:
+        """Claim one block and initialize the monotonic per-process port sequence."""
+        block_start = self._claim_block_start()
+        self._next_port = block_start + 1
+        self._end_port = block_start + self.block_size - 1
+
+    def _claim_block_start(self) -> int:
+        """Claim the first available block start by binding and keeping a guard socket."""
+        block_start = self.base
+        while True:
+            guard_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                guard_socket.bind(("127.0.0.1", block_start))
+            except OSError:
+                guard_socket.close()
+                block_start += self.block_size
+                continue
+            self._guard_socket = guard_socket
+            return block_start
+
+    def next_port(self) -> Port:
+        """
+        Return the next port in this process's claimed block.
+
+        Raises:
+            RuntimeError: if all ports in the claimed block were already allocated.
+        """
+        with self._lock:
+            if self._next_port > self._end_port:
+                raise RuntimeError("Allocated test port block exhausted.")
+            allocated = self._next_port
+            self._next_port += 1
+            return Port(allocated)
+
+    def close(self) -> None:
+        """Release the guard socket and relinquish block ownership."""
+        guard_socket = self._guard_socket
+        self._guard_socket = None
+        if guard_socket is not None:
+            guard_socket.close()
+
+
 @pytest.fixture
 def default_test_s3_bucket() -> str:
     return DEFAULT_TEST_S3_BUCKET
@@ -28,6 +95,20 @@ def default_test_s3_bucket() -> str:
 @pytest.fixture
 def default_test_netuid() -> NetUid:
     return DEFAULT_TEST_NETUID
+
+
+@pytest.fixture(scope="session")
+def port_block_allocator() -> Iterator[PortBlockAllocator]:
+    allocator = PortBlockAllocator()
+    try:
+        yield allocator
+    finally:
+        allocator.close()
+
+
+@pytest.fixture
+def unused_local_port(port_block_allocator: PortBlockAllocator) -> Callable[[], Port]:
+    return port_block_allocator.next_port
 
 
 @pytest.fixture

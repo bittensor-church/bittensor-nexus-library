@@ -1,12 +1,10 @@
 # pyright: basic
 
-import socket
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
-from pylon_client.artanis import Port
 from utils import CollectorActor
 
 from nexus.core.dsl.flow import Flow
@@ -18,12 +16,6 @@ from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
 from nexus.utils.exceptions import NexusException
 
 DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_SECONDS = 1.5
-
-
-def unused_local_port() -> Port:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return Port(int(sock.getsockname()[1]))
 
 
 def build_runtime[Input, Output](
