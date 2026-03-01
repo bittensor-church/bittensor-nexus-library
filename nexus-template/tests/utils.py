@@ -1,7 +1,10 @@
 # pyright: basic
+from collections.abc import Callable
 from threading import Thread
 from typing import Any
 
+from polyfactory.factories.pydantic_factory import ModelFactory
+from pylon_client.artanis.v1 import Neuron
 from tenacity import RetryError, retry, stop_after_delay, wait_fixed
 
 from nexus.actors.chain_beat.block_beat import BlockBeat
@@ -14,7 +17,25 @@ from nexus.utils.chain import get_epoch_containing_block
 from nexus.utils.types import BlockHash, BlockNumber, NetUid, Timestamp
 
 
-def wait_until(condition, *, timeout=1.0, interval=0.05):
+class NeuronFactory(ModelFactory[Neuron]):
+    __model__ = Neuron
+
+
+def build_neuron(
+    *,
+    uid: int,
+    hotkey: str,
+    validator_permit: bool,
+) -> Neuron:
+    return NeuronFactory.build(
+        uid=uid,
+        hotkey=hotkey,
+        coldkey=f"cold-{hotkey}",
+        validator_permit=validator_permit,
+    )
+
+
+def wait_until(condition: Callable[[], bool], *, timeout=1.0, interval=0.05):
     """
     I wasn't able to find this as a library function :shrug:
 

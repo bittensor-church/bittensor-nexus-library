@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import override
 
-from polyfactory.factories.pydantic_factory import ModelFactory
 from pylon_client.artanis import BlockHash, BlockNumber, NetUid
 from pylon_client.artanis.v1 import Block, GetNeuronsResponse, Neuron
 
@@ -14,19 +13,6 @@ from nexus.actors.pylon_client_provider import (
     PylonClientProvider,
     SyncPylonClientLike,
 )
-
-
-class NeuronFactory(ModelFactory[Neuron]):
-    __model__ = Neuron
-
-
-def build_neuron(*, uid: int, hotkey: str, validator_permit: bool) -> Neuron:
-    return NeuronFactory.build(
-        uid=uid,
-        hotkey=hotkey,
-        coldkey=f"cold-{hotkey}",
-        validator_permit=validator_permit,
-    )
 
 
 @dataclass(frozen=True)
