@@ -44,6 +44,25 @@ class ActorMisconfiguredException(NexusException):
     pass
 
 
+class ExecutorFailureException[Input](NexusException):
+    """Raised when executor fails while handling a specific input.
+
+    We persist context payloads using deep-copy/pickling paths. Exception
+    reconstruction for custom exceptions relies on constructor arguments, so we
+    implement ``__reduce__`` to restore this type with ``(input, executor_error)``.
+    """
+    input: Input
+    executor_error: NexusException
+
+    def __init__(self, _input: Input, executor_error: NexusException) -> None:
+        super().__init__("Executor failed to process input")
+        self.input = _input
+        self.executor_error = executor_error
+
+    def __reduce__(self) -> tuple[type[ExecutorFailureException[Input]], tuple[Input, NexusException]]:
+        return type(self), (self.input, self.executor_error)
+
+
 class UnsupportedAxonProtocolException(NexusException):
     """Raised when an operation expects one axon protocol but receives another one.
 

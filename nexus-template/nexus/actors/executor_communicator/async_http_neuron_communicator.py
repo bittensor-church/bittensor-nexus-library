@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv6Address
-from typing import Any, override
+from typing import override
 from urllib.parse import urlparse
 
 from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
@@ -11,11 +11,9 @@ from pylon_client.artanis import Port
 from pylon_client.artanis.v1 import AxonProtocol, Neuron
 
 from nexus.actors.neuron_router import Routed
-from nexus.core.dsl.nodes import Sink
-from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus.core.runtime.actor import Actor, ActorBuilder
 from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.context_store_types import ContextId
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
 from nexus.logging_utils import get_logger
 from nexus.utils.exceptions import (
     ActorMisconfiguredException,
@@ -26,7 +24,7 @@ from nexus.utils.exceptions import (
     UnsupportedAxonProtocolException,
 )
 
-from .base_communicator import ExecutorCommunicator
+from .base_communicator import CommunicatorActor, ExecutorCommunicator
 from .callback_http_server_runtime import (
     CallbackHttpServerRuntime,
     CallbackHttpServerRuntimeConfig,
@@ -60,7 +58,7 @@ class HttpBindEndpoint:
 
 
 class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel](
-    ExecutorCommunicator[Routed[InputModel], OutputModel], ActorBuilder
+    ExecutorCommunicator[InputModel, OutputModel], ActorBuilder
 ):
     """
     Executor communicator that forwards routed input payloads to a target neuron's HTTP axon
@@ -70,8 +68,9 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
     it to the neuron's `ip:port` on `target_path`, and stores a pending request record keyed
     by request id. The communicator listens on `response_bind` and advertises callbacks using
     `callback_base_url + response_path`. Valid `OutputModel` callbacks are emitted on
-    `processed`; all communication failures, protocol mismatches, timeouts, and invalid
-    responses are emitted on `error`.
+    `processed` as `ProcessedInput[Routed[InputModel], OutputModel]`, preserving both
+    original routed input and callback output. All communication failures, protocol
+    mismatches, timeouts, and invalid responses are emitted on `error`.
     """
 
     target_path: NormalizedHttpPath
@@ -81,8 +80,6 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
     response_bind: HttpBindEndpoint
     response_path: NormalizedHttpPath
     callback_base_url: AnyHttpUrl
-    input_model: type[InputModel]
-    output_model: type[OutputModel]
     pending_request_store: PendingAsyncHttpRequestStore
 
     def __init__(
@@ -129,7 +126,7 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
                 is not positive, response_bind.port is outside [0, 65535], or
                 callback_base_url contains query/fragment components.
         """
-        super().__init__(_id)
+        super().__init__(_id, input_model, output_model)
         validate_positive_timeout(timeout=send_timeout, parameter_name="send_timeout")
         validate_positive_timeout(
             timeout=total_processing_timeout,
@@ -150,8 +147,6 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
         self.response_bind = response_bind
         self.response_path = normalize_http_path(response_path)
         self.callback_base_url = parsed_callback_base_url
-        self.input_model = input_model
-        self.output_model = output_model
         self.pending_request_store = pending_request_store or InMemoryPendingAsyncHttpRequestStore()
 
     @override
@@ -159,7 +154,9 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
         return AsyncHttpNeuronCommunicatorActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
-class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseModel](Actor):
+class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseModel](
+    CommunicatorActor[InputModel, OutputModel]
+):
     _SWEEP_TIMEOUT: datetime.timedelta = datetime.timedelta(milliseconds=50)
     _SENDER_QUEUE_ENQUEUE_TIMEOUT: datetime.timedelta = datetime.timedelta(milliseconds=50)
     _SENDER_THREAD_START_TIMEOUT: datetime.timedelta = datetime.timedelta(seconds=1)
@@ -181,17 +178,15 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
         pipe_to_bus: PipeToBus,
         context_store: ContextStore,
     ) -> None:
-        super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
+        super().__init__(
+            spec=spec,
+            pipe_to_bus=pipe_to_bus,
+            context_store=context_store
+        )
         self.spec = spec
         self._sender = None
         self._callback_server = None
         self._timeout_sweep = None
-
-    @override
-    def handlers(self) -> dict[Sink[Any], EventHandler]:
-        return {
-            self.spec.input: self._handle_input,
-        }
 
     @override
     def on_start(self) -> None:
@@ -310,7 +305,8 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
             except Exception as exc:
                 logger.error("Failed to stop callback server runtime cleanly.", exc_info=exc)
 
-    def _handle_input(self, _: Context, event: ReceiveEvent[Routed[InputModel]]) -> MessagesToSend:
+    @override
+    def handle_input(self, ctx: Context, event: ReceiveEvent[Routed[InputModel]]) -> MessagesToSend:
         sender = self._sender
         if sender is None:
             self._emit_error(event.ctx_id, InternalFrameworkException("Sender loop is not running."))
@@ -350,21 +346,3 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
         target_host = format_host_for_url(axon_info.ip)
         target_url = f"http://{target_host}:{int(axon_info.port)}{self.spec.target_path}"
         return _ANY_HTTP_URL_ADAPTER.validate_python(target_url)
-
-    def _emit_processed(self, ctx_id: ContextId, payload: OutputModel) -> None:
-        self._pipe_to_bus.put(
-            SendEvent(
-                ctx_id=ctx_id,
-                source=self.spec.processed,
-                payload=payload,
-            )
-        )
-
-    def _emit_error(self, ctx_id: ContextId, error: NexusException) -> None:
-        self._pipe_to_bus.put(
-            SendEvent(
-                ctx_id=ctx_id,
-                source=self.spec.error,
-                payload=error,
-            )
-        )
