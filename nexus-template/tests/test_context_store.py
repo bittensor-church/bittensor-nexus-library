@@ -17,6 +17,7 @@ from nexus.core.runtime.context_store_types import (
     ContextCompleted,
     InvalidContextIdException,
 )
+from nexus.utils.exceptions import InternalStateCorruptionException
 
 
 def _random_payloads(rng: random.Random, count: int) -> list[dict[str, int]]:
@@ -154,6 +155,39 @@ def test_get_context_provides_mutual_exclusion():
     assert not t1.is_alive()
     assert not t2.is_alive()
     assert second_acquired.is_set()
+
+
+def test_get_user_data_returns_typed_value():
+    persistence = InMemoryContextStorePersistence()
+    context_store = ContextStore.recover_from(persistence).context_store
+    context_id = _create_context(context_store)
+
+    with context_store.get_context(context_id) as context:
+        context.set_user_data("count", 2)
+
+    count = context_store.get_user_data(context_id, "count", expected_type=int)
+    assert count == 2
+
+
+def test_get_user_data_raises_when_value_is_missing():
+    persistence = InMemoryContextStorePersistence()
+    context_store = ContextStore.recover_from(persistence).context_store
+    context_id = _create_context(context_store)
+
+    with pytest.raises(InternalStateCorruptionException, match="Missing context user_data"):
+        context_store.get_user_data(context_id, "missing", expected_type=int)
+
+
+def test_get_user_data_raises_when_value_type_is_invalid():
+    persistence = InMemoryContextStorePersistence()
+    context_store = ContextStore.recover_from(persistence).context_store
+    context_id = _create_context(context_store)
+
+    with context_store.get_context(context_id) as context:
+        context.set_user_data("count", "2")
+
+    with pytest.raises(InternalStateCorruptionException, match="Unexpected context user_data type"):
+        context_store.get_user_data(context_id, "count", expected_type=int)
 
 
 def test_complete_context_appends_terminal_log_entry_and_blocks_mutation():
