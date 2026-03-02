@@ -24,8 +24,7 @@ def test_timestamper_input_sets_start_timestamp_and_forwards_input() -> None:
     )
 
     runtime = (
-        builder
-        .add_flows(
+        builder.add_flows(
             Flow.from_connectable(upstream_input).then(timestamper.input),
             Flow.from_connectable(timestamper.forwarded_input).then(input_collector.sink),
         )
@@ -69,8 +68,7 @@ def test_timestamper_queues_output_until_first_block_beat() -> None:
     )
 
     runtime = (
-        builder
-        .add_flows(
+        builder.add_flows(
             Flow.from_connectable(upstream_input).then(timestamper.input),
             Flow.from_connectable(upstream_output).then(timestamper.output),
             Flow.from_connectable(upstream_block_beat).then(timestamper.block_beat),
@@ -127,8 +125,7 @@ def test_timestamper_uses_most_recent_block_beat_for_output() -> None:
     )
 
     runtime = (
-        builder
-        .add_flows(
+        builder.add_flows(
             Flow.from_connectable(upstream_input).then(timestamper.input),
             Flow.from_connectable(upstream_output).then(timestamper.output),
             Flow.from_connectable(upstream_block_beat).then(timestamper.block_beat),
@@ -172,8 +169,7 @@ def test_timestamper_drops_entries_older_than_five_minutes_when_logging_error(ca
     )
 
     runtime = (
-        builder
-        .add_flows(
+        builder.add_flows(
             Flow.from_connectable(upstream_output).then(timestamper.output),
             Flow.from_connectable(upstream_block_beat).then(timestamper.block_beat),
             Flow.from_connectable(timestamper.timestamped_output).then(output_collector.sink),
@@ -214,13 +210,9 @@ def test_timestamper_logs_warning_only_once_after_threshold_crossing(caplog: pyt
 
     upstream_output = Source[str]("upstream-output")
 
-    runtime = (
-        builder
-        .add_flows(
-            Flow.from_connectable(upstream_output).then(timestamper.output),
-        )
-        .build()
-    )
+    runtime = builder.add_flows(
+        Flow.from_connectable(upstream_output).then(timestamper.output),
+    ).build()
 
     with runtime.context_store.create_context() as context:
         old_ctx_id = context.id
@@ -234,9 +226,7 @@ def test_timestamper_logs_warning_only_once_after_threshold_crossing(caplog: pyt
     with runtime.running(shutdown_timeout_seconds=1.0):
         with caplog.at_level("WARNING", logger="nexus.actors.timestamper"):
             runtime.pipe_to_bus.put(SendEvent(ctx_id=old_ctx_id, source=upstream_output, payload="first"))
-            wait_until(
-                lambda: sum("Timestamper queue head is old" in record.message for record in caplog.records) == 1
-            )
+            wait_until(lambda: sum("Timestamper queue head is old" in record.message for record in caplog.records) == 1)
 
             runtime.pipe_to_bus.put(SendEvent(ctx_id=old_ctx_id, source=upstream_output, payload="second"))
             with pytest.raises(AssertionError):

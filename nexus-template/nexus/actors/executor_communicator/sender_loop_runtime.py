@@ -178,9 +178,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
         try:
             sender_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(sender_loop)
-            sender_queue: asyncio.Queue[SenderLoopQueueItem[InputModelT]] = asyncio.Queue(
-                maxsize=config.queue_max_size
-            )
+            sender_queue: asyncio.Queue[SenderLoopQueueItem[InputModelT]] = asyncio.Queue(maxsize=config.queue_max_size)
             bootstrap_queue.put((sender_loop, sender_queue))
         except Exception as exc:
             bootstrap_queue.put(exc)
@@ -416,8 +414,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
             )
             if response.status_code < 200 or response.status_code >= 300:
                 raise RemoteRequestRejectedException(
-                    "Remote service rejected request "
-                    f"{pending_send.request_id} with HTTP status={response.status_code}"
+                    f"Remote service rejected request {pending_send.request_id} with HTTP status={response.status_code}"
                 )
         except httpx.TimeoutException as exc:
             raise RemoteRequestFailedException(
@@ -425,8 +422,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
             ) from exc
         except httpx.RequestError as exc:
             raise RemoteRequestFailedException(
-                "Network error while sending request "
-                f"{pending_send.request_id} to target URL {target_url!r}: {exc!r}"
+                f"Network error while sending request {pending_send.request_id} to target URL {target_url!r}: {exc!r}"
             ) from exc
 
     @staticmethod
@@ -471,8 +467,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
             return
 
         logger.warning(
-            "Failed request %s in communicator=%s had no pending record (already completed/expired). "
-            "Fallback ctx=%s",
+            "Failed request %s in communicator=%s had no pending record (already completed/expired). Fallback ctx=%s",
             request_id,
             communicator_id,
             fallback_ctx_id,

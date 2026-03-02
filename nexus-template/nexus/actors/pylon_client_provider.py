@@ -16,8 +16,7 @@ class OpenAccessPylonApiLike(Protocol):
 
 
 class IdentityPylonApiLike(Protocol):
-    def put_weights(self, weights: dict[Hotkey, Weight]) -> SetWeightsResponse:
-        ...
+    def put_weights(self, weights: dict[Hotkey, Weight]) -> SetWeightsResponse: ...
 
 
 class SyncPylonClientLike(Protocol):
@@ -34,8 +33,7 @@ class SyncPylonClientLike(Protocol):
     def open_access(self) -> OpenAccessPylonApiLike: ...
 
     @property
-    def identity(self) -> IdentityPylonApiLike:
-        ...
+    def identity(self) -> IdentityPylonApiLike: ...
 
     def __enter__(self) -> SyncPylonClientLike: ...
 
