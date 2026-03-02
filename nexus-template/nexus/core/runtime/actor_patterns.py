@@ -77,6 +77,9 @@ class ProducerActor[Product](Actor, ABC):
 
     @override
     def on_start(self) -> None:
+        if self.thread is None:
+            raise InternalFrameworkException(f"{self.actor_id} on_start called before thread was assigned")
+
         self.producer_thread = Thread(
             target=self._producer_loop,
             daemon=True,

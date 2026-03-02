@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import override
 
-from pylon_client.artanis import BlockHash, BlockNumber, NetUid
-from pylon_client.artanis.v1 import Block, GetNeuronsResponse, Neuron
+from pylon_client.artanis import BlockHash, BlockNumber, NetUid, Timestamp
+from pylon_client.artanis.v1 import Block, GetLatestBlockInfoResponse, GetNeuronsResponse, Neuron
 
 from nexus.actors.pylon_client_provider import (
     OpenAccessPylonApiLike,
@@ -35,6 +35,13 @@ class FakeOpenAccessApi(OpenAccessPylonApiLike):
             neurons={neuron.hotkey: neuron for neuron in self.neurons},
         )
 
+    def get_latest_block_info(self) -> GetLatestBlockInfoResponse:
+        return GetLatestBlockInfoResponse(
+            number=BlockNumber(0),
+            timestamp=Timestamp(0),
+            hash=BlockHash("0x0"),
+        )
+
 
 class FakePylonClient(SyncPylonClientLike):
     def __init__(self, *, neurons: list[Neuron], netuid_calls: list[int]) -> None:
@@ -48,13 +55,8 @@ class FakePylonClient(SyncPylonClientLike):
     def __enter__(self) -> FakePylonClient:
         return self
 
-    def __exit__(
-        self,
-        exc_type: object,
-        exc_val: object,
-        exc_tb: object,
-    ) -> object:
-        return None
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> object:
+        pass
 
 
 class FakePylonClientProvider(PylonClientProvider):

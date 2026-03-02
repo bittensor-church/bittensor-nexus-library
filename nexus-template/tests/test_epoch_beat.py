@@ -1,11 +1,12 @@
+# pyright: basic
+
 from datetime import timedelta
 from itertools import chain, repeat
-from unittest.mock import MagicMock, seal
 
 import pytest
 from pylon_client import artanis
 from pylon_client.artanis import v1 as artanis_v1
-from utils import CollectorActor, dummy_epoch_beat, wait_until
+from utils import CollectorActor, MockPylonClientProvider, dummy_epoch_beat, wait_until
 
 from nexus.actors.chain_beat.epoch_beat import EpochBeat, EpochBeatNode
 from nexus.core.dsl.flow import Flow
@@ -48,16 +49,16 @@ def test_epoch_beat(blocks: list[BlockNumber], beats: list[BlockNumber], delay: 
     expected_beats = [dummy_epoch_beat(block_number, default_test_netuid) for block_number in beats]
 
     # Repeat the last block forever so the producer doesn't crash on exhaustion; dedup prevents extra emissions
-    client = MagicMock()
-    client.open_access.get_latest_block_info.side_effect = chain(block_infos, repeat(block_infos[-1]))
-    seal(client)
+    provider = MockPylonClientProvider()
+    with provider.prepare_mock_client() as client:
+        client.open_access.get_latest_block_info.side_effect = chain(block_infos, repeat(block_infos[-1]))
 
     node = EpochBeatNode(
         "test",
         netuid=default_test_netuid,
         delay=delay,
         polling_interval=timedelta(seconds=0.01),
-        pylon_client=client,
+        pylon_client_provider=provider,
     )
     builder = SubnetBuilder(nodes=[node])
     collector = CollectorActor[EpochBeat](

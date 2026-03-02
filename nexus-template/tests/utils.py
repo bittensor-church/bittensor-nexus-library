@@ -1,7 +1,9 @@
 # pyright: basic
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from threading import Thread
-from typing import Any
+from typing import Any, override
+from unittest.mock import MagicMock, create_autospec, seal
 
 from polyfactory.factories.pydantic_factory import ModelFactory
 from pylon_client.artanis.v1 import Neuron
@@ -9,6 +11,7 @@ from tenacity import RetryError, retry, stop_after_delay, wait_fixed
 
 from nexus.actors.chain_beat.block_beat import BlockBeat
 from nexus.actors.chain_beat.epoch_beat import EpochBeat
+from nexus.actors.pylon_client_provider import OpenAccessPylonApiLike, PylonClientProvider, SyncPylonClientLike
 from nexus.core.dsl.nodes import Sink
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
@@ -101,3 +104,34 @@ def dummy_block_beat(block_number: BlockNumber | int) -> BlockBeat:
         block_timestamp=Timestamp(block_number * 1000),
         block_hash=BlockHash(f"0x{block_number:064x}"),
     )
+
+
+class MockPylonClientProvider(PylonClientProvider):
+    """Provides a mock pylon client for testing beat actors.
+
+    Use prepare_mock_client() to create and configure the mock before the actor runs.
+    """
+
+    _client: MagicMock | None
+
+    def __init__(self) -> None:
+        self._client = None
+
+    @contextmanager
+    def prepare_mock_client(self) -> Generator[MagicMock]:
+        """Create an autospec'd mock client, seal it, and yield for configuration."""
+        client = create_autospec(SyncPylonClientLike, instance=True)
+        # autospec doesn't recurse into Protocol property return types
+        client.open_access = create_autospec(OpenAccessPylonApiLike, instance=True)
+        # autospec creates dunder methods as lazy descriptors; seal() blocks lazy creation.
+        # Force-realize them before sealing.
+        client.__enter__.return_value = client
+        client.__exit__.return_value = None
+        seal(client)
+        yield client
+        self._client = client
+
+    @override
+    def get_client(self) -> SyncPylonClientLike:
+        assert self._client is not None, "Call prepare_client() before get_client()"
+        return self._client  # type: ignore[return-value]

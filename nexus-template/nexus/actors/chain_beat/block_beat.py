@@ -8,8 +8,9 @@ from datetime import timedelta
 from threading import Event
 from typing import override
 
-from pylon_client.artanis import PylonClient, PylonResponseException
+from pylon_client.artanis import PylonResponseException
 
+from nexus.actors.pylon_client_provider import PylonClientProvider
 from nexus.core.dsl.nodes import Producer
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import ProducerActor
@@ -42,7 +43,7 @@ class BlockBeatNode(Producer[BlockBeat], ActorBuilder):
 
     every_nth: BlockCount
     polling_interval: timedelta
-    pylon_client: PylonClient
+    pylon_client_provider: PylonClientProvider
 
     def __init__(
         self,
@@ -50,19 +51,19 @@ class BlockBeatNode(Producer[BlockBeat], ActorBuilder):
         *,
         every_nth: BlockCount = BlockCount(1),  # noqa: B008
         polling_interval: timedelta = timedelta(seconds=1),
-        pylon_client: PylonClient,
+        pylon_client_provider: PylonClientProvider,
     ) -> None:
         """
         Args:
             _id: The node ID / name
             every_nth: Emit only every n-th block
             polling_interval: How often to poll for the latest block
-            pylon_client: The Pylon client to use for polling
+            pylon_client_provider: Provider for pylon client instances
         """
         super().__init__(_id)
         self.every_nth = every_nth
         self.polling_interval = polling_interval
-        self.pylon_client = pylon_client
+        self.pylon_client_provider = pylon_client_provider
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> BlockBeatActor:
@@ -85,8 +86,9 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
     @override
     def _produce(self) -> Generator[BlockBeat]:
         last_emitted: BlockNumber | None = None
-        pylon = self.beat_spec.pylon_client
         interval_seconds = self.beat_spec.polling_interval.total_seconds()
+        pylon = self.beat_spec.pylon_client_provider.get_client()
+        every_nth = self.beat_spec.every_nth
 
         while not self._stop_event.is_set():
             poll_start = time.monotonic()
@@ -94,7 +96,8 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
             try:
                 # 1. Retry on PylonResponseException - these may be transient
                 # 2. Bubble up all other exceptions - ProducerActor will handle that
-                response = pylon.open_access.get_latest_block_info()
+                with pylon:
+                    response = pylon.open_access.get_latest_block_info()
 
             except PylonResponseException as exc:
                 logger.error("Failed to poll for latest block info", exc_info=exc)
@@ -102,7 +105,7 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
             else:
                 block_number = BlockNumber(response.number)
 
-                if block_number != last_emitted and block_number % self.beat_spec.every_nth == 0:
+                if block_number != last_emitted and block_number % every_nth == 0:
                     logger.info(f"New block: {block_number}")
                     last_emitted = block_number
                     yield BlockBeat(

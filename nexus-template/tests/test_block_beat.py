@@ -1,11 +1,12 @@
+# pyright: basic
+
 from datetime import timedelta
 from itertools import chain, repeat
-from unittest.mock import MagicMock, seal
 
 import pytest
 from pylon_client import artanis
-from pylon_client.artanis.v1 import GetLatestBlockInfoResponse
-from utils import CollectorActor, dummy_block_beat, wait_until
+from pylon_client.artanis import v1 as artanis_v1
+from utils import CollectorActor, MockPylonClientProvider, dummy_block_beat, wait_until
 
 from nexus.actors.chain_beat.block_beat import BlockBeat, BlockBeatNode
 from nexus.core.dsl.flow import Flow
@@ -47,11 +48,16 @@ def test_block_beat(blocks: list[BlockNumber], beats: list[BlockNumber], nth: Bl
     expected_beats = [dummy_block_beat(block_number) for block_number in beats]
 
     # Repeat the last block forever so the producer doesn't crash on exhaustion; dedup prevents extra emissions
-    client = MagicMock()
-    client.open_access.get_latest_block_info.side_effect = chain(block_infos, repeat(block_infos[-1]))
-    seal(client)
+    provider = MockPylonClientProvider()
+    with provider.prepare_mock_client() as client:
+        client.open_access.get_latest_block_info.side_effect = chain(block_infos, repeat(block_infos[-1]))
 
-    beat = BlockBeatNode("test", pylon_client=client, polling_interval=timedelta(seconds=0.01), every_nth=nth)
+    beat = BlockBeatNode(
+        "test",
+        pylon_client_provider=provider,
+        polling_interval=timedelta(seconds=0.01),
+        every_nth=nth,
+    )
     builder = SubnetBuilder(nodes=[beat])
     collector = CollectorActor[BlockBeat](
         pipe_to_bus=builder.pipe_to_bus,
@@ -66,8 +72,8 @@ def test_block_beat(blocks: list[BlockNumber], beats: list[BlockNumber], nth: Bl
     assert [event.payload for event in collector.received_events] == expected_beats
 
 
-def _dummy_block_info_response(block_number: BlockNumber) -> GetLatestBlockInfoResponse:
-    return GetLatestBlockInfoResponse(
+def _dummy_block_info_response(block_number: BlockNumber) -> artanis_v1.GetLatestBlockInfoResponse:
+    return artanis_v1.GetLatestBlockInfoResponse(
         number=artanis.BlockNumber(block_number),
         timestamp=artanis.Timestamp(block_number * 1000),
         hash=artanis.BlockHash(f"0x{block_number:064x}"),
