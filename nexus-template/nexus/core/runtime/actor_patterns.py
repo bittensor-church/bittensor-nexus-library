@@ -145,6 +145,11 @@ class ForkActor[From, ToLeft, ToRight](Actor, ABC):
 
 
 class TransformActor[From, To](ForkActor[From, To, NexusException], ABC):
+    """
+    Convenience pattern for an actor that transforms a message from one type to another.
+    Additionally, it will catch exceptions during the transformation and emit them at the "errors" source.
+    """
+
     spec: Transform[From, To]
 
     def __init__(self, spec: Transform[From, To], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:

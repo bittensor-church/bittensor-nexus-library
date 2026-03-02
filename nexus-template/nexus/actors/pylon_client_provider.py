@@ -3,8 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Protocol, override
 
-from pylon_client.artanis import Config, NetUid, PylonAuthToken, PylonClient
-from pylon_client.artanis.v1 import GetLatestBlockInfoResponse, GetNeuronsResponse
+from pylon_client.artanis import Config, Hotkey, NetUid, PylonAuthToken, PylonClient, Weight
+from pylon_client.artanis.v1 import GetLatestBlockInfoResponse, GetNeuronsResponse, SetWeightsResponse
 
 from nexus.utils.exceptions import InternalFrameworkException
 
@@ -13,6 +13,11 @@ class OpenAccessPylonApiLike(Protocol):
     def get_recent_neurons(self, netuid: NetUid) -> GetNeuronsResponse: ...
 
     def get_latest_block_info(self) -> GetLatestBlockInfoResponse: ...
+
+
+class IdentityPylonApiLike(Protocol):
+    def put_weights(self, weights: dict[Hotkey, Weight]) -> SetWeightsResponse:
+        ...
 
 
 class SyncPylonClientLike(Protocol):
@@ -27,6 +32,10 @@ class SyncPylonClientLike(Protocol):
 
     @property
     def open_access(self) -> OpenAccessPylonApiLike: ...
+
+    @property
+    def identity(self) -> IdentityPylonApiLike:
+        ...
 
     def __enter__(self) -> SyncPylonClientLike: ...
 

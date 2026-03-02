@@ -5,7 +5,7 @@ There are a ton more available - check them out before creating new types here.
 
 from typing import NamedTuple, NewType
 
-from pylon_client.artanis import BlockHash, BlockNumber, NetUid, Tempo, Timestamp
+from pylon_client.artanis import BlockHash, BlockNumber, Hotkey, NetUid, Tempo, Timestamp, Weight
 
 BlockCount = NewType("BlockCount", int)
 
@@ -20,7 +20,9 @@ __all__ = [
     "BlockHash",
     "BlockNumber",
     "Epoch",
+    "Hotkey",
     "NetUid",
     "Tempo",
     "Timestamp",
+    "Weight",
 ]
