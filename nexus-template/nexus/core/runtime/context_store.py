@@ -24,7 +24,7 @@ from .context_store_types import (
     LogEntryData,
     MessageSent,
     StepIdx,
-    UserDataChange,
+    UserDataChange, UserNote,
 )
 from .serialization import unsafe_pickle_load
 
@@ -224,6 +224,10 @@ class Context:
         _assert_recovery(old_value, value_delta, value)
 
         self._user_data[key] = copy.deepcopy(value)
+
+    def append_user_note(self, note: str) -> None:
+        self._assert_mutable()
+        self._context_store._append_entry(self._id, UserNote(note=note))  # pyright: ignore[reportPrivateUsage]
 
     def complete(self) -> None:
         self._assert_mutable()

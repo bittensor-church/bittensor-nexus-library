@@ -35,6 +35,13 @@ class UserDataChange(BaseModel):
     value_delta: bytes
 
 
+class UserNote(BaseModel):
+    """
+    Log entry representing a custom user note added to the context log.
+    """
+    note: str
+
+
 class ChildContextCreated(BaseModel):
     """
     Log entry representing the creation of a child context by the current context.
@@ -60,7 +67,7 @@ class ContextCompleted(BaseModel):
 
 
 # union for exhaustive type checking
-type LogEntryData = MessageSent | UserDataChange | ChildContextCreated | ContextCreated | ContextCompleted
+type LogEntryData = MessageSent | UserDataChange | ChildContextCreated | ContextCreated | ContextCompleted | UserNote
 
 
 LogEntryId = NewType("LogEntryId", int)
