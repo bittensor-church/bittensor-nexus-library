@@ -12,17 +12,14 @@ from nexus_task_test_setup import (
     NexusTaskTestSetupFactory,
     NoopRouter,
 )
-from utils import build_neuron, wait_until
+from utils import build_neuron, get_stored_results_for_block, wait_until
 
 from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
 from nexus.core.runtime.context_store_types import ContextId
 from nexus.core.runtime.nexus_task_types import TaskResultId
 from nexus.core.runtime.task_result_store import SingleTaskResult
-from nexus.utils.chain import get_epoch_containing_block
 from nexus.utils.exceptions import ExecutorFailureException
-from nexus.utils.types import BlockNumber, NetUid
-
-DEFAULT_TIMESTAMP_TOLERANCE = timedelta(seconds=10)
+from nexus.utils.types import BlockNumber
 
 
 def assert_stored_task_result(
@@ -62,9 +59,10 @@ def assert_stored_task_result(
     assert timestamped.processing_finished >= timestamped.processing_started
 
     now = datetime.now(tz=UTC)
+    timestamp_tolerance = timedelta(seconds=10)
     # Persisted timestamps should be recent relative to test execution time.
-    assert now - timestamped.processing_started <= DEFAULT_TIMESTAMP_TOLERANCE
-    assert now - timestamped.processing_finished <= DEFAULT_TIMESTAMP_TOLERANCE
+    assert now - timestamped.processing_started <= timestamp_tolerance
+    assert now - timestamped.processing_finished <= timestamp_tolerance
 
 
 def assert_successful_task_result(
@@ -84,8 +82,11 @@ def assert_successful_task_result(
     emitted_result_id = result_event.payload
 
     # Store lookup is scoped to expected epoch and task identity.
-    epoch = get_epoch_containing_block(BlockNumber(block_number), netuid=NetUid(1))
-    stored_results = setup.task_result_store.get_tasks_for_epoch(setup.task.name, epoch)
+    stored_results = get_stored_results_for_block(
+        store=setup.task_result_store,
+        task_name=setup.task.name,
+        block_number=block_number,
+    )
     # Expected number of persisted entries may vary by scenario (e.g. failure + retry success).
     assert len(stored_results) == expected_stored_results_for_epoch
 
@@ -310,8 +311,11 @@ def test_nexus_task_retries_after_executor_failure_result_is_stored(
     )
     assert communicator.attempts_by_ctx[input_ctx_id] == 2
 
-    epoch = get_epoch_containing_block(BlockNumber(block_number), netuid=NetUid(1))
-    stored_results = setup.task_result_store.get_tasks_for_epoch(setup.task.name, epoch)
+    stored_results = get_stored_results_for_block(
+        store=setup.task_result_store,
+        task_name=setup.task.name,
+        block_number=block_number,
+    )
     assert len(stored_results) == 2
     failed_stored_result = next(
         (
