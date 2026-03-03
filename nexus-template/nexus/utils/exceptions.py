@@ -1,3 +1,6 @@
+from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
+
+
 class NexusException(Exception):
     """Base exception for all Nexus errors."""
 
@@ -147,6 +150,26 @@ class RetryTaskAfterExecutorFailureException(NexusException):
     """Raised by task result storer to indicate that a task should be retried after an executor failure."""
 
     pass
+
+
+class TaskResultNotFoundException(NexusException):
+    """Raised when a task result id cannot be found for a given task name.
+
+    We persist context payloads using deep-copy/pickling paths, so this
+    exception stores typed lookup fields and implements ``__reduce__`` for
+    stable reconstruction.
+    """
+
+    task_name: NexusTaskName
+    task_result_id: TaskResultId
+
+    def __init__(self, task_name: NexusTaskName, task_result_id: TaskResultId) -> None:
+        self.task_name = task_name
+        self.task_result_id = task_result_id
+        super().__init__(f"Task result {task_result_id} not found for task {task_name}")
+
+    def __reduce__(self) -> tuple[type[TaskResultNotFoundException], tuple[NexusTaskName, TaskResultId]]:
+        return type(self), (self.task_name, self.task_result_id)
 
 
 class EmbeddedExecutorFailureException(NexusException):

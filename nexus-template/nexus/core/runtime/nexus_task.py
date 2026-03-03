@@ -7,7 +7,8 @@ from nexus.actors.task_result_store_provider import DefaultTaskResultStoreProvid
 from nexus.actors.task_result_storer import TaskResultStorer
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Node, NodeId, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
-from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
+from nexus.core.runtime.nexus_task_types import NexusTaskName
+from nexus.core.runtime.task_result_store import SingleTaskResult
 
 
 class NexusTask[Input, Output, ExecutorPayload]:
@@ -16,7 +17,7 @@ class NexusTask[Input, Output, ExecutorPayload]:
     name: NexusTaskName
     input: Sink[Input]
     block_beat: Sink[BlockBeat]
-    output: Source[TaskResultId]
+    output: Source[SingleTaskResult[ExecutorPayload, Output]]
     error: Source[RetriesExhaustedException]
     internal_flow: Flow
 
@@ -59,7 +60,7 @@ class NexusTask[Input, Output, ExecutorPayload]:
 
         self.block_beat = self.timestamper.block_beat
         self.input = self.retry.input
-        self.output = self.task_result_storer.task_result_ids
+        self.output = self.task_result_storer.task_result
         self.error = self.retry.error
 
         self.internal_flow = Flow(

@@ -13,13 +13,14 @@ from utils import (
 from nexus.actors.task_result_storer import TaskResultStorer
 from nexus.core.dsl.nodes import NodeId
 from nexus.core.runtime.nexus_task_types import NexusTaskName
+from nexus.core.runtime.task_result_store import SingleTaskResult
 from nexus.utils.exceptions import ExecutorFailureException, NexusException, RetryTaskAfterExecutorFailureException
 
 type DummyExecutorPayload = str
 type DummyExecutorOutput = int
 
 
-def test_task_result_storer_emits_task_result_id_and_persists_payload(
+def test_task_result_storer_emits_task_result_and_persists_payload(
     transform_actor_test_setup_factory: TransformActorTestSetupFactory,
 ) -> None:
     task_name = NexusTaskName("task-result-storer-success")
@@ -45,6 +46,8 @@ def test_task_result_storer_emits_task_result_id_and_persists_payload(
     assert len(setup.error_collector.received_events) == 0
     result_event = setup.processed_collector.received_events[0]
     assert result_event.ctx_id == ctx_id
+    emitted_result = result_event.payload
+    assert isinstance(emitted_result, SingleTaskResult)
 
     stored_results = get_stored_results_for_block(
         store=store_provider.get_task_result_store(),
@@ -53,8 +56,15 @@ def test_task_result_storer_emits_task_result_id_and_persists_payload(
     )
     assert len(stored_results) == 1
     stored_result = stored_results[0]
-    assert stored_result.id == result_event.payload
+    assert emitted_result == stored_result
     assert stored_result.result == nexus_task_result
+    assert (
+        store_provider.get_task_result_store().get_task_result(
+            task_name=task_name,
+            task_result_id=emitted_result.id,
+        )
+        == emitted_result
+    )
 
 
 def test_task_result_storer_persists_executor_failure_and_emits_retry_error(

@@ -15,7 +15,7 @@ from nexus.actors.neuron_router import Routed
 from nexus.actors.timestamper import Timestamped
 from nexus.core.runtime.context_store import Context
 from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
-from nexus.utils.exceptions import ExecutorFailureException, NexusException
+from nexus.utils.exceptions import ExecutorFailureException, NexusException, TaskResultNotFoundException
 from nexus.utils.types import Epoch, Hotkey
 
 type StoredTaskExecution[ExecutorPayload, Output] = Timestamped[ProcessedInput[Routed[ExecutorPayload], Output]]
@@ -63,10 +63,23 @@ class TaskResultStore[ExecutorPayload, Output](ABC):
         ctx: Context,
         task_name: NexusTaskName,
         result: StoredTaskExecution[ExecutorPayload, Output],
-    ) -> TaskResultId:
+    ) -> SingleTaskResult[ExecutorPayload, Output]:
         """
-        Appends a new task result to the store,
-        makes a relevant log entry in the Context
+        Appends a new task result to the store, makes a relevant log entry in the Context,
+        and returns the stored result.
+        """
+        pass
+
+    @abstractmethod
+    def get_task_result(
+        self,
+        task_name: NexusTaskName,
+        task_result_id: TaskResultId,
+    ) -> SingleTaskResult[ExecutorPayload, Output]:
+        """Retrieves one task result for a given task name and task-result id.
+
+        Raises:
+            TaskResultNotFoundException: If no result exists for the given task name and result id.
         """
         pass
 
@@ -108,10 +121,12 @@ class TaskResultStore[ExecutorPayload, Output](ABC):
 
 class InMemoryTaskResultStore[ExecutorPayload, Output](TaskResultStore[ExecutorPayload, Output]):
     store: dict[NexusTaskName, list[SingleTaskResult[ExecutorPayload, Output]]]
+    by_id: dict[NexusTaskName, dict[TaskResultId, SingleTaskResult[ExecutorPayload, Output]]]
     lock: threading.Lock
 
     def __init__(self) -> None:
         self.store = {}
+        self.by_id = {}
         self.lock = threading.Lock()
 
     @override
@@ -120,14 +135,28 @@ class InMemoryTaskResultStore[ExecutorPayload, Output](TaskResultStore[ExecutorP
         ctx: Context,
         task_name: NexusTaskName,
         result: StoredTaskExecution[ExecutorPayload, Output],
-    ) -> TaskResultId:
+    ) -> SingleTaskResult[ExecutorPayload, Output]:
         entry = SingleTaskResult[ExecutorPayload, Output](id=TaskResultId(uuid.uuid7()), result=result)
         with self.lock:
             if task_name not in self.store:
                 self.store[task_name] = []
+                self.by_id[task_name] = {}
             self.store[task_name].append(entry)
+            self.by_id[task_name][entry.id] = entry
             ctx.append_user_note(f"Added task result for {task_name} at block {result.block_at_finish.block_number}")
-            return entry.id
+            return entry
+
+    @override
+    def get_task_result(
+        self,
+        task_name: NexusTaskName,
+        task_result_id: TaskResultId,
+    ) -> SingleTaskResult[ExecutorPayload, Output]:
+        with self.lock:
+            task_results = self.by_id.get(task_name)
+            if task_results is None or task_result_id not in task_results:
+                raise TaskResultNotFoundException(task_name=task_name, task_result_id=task_result_id)
+            return task_results[task_result_id]
 
     @override
     def get_tasks_for_epoch(
