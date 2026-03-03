@@ -67,10 +67,16 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
     For each `Routed[InputModel]` event, it serializes input as human-readable JSON, sends
     it to the neuron's `ip:port` on `target_path`, and stores a pending request record keyed
     by request id. The communicator listens on `response_bind` and advertises callbacks using
-    `callback_base_url + response_path`. Valid `OutputModel` callbacks are emitted on
-    `processed` as `ProcessedInput[Routed[InputModel], OutputModel]`, preserving both
-    original routed input and callback output. All communication failures, protocol
-    mismatches, timeouts, and invalid responses are emitted on `error`.
+    `callback_base_url + response_path`.
+
+    Emission semantics:
+    - successful callbacks are emitted on `processed` as
+      `ProcessedInput[Routed[InputModel], OutputModel]`
+    - executor-side failures (remote execution error, timeout, invalid callback payload,
+      send/rejection failures) are emitted on `processed` as `ExecutorFailureException`
+      wrapped in `ProcessedInput.output`
+    - internal/framework failures (for example local misconfiguration or invalid target
+      protocol/address before dispatch) are emitted on `error`
     """
 
     target_path: NormalizedHttpPath
@@ -215,7 +221,7 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
             emit_processed=self._emit_processed,
         )
         error_callback = CommunicatorErrorCallback(
-            emit_error=self._emit_error,
+            emit_executor_error=self._emit_executor_error,
         )
         self._sender = SenderLoopRuntime.start(
             config=SenderLoopRuntimeConfig(
@@ -309,7 +315,7 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
     def handle_input(self, ctx: Context, event: ReceiveEvent[Routed[InputModel]]) -> MessagesToSend:
         sender = self._sender
         if sender is None:
-            self._emit_error(event.ctx_id, InternalFrameworkException("Sender loop is not running."))
+            self._emit_internal_error(event.ctx_id, InternalFrameworkException("Sender loop is not running."))
             return ()
 
         try:
@@ -320,9 +326,9 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
                 payload=event.payload.input,
             )
         except NexusException as exc:
-            self._emit_error(event.ctx_id, exc)
+            self._emit_internal_error(event.ctx_id, exc)
         except Exception as exc:
-            self._emit_error(
+            self._emit_internal_error(
                 event.ctx_id,
                 RemoteRequestFailedException(
                     f"Unexpected failure while dispatching request for context {event.ctx_id}: {exc!r}"

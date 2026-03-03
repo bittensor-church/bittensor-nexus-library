@@ -85,7 +85,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
     - create and register pending request records with processing deadlines
     - enqueue send work into a dedicated asyncio loop
     - execute HTTP sends concurrently (up to `max_in_flight`)
-    - convert enqueue/send failures into communicator error callbacks
+    - convert enqueue/send failures into executor-failure callbacks
 
     How it works:
     - `start(...)` spins up a daemon thread with a private asyncio loop and queue
@@ -233,25 +233,13 @@ class SenderLoopRuntime[InputModel: BaseModel]:
         expires_at = datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(
             seconds=timeout_seconds(self.total_processing_timeout)
         )
-        try:
-            self.pending_request_store.put(
-                PendingAsyncHttpRequest(
-                    request_id=request_id,
-                    ctx_id=ctx_id,
-                    expires_at=expires_at,
-                )
+        self.pending_request_store.put(
+            PendingAsyncHttpRequest(
+                request_id=request_id,
+                ctx_id=ctx_id,
+                expires_at=expires_at,
             )
-        except NexusException as exc:
-            self.error_callback.emit_error(ctx_id, exc)
-            return
-        except Exception as exc:
-            self.error_callback.emit_error(
-                ctx_id,
-                RemoteRequestFailedException(
-                    f"Unexpected failure while registering pending request {request_id}: {exc!r}"
-                ),
-            )
-            return
+        )
 
         pending_send = PendingSendRequest(
             request_id=request_id,
@@ -463,7 +451,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
     ) -> None:
         pending_request = pending_request_store.pop(request_id)
         if pending_request is not None:
-            error_callback.emit_error(pending_request.ctx_id, error)
+            error_callback.emit_executor_error(pending_request.ctx_id, error)
             return
 
         logger.warning(

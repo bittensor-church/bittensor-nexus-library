@@ -5,7 +5,7 @@ This module owns the small web server that receives asynchronous callback respon
 from remote executors (neurons). It exposes a single POST endpoint, validates the
 callback envelope, resolves the corresponding pending request, and emits either:
 - `processed` callbacks for successfully parsed output payloads, or
-- `error` callbacks for remote execution and response-shape failures.
+- executor-failure callbacks on `processed` for remote execution and response-shape failures.
 """
 
 from __future__ import annotations
@@ -201,7 +201,7 @@ class CallbackHttpServerRuntime[OutputModel: BaseModel]:
         Behavior:
             - Invalid envelope JSON -> `400`
             - Unknown request id -> `404`
-            - Remote-side error/invalid output -> emit communicator error, return `202`
+            - Remote-side error/invalid output -> emit executor failure on `processed`, return `202`
             - Valid output payload -> emit processed output, return `202`
         """
         try:
@@ -222,14 +222,14 @@ class CallbackHttpServerRuntime[OutputModel: BaseModel]:
             return 404, "Unknown request_id\n"
 
         if envelope.error is not None:
-            error_callback.emit_error(
+            error_callback.emit_executor_error(
                 pending_request.ctx_id,
                 RemoteExecutionException(f"Remote returned error for request {envelope.request_id}: {envelope.error}"),
             )
             return 202, "accepted\n"
 
         if envelope.output is None:
-            error_callback.emit_error(
+            error_callback.emit_executor_error(
                 pending_request.ctx_id,
                 ResponseInvalidException(f"Remote response for request {envelope.request_id} did not include output."),
             )
@@ -238,7 +238,7 @@ class CallbackHttpServerRuntime[OutputModel: BaseModel]:
         try:
             parsed_output = output_model.model_validate(envelope.output)
         except ValidationError as exc:
-            error_callback.emit_error(
+            error_callback.emit_executor_error(
                 pending_request.ctx_id,
                 ResponseValidationException(
                     f"Remote response validation failed for request {envelope.request_id}: {exc}"

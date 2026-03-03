@@ -15,11 +15,15 @@ from nexus.utils.exceptions import ExecutorFailureException, InternalStateCorrup
 @dataclass(frozen=True)
 class ProcessedInput[Input, Output]:
     """
-    Successful executor result paired with the original input that produced it.
+    Executor processing result paired with the original input that produced it.
+
+    `output` carries either:
+    - validated executor output (`Output`), or
+    - executor-side failure (`NexusException`, typically wrapped as `ExecutorFailureException`).
     """
 
     input: Input
-    output: Output
+    output: Output | NexusException
 
 
 type InputValidator[Input] = Callable[[ContextId, Input], None]
@@ -31,8 +35,8 @@ class ExecutorCommunicator[Input, Output](Transform[Routed[Input], ProcessedInpu
     An executor communicator bridges routed execution requests and executor results
     in the processing graph:
     - consumes request payloads on `input`
-    - emits successful executor `(input, output)` pairs on `processed`
-    - emits failures on `error`
+    - emits `ProcessedInput` on `processed` for both success and executor-side failure
+    - emits internal/framework failures on `error`
 
     This class defines only the logical node interface and naming conventions.
     Concrete implementations provide transport/protocol details. The current codebase
@@ -83,8 +87,9 @@ class CommunicatorActor[Input, Output](Actor, ABC):
 
     Provides common context/user-data and emit behavior:
     - load original input from context
-    - emit `ProcessedInput[input, output]` on `processed`
-    - emit wrapped `ExecutorFailureException[input]` on `error`
+    - emit `ProcessedInput[input, output]` on `processed` for successful executor outputs
+    - emit wrapped `ExecutorFailureException` on `processed` for executor-side failures
+    - emit framework/internal failures on `error`
 
     The communicator node spec is stored privately and exposed through `_spec`
     as a read-only accessor for subclasses.
@@ -154,12 +159,25 @@ class CommunicatorActor[Input, Output](Actor, ABC):
             )
         )
 
-    def _emit_error(self, ctx_id: ContextId, error: NexusException) -> None:
+    def _emit_executor_error(self, ctx_id: ContextId, error: NexusException) -> None:
         communicator_input = self._load_input_from_context(ctx_id)
+        processed = ProcessedInput(
+            input=communicator_input,
+            output=ExecutorFailureException(error),
+        )
+        self._pipe_to_bus.put(
+            SendEvent(
+                ctx_id=ctx_id,
+                source=self.__spec.processed,
+                payload=processed,
+            )
+        )
+
+    def _emit_internal_error(self, ctx_id: ContextId, error: NexusException) -> None:
         self._pipe_to_bus.put(
             SendEvent(
                 ctx_id=ctx_id,
                 source=self.__spec.error,
-                payload=ExecutorFailureException(communicator_input, error),
+                payload=error,
             )
         )

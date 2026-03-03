@@ -29,7 +29,8 @@ class CommunicatorErrorCallback:
 
     Called when a pending request cannot be completed successfully (send failure, timeout,
     invalid callback body, remote execution error, etc.). Receives the request context id
-    and a `NexusException` that should be emitted on the communicator `error` output.
+    and a `NexusException` that should be emitted on the communicator `processed` output
+    as an error.
     """
 
-    emit_error: Callable[[ContextId, NexusException], None]
+    emit_executor_error: Callable[[ContextId, NexusException], None]

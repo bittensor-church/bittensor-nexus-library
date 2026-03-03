@@ -36,7 +36,7 @@ class TimeoutSweepRuntime:
     Purpose:
     - continuously scan the shared pending-request store for expired entries
     - remove expired requests from the store
-    - emit `RemoteResponseTimeoutException` for each expired request via the error callback
+    - emit `RemoteResponseTimeoutException` for each expired request via executor-failure callback
 
     How it works:
     - `start(...)` creates a dedicated daemon thread
@@ -97,7 +97,7 @@ class TimeoutSweepRuntime:
             now = datetime.datetime.now(tz=datetime.UTC)
             expired_requests = pending_request_store.pop_expired(now=now)
             for request in expired_requests:
-                error_callback.emit_error(
+                error_callback.emit_executor_error(
                     request.ctx_id,
                     RemoteResponseTimeoutException(
                         "Timed out waiting for remote response "
