@@ -184,11 +184,7 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
         pipe_to_bus: PipeToBus,
         context_store: ContextStore,
     ) -> None:
-        super().__init__(
-            spec=spec,
-            pipe_to_bus=pipe_to_bus,
-            context_store=context_store
-        )
+        super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.spec = spec
         self._sender = None
         self._callback_server = None

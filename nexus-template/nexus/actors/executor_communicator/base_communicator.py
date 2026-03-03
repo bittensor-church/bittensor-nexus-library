@@ -28,6 +28,7 @@ class ProcessedInput[Input, Output]:
 
 type InputValidator[Input] = Callable[[ContextId, Input], None]
 
+
 class ExecutorCommunicator[Input, Output](Transform[Routed[Input], ProcessedInput[Routed[Input], Output]]):
     """
     Transport-agnostic contract for executor-facing communicators.

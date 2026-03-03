@@ -51,6 +51,7 @@ class ExecutorFailureException(NexusException):
     reconstruction for custom exceptions relies on constructor arguments, so we
     implement ``__reduce__`` to restore this type with ``(executor_error)``.
     """
+
     executor_error: NexusException
 
     def __init__(self, executor_error: NexusException) -> None:
@@ -58,7 +59,7 @@ class ExecutorFailureException(NexusException):
         self.executor_error = executor_error
 
     def __reduce__(self) -> tuple[type[ExecutorFailureException], tuple[NexusException]]:
-        return type(self), (self.executor_error, )
+        return type(self), (self.executor_error,)
 
 
 class UnsupportedAxonProtocolException(NexusException):
@@ -144,4 +145,5 @@ class WeightSettingException(NexusException):
 
 class RetryTaskAfterExecutorFailureException(NexusException):
     """Raised by task result storer to indicate that a task should be retried after an executor failure."""
+
     pass
