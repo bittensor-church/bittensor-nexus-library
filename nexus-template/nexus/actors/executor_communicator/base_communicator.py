@@ -86,11 +86,12 @@ class CommunicatorActor[Input, Output](Actor, ABC):
     """
     Shared runtime actor base for executor communicator implementations.
 
-    Provides common context/user-data and emit behavior:
+    Provides common context/user-data behavior and event helpers:
     - load original input from context
-    - emit `ProcessedInput[input, output]` on `processed` for successful executor outputs
-    - emit wrapped `ExecutorFailureException` on `processed` for executor-side failures
-    - emit framework/internal failures on `error`
+    - build `SendEvent` values for successful executor outputs
+    - build `SendEvent` values for wrapped executor-side failures
+    - build `SendEvent` values for framework/internal failures
+    - emit any prebuilt event through `_emit`
 
     The communicator node spec is stored privately and exposed through `_spec`
     as a read-only accessor for subclasses.
@@ -146,39 +147,65 @@ class CommunicatorActor[Input, Output](Actor, ABC):
             )
         return cast(Routed[Input], communicator_input)
 
-    def _emit_processed(self, ctx_id: ContextId, payload: Output) -> None:
+    def _processed_event(self, ctx_id: ContextId, payload: Output) -> SendEvent[ProcessedInput[Routed[Input], Output]]:
         communicator_input = self._load_input_from_context(ctx_id)
         processed = ProcessedInput(
             input=communicator_input,
             output=payload,
         )
-        self._pipe_to_bus.put(
-            SendEvent(
-                ctx_id=ctx_id,
-                source=self.__spec.processed,
-                payload=processed,
-            )
+        return SendEvent(
+            ctx_id=ctx_id,
+            source=self.__spec.processed,
+            payload=processed,
         )
 
-    def _emit_executor_error(self, ctx_id: ContextId, error: NexusException) -> None:
+    def _executor_error_event(
+        self, ctx_id: ContextId, error: NexusException
+    ) -> SendEvent[ProcessedInput[Routed[Input], Output]]:
         communicator_input = self._load_input_from_context(ctx_id)
-        processed = ProcessedInput(
+        processed: ProcessedInput[Routed[Input], Output] = ProcessedInput(
             input=communicator_input,
             output=ExecutorFailureException(error),
         )
-        self._pipe_to_bus.put(
-            SendEvent(
-                ctx_id=ctx_id,
-                source=self.__spec.processed,
-                payload=processed,
-            )
+        return SendEvent(
+            ctx_id=ctx_id,
+            source=self.__spec.processed,
+            payload=processed,
         )
 
-    def _emit_internal_error(self, ctx_id: ContextId, error: NexusException) -> None:
-        self._pipe_to_bus.put(
-            SendEvent(
-                ctx_id=ctx_id,
-                source=self.__spec.error,
-                payload=error,
-            )
+    def _internal_error_event(self, ctx_id: ContextId, error: NexusException) -> SendEvent[NexusException]:
+        return SendEvent(
+            ctx_id=ctx_id,
+            source=self.__spec.error,
+            payload=error,
         )
+
+    def _emit_processed(self, ctx_id: ContextId, payload: Output) -> None:
+        """
+        Temporary compatibility wrapper for handlers that still emit side-effectfully.
+
+        New code should prefer `_processed_event` and explicit `_emit`.
+        """
+
+        self._emit(self._processed_event(ctx_id, payload))
+
+    def _emit_executor_error(self, ctx_id: ContextId, error: NexusException) -> None:
+        """
+        Temporary compatibility wrapper for handlers that still emit side-effectfully.
+
+        New code should prefer `_executor_error_event` and explicit `_emit`.
+        """
+
+        self._emit(self._executor_error_event(ctx_id, error))
+
+    def _emit_internal_error(self, ctx_id: ContextId, error: NexusException) -> None:
+        """
+        Temporary compatibility wrapper for handlers that still emit side-effectfully.
+
+        New code should prefer `_internal_error_event` and explicit `_emit`.
+        """
+
+        self._emit(self._internal_error_event(ctx_id, error))
+
+    def _emit(self, event: SendEvent[Any]) -> None:
+        self._pipe_to_bus.put(event)

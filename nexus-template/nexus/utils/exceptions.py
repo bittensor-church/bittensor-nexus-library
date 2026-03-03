@@ -147,3 +147,9 @@ class RetryTaskAfterExecutorFailureException(NexusException):
     """Raised by task result storer to indicate that a task should be retried after an executor failure."""
 
     pass
+
+
+class EmbeddedExecutorFailureException(NexusException):
+    """Raised when an exception happens during execution in embedded executor."""
+
+    pass

@@ -214,10 +214,10 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
             )
 
         processed_callback = CommunicatorProcessedCallback[OutputModel](
-            emit_processed=self._emit_processed,
+            emit_processed=lambda ctx_id, payload: self._emit(self._processed_event(ctx_id, payload)),
         )
         error_callback = CommunicatorErrorCallback(
-            emit_executor_error=self._emit_executor_error,
+            emit_executor_error=lambda ctx_id, error: self._emit(self._executor_error_event(ctx_id, error)),
         )
         self._sender = SenderLoopRuntime.start(
             config=SenderLoopRuntimeConfig(
