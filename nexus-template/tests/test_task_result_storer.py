@@ -1,56 +1,45 @@
 # pyright: basic
 
-from datetime import UTC, datetime
+from typing import cast
 
 from transform_test_utils import TransformActorTestSetupFactory
-from utils import InMemoryTestTaskResultStoreProvider, dummy_block_beat, get_stored_results_for_block, wait_until
+from utils import (
+    InMemoryTestTaskResultStoreProvider,
+    build_nexus_task_result,
+    get_stored_results_for_block,
+    wait_until,
+)
 
-from nexus.actors import Timestamped
-from nexus.actors.executor_communicator import ProcessedInput
 from nexus.actors.task_result_storer import TaskResultStorer
 from nexus.core.dsl.nodes import NodeId
 from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.utils.exceptions import ExecutorFailureException, NexusException, RetryTaskAfterExecutorFailureException
 
-type StorerInput = str
-type StorerOutput = int
-type StorerProcessedInput = ProcessedInput[StorerInput, StorerOutput]
-
-
-def build_timestamped_payload(
-    *,
-    input_payload: StorerInput,
-    output: StorerOutput | NexusException,
-    block_number: int,
-) -> Timestamped[StorerProcessedInput]:
-    return Timestamped(
-        executor_output=ProcessedInput(input=input_payload, output=output),
-        processing_started=datetime(2025, 1, 1, 0, 0, tzinfo=UTC),
-        processing_finished=datetime(2025, 1, 1, 0, 0, 1, tzinfo=UTC),
-        block_at_finish=dummy_block_beat(block_number),
-    )
+type DummyExecutorPayload = str
+type DummyExecutorOutput = int
 
 
 def test_task_result_storer_emits_task_result_id_and_persists_payload(
     transform_actor_test_setup_factory: TransformActorTestSetupFactory,
 ) -> None:
     task_name = NexusTaskName("task-result-storer-success")
-    store_provider = InMemoryTestTaskResultStoreProvider[StorerProcessedInput]()
-    storer = TaskResultStorer[StorerInput, StorerOutput](
+    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    storer = TaskResultStorer[DummyExecutorPayload, DummyExecutorOutput](
         NodeId("task-result-storer-success"),
         name=task_name,
         task_result_store_provider=store_provider,
     )
     setup = transform_actor_test_setup_factory(storer)
     block_number = 123
-    timestamped_payload = build_timestamped_payload(
-        input_payload="input-1",
+    nexus_task_result = build_nexus_task_result(
+        executor_payload="input-1",
         output=7,
         block_number=block_number,
+        target_hotkey="task-result-storer-neuron",
     )
 
     with setup.running():
-        ctx_id = setup.send(input_payload=timestamped_payload)
+        ctx_id = setup.send(input_payload=nexus_task_result)
         wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
 
     assert len(setup.error_collector.received_events) == 0
@@ -65,29 +54,34 @@ def test_task_result_storer_emits_task_result_id_and_persists_payload(
     assert len(stored_results) == 1
     stored_result = stored_results[0]
     assert stored_result.id == result_event.payload
-    assert stored_result.result == timestamped_payload
+    assert stored_result.result == nexus_task_result
 
 
 def test_task_result_storer_persists_executor_failure_and_emits_retry_error(
     transform_actor_test_setup_factory: TransformActorTestSetupFactory,
 ) -> None:
     task_name = NexusTaskName("task-result-storer-executor-failure")
-    store_provider = InMemoryTestTaskResultStoreProvider[StorerProcessedInput]()
-    storer = TaskResultStorer[StorerInput, StorerOutput](
+    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    storer = TaskResultStorer[DummyExecutorPayload, DummyExecutorOutput](
         NodeId("task-result-storer-executor-failure"),
         name=task_name,
         task_result_store_provider=store_provider,
     )
     setup = transform_actor_test_setup_factory(storer)
     block_number = 456
-    timestamped_payload = build_timestamped_payload(
-        input_payload="input-2",
-        output=ExecutorFailureException(NexusException("executor boom")),
+    failed_output = cast(
+        DummyExecutorOutput | NexusException,
+        ExecutorFailureException(NexusException("executor boom")),
+    )
+    nexus_task_result = build_nexus_task_result(
+        executor_payload="input-2",
+        output=failed_output,
         block_number=block_number,
+        target_hotkey="task-result-storer-neuron",
     )
 
     with setup.running():
-        ctx_id = setup.send(input_payload=timestamped_payload)
+        ctx_id = setup.send(input_payload=nexus_task_result)
         wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
 
     assert len(setup.processed_collector.received_events) == 0
@@ -103,7 +97,7 @@ def test_task_result_storer_persists_executor_failure_and_emits_retry_error(
     )
     assert len(stored_results) == 1
     stored_result = stored_results[0]
-    assert stored_result.result == timestamped_payload
+    assert stored_result.result == nexus_task_result
     stored_output = stored_result.result.executor_output.output
     assert isinstance(stored_output, ExecutorFailureException)
     assert str(stored_output.executor_error) == "executor boom"

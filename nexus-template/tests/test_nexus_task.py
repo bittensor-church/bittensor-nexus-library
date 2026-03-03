@@ -5,8 +5,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from nexus_task_test_setup import (
     DummyExecutorCommunicator,
+    DummyExecutorOutput,
+    DummyExecutorPayload,
     DummyPayloadCreator,
-    DummyProcessedInput,
     DummyTaskInput,
     NexusTaskTestSetup,
     NexusTaskTestSetupFactory,
@@ -25,7 +26,7 @@ from nexus.utils.types import BlockNumber
 def assert_stored_task_result(
     *,
     setup: NexusTaskTestSetup,
-    stored_result: SingleTaskResult[DummyProcessedInput],
+    stored_result: SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput],
     input_payload: DummyTaskInput,
     expected_failure: bool = False,
     block_number: int,
@@ -71,7 +72,7 @@ def assert_successful_task_result(
     input_ctx_id: ContextId,
     block_number: int,
     expected_stored_results_for_epoch: int = 1,
-) -> tuple[SingleTaskResult[DummyProcessedInput], TaskResultId]:
+) -> tuple[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput], TaskResultId]:
     """Validate emitted-success linkage and return the matched stored success entry + emitted id."""
     # Runtime outcome: no terminal retries-exhausted error and exactly one emitted successful task-result event.
     assert len(setup.error_collector.received_events) == 0

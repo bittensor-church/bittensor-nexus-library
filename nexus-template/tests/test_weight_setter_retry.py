@@ -4,12 +4,13 @@ Integration tests for the weight setter + retry strategy loop.
 """
 
 from datetime import timedelta
+from typing import Any
 from unittest.mock import ANY, MagicMock, create_autospec, seal
 
 import pytest
 from pylon_client.artanis import PylonResponseException
 from pylon_client.artanis.v1 import SetWeightsResponse
-from utils import CollectorActor, wait_until
+from utils import CollectorActor, InMemoryTestTaskResultStoreProvider, wait_until
 
 from nexus.actors import PylonClientProvider
 from nexus.actors.chain_beat.epoch_beat import EpochBeat
@@ -53,7 +54,12 @@ def _build_and_run(weighing_func: WeighingFunc, pylon_client: SyncPylonClientLik
 
     trigger = Source[EpochBeat]("test-trigger")
     retry = RetryStrategy[EpochBeat]("retry", max_attempts=MAX_ATTEMPTS, delay=RETRY_DELAY)
-    weight_setter = WeightSetterNode("weight-setter", weighing_func=weighing_func, pylon_client_provider=provider)
+    weight_setter = WeightSetterNode(
+        "weight-setter",
+        weighing_func=weighing_func,
+        pylon_client_provider=provider,
+        tasks_result_store_provider=InMemoryTestTaskResultStoreProvider[Any, Any](),
+    )
 
     builder = SubnetBuilder(nodes=[retry, weight_setter])
     ok_collector = CollectorActor[WeightSettingSuccess](

@@ -1,29 +1,69 @@
 import threading
 import uuid
 from abc import ABC, abstractmethod
+from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import override
 
-from nexus.actors import Timestamped
+from pylon_client.artanis.v1 import Neuron
+
+from nexus.actors.chain_beat.block_beat import BlockBeat
+from nexus.actors.executor_communicator import ProcessedInput
+from nexus.actors.neuron_router import Routed
+from nexus.actors.timestamper import Timestamped
 from nexus.core.runtime.context_store import Context
 from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
-from nexus.utils.types import Epoch
+from nexus.utils.exceptions import ExecutorFailureException, NexusException
+from nexus.utils.types import Epoch, Hotkey
+
+type StoredTaskExecution[ExecutorPayload, Output] = Timestamped[ProcessedInput[Routed[ExecutorPayload], Output]]
 
 
 @dataclass(frozen=True)
-class SingleTaskResult[Result]:
+class SingleTaskResult[ExecutorPayload, Output]:
     id: TaskResultId
-    result: Timestamped[Result]
+    result: StoredTaskExecution[ExecutorPayload, Output]
+
+    @property
+    def processing_started(self) -> datetime:
+        return self.result.processing_started
+
+    @property
+    def processing_finished(self) -> datetime:
+        return self.result.processing_finished
+
+    @property
+    def block_at_finish(self) -> BlockBeat:
+        return self.result.block_at_finish
+
+    @property
+    def executor_payload(self) -> ExecutorPayload:
+        return self.result.executor_output.input.input
+
+    @property
+    def executor_output(self) -> Output | NexusException:
+        return self.result.executor_output.output
+
+    @property
+    def target(self) -> Neuron:
+        return self.result.executor_output.input.target
 
 
-class TaskResultStore[Result](ABC):
-    """ "Interface for storing and retrieving task results.
+class TaskResultStore[ExecutorPayload, Output](ABC):
+    """Interface for storing and querying NexusTask results.
 
-    implementations must be thread-safe
+    Implementations must be thread-safe.
     """
 
     @abstractmethod
-    def add_task_result(self, ctx: Context, task_name: NexusTaskName, result: Timestamped[Result]) -> TaskResultId:
+    def add_task_result(
+        self,
+        ctx: Context,
+        task_name: NexusTaskName,
+        result: StoredTaskExecution[ExecutorPayload, Output],
+    ) -> TaskResultId:
         """
         Appends a new task result to the store,
         makes a relevant log entry in the Context
@@ -31,7 +71,11 @@ class TaskResultStore[Result](ABC):
         pass
 
     @abstractmethod
-    def get_tasks_for_epoch(self, task_name: NexusTaskName, epoch: Epoch) -> tuple[SingleTaskResult[Result], ...]:
+    def get_tasks_for_epoch(
+        self,
+        task_name: NexusTaskName,
+        epoch: Epoch,
+    ) -> tuple[SingleTaskResult[ExecutorPayload, Output], ...]:
         """
         Retrieves all task results for a given task name and epoch.
          - The results should be returned in chronological order by block number (oldest first).
@@ -41,27 +85,56 @@ class TaskResultStore[Result](ABC):
         """
         pass
 
+    def count_by_hotkey_for_epoch(
+        self,
+        task_name: NexusTaskName,
+        epoch: Epoch,
+        *,
+        include_executor_failures: bool = True,
+    ) -> Mapping[Hotkey, int]:
+        """
+        Counts task results for a given task and epoch grouped by routed neuron hotkey.
+        """
+        results = self.get_tasks_for_epoch(task_name=task_name, epoch=epoch)
+        if include_executor_failures:
+            return Counter(Hotkey(result.target.hotkey) for result in results)
+        else:
+            return Counter(
+                Hotkey(result.target.hotkey)
+                for result in results
+                if not isinstance(result.executor_output, ExecutorFailureException)
+            )
 
-class InMemoryTaskResultStore[Result](TaskResultStore[Result]):
-    store: dict[NexusTaskName, list[SingleTaskResult[Result]]]
+
+class InMemoryTaskResultStore[ExecutorPayload, Output](TaskResultStore[ExecutorPayload, Output]):
+    store: dict[NexusTaskName, list[SingleTaskResult[ExecutorPayload, Output]]]
     lock: threading.Lock
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.store = {}
         self.lock = threading.Lock()
 
     @override
-    def add_task_result(self, ctx: Context, task_name: NexusTaskName, result: Timestamped[Result]) -> TaskResultId:
-        entry = SingleTaskResult(id=TaskResultId(uuid.uuid7()), result=result)
+    def add_task_result(
+        self,
+        ctx: Context,
+        task_name: NexusTaskName,
+        result: StoredTaskExecution[ExecutorPayload, Output],
+    ) -> TaskResultId:
+        entry = SingleTaskResult[ExecutorPayload, Output](id=TaskResultId(uuid.uuid7()), result=result)
         with self.lock:
             if task_name not in self.store:
                 self.store[task_name] = []
             self.store[task_name].append(entry)
-            ctx.append_user_note(f"Added task result for {task_name} at block {result.block_at_finish}")
+            ctx.append_user_note(f"Added task result for {task_name} at block {result.block_at_finish.block_number}")
             return entry.id
 
     @override
-    def get_tasks_for_epoch(self, task_name: NexusTaskName, epoch: Epoch) -> tuple[SingleTaskResult[Result], ...]:
+    def get_tasks_for_epoch(
+        self,
+        task_name: NexusTaskName,
+        epoch: Epoch,
+    ) -> tuple[SingleTaskResult[ExecutorPayload, Output], ...]:
         with self.lock:
             if task_name not in self.store:
                 return ()
