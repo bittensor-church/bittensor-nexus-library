@@ -204,6 +204,7 @@ class NoopRouter[Input](NeuronRouter[Input], ActorBuilder):
     useful if you want to use an embedded executor which just runs the provided
     code locally.
     """
+
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
         return NoopRouterActor[Input](spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
@@ -214,7 +215,6 @@ class NeuronFactory(ModelFactory[Neuron]):
 
 
 class NoopRouterActor[Input](NeuronRouterActor[Input]):
-
     @override
     def select_neuron(self, *, ctx: Context, neurons: Sequence[Neuron]) -> Neuron:
         return NeuronFactory.build(hotkey="local-neuron")
