@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import NewType, Sequence, Any, override
+from collections.abc import Sequence
+from typing import Any, NewType, override
 
 from nexus.actors import Timestamped
 from nexus.core.runtime.context_store import Context
 from nexus.utils.types import Epoch
-
 
 NexusTaskName = NewType("NexusTaskName", str)
 

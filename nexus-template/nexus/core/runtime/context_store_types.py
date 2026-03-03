@@ -39,6 +39,7 @@ class UserNote(BaseModel):
     """
     Log entry representing a custom user note added to the context log.
     """
+
     note: str
 
 

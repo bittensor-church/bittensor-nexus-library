@@ -14,6 +14,7 @@ class Epoch(NamedTuple):
     """Represents an epoch as a range of block numbers,
     inclusive of the first and last block.
     """
+
     first_block: BlockNumber
     last_block: BlockNumber
 
