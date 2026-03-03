@@ -1,6 +1,7 @@
 # pyright: basic
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from threading import Thread
 from typing import Any, override
 from unittest.mock import MagicMock, create_autospec, seal
@@ -9,17 +10,26 @@ from polyfactory.factories.pydantic_factory import ModelFactory
 from pylon_client.artanis.v1 import Neuron
 from tenacity import RetryError, retry, stop_after_delay, wait_fixed
 
+from nexus.actors import Timestamped
 from nexus.actors.chain_beat.block_beat import BlockBeat
 from nexus.actors.chain_beat.epoch_beat import EpochBeat
+from nexus.actors.executor_communicator import ProcessedInput
+from nexus.actors.neuron_router import Routed
 from nexus.actors.pylon_client_provider import OpenAccessPylonApiLike, PylonClientProvider, SyncPylonClientLike
 from nexus.actors.task_result_store_provider import TaskResultStoreProvider
 from nexus.core.dsl.nodes import Sink
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.task_result_store import InMemoryTaskResultStore, SingleTaskResult, TaskResultStore
+from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
+from nexus.core.runtime.task_result_store import (
+    InMemoryTaskResultStore,
+    SingleTaskResult,
+    StoredTaskExecution,
+    TaskResultStore,
+)
 from nexus.utils.chain import get_epoch_containing_block
+from nexus.utils.exceptions import NexusException
 from nexus.utils.types import BlockHash, BlockNumber, NetUid, Timestamp
 
 DEFAULT_TEST_NETUID = NetUid(1)
@@ -111,28 +121,73 @@ def dummy_block_beat(block_number: BlockNumber | int) -> BlockBeat:
     )
 
 
-class InMemoryTestTaskResultStoreProvider[Result](TaskResultStoreProvider[Result]):
+class InMemoryTestTaskResultStoreProvider[ExecutorPayload, Output](TaskResultStoreProvider[ExecutorPayload, Output]):
     """TaskResultStoreProvider with isolated in-memory state per test setup."""
 
-    _store: TaskResultStore[Result]
+    _store: TaskResultStore[ExecutorPayload, Output]
 
     def __init__(self) -> None:
-        self._store = InMemoryTaskResultStore[Result]()
+        self._store = InMemoryTaskResultStore[ExecutorPayload, Output]()
 
     @override
-    def get_task_result_store(self) -> TaskResultStore[Result]:
+    def get_task_result_store(self) -> TaskResultStore[ExecutorPayload, Output]:
         return self._store
 
 
-def get_stored_results_for_block[Result](
+def get_stored_results_for_block[ExecutorPayload, Output](
     *,
-    store: TaskResultStore[Result],
+    store: TaskResultStore[ExecutorPayload, Output],
     task_name: NexusTaskName,
     block_number: int,
     netuid: NetUid = DEFAULT_TEST_NETUID,
-) -> tuple[SingleTaskResult[Result], ...]:
+) -> tuple[SingleTaskResult[ExecutorPayload, Output], ...]:
     epoch = get_epoch_containing_block(BlockNumber(block_number), netuid=netuid)
     return store.get_tasks_for_epoch(task_name, epoch)
+
+
+def build_nexus_task_result[ExecutorPayload, Output](
+    *,
+    executor_payload: ExecutorPayload,
+    output: Output | NexusException,
+    block_number: int,
+    target_hotkey: str,
+    target_uid: int = 1,
+    target_validator_permit: bool = False,
+    processing_started: datetime | None = None,
+    processing_finished: datetime | None = None,
+) -> StoredTaskExecution[ExecutorPayload, Output]:
+    if processing_started is None:
+        processing_started = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+    if processing_finished is None:
+        processing_finished = processing_started + timedelta(seconds=1)
+
+    return Timestamped(
+        executor_output=ProcessedInput(
+            input=Routed(
+                input=executor_payload,
+                target=build_neuron(
+                    uid=target_uid,
+                    hotkey=target_hotkey,
+                    validator_permit=target_validator_permit,
+                ),
+            ),
+            output=output,
+        ),
+        processing_started=processing_started,
+        processing_finished=processing_finished,
+        block_at_finish=dummy_block_beat(block_number),
+    )
+
+
+def store_nexus_task_result[ExecutorPayload, Output](
+    *,
+    context_store: ContextStore,
+    task_result_store: TaskResultStore[ExecutorPayload, Output],
+    task_name: NexusTaskName,
+    result: StoredTaskExecution[ExecutorPayload, Output],
+) -> TaskResultId:
+    with context_store.create_context() as ctx:
+        return task_result_store.add_task_result(ctx=ctx, task_name=task_name, result=result)
 
 
 class MockPylonClientProvider(PylonClientProvider):

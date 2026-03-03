@@ -243,7 +243,7 @@ class NexusTaskTestSetup:
     task: NexusTask[DummyTaskInput, DummyExecutorOutput, DummyExecutorPayload]
     payload_creator: DummyPayloadCreator
     executor_communicator: DummyExecutorCommunicator
-    task_result_store: TaskResultStore[DummyProcessedInput]
+    task_result_store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput]
     runtime: SubnetRuntime
     result_collector: CollectorActor[TaskResultId]
     error_collector: CollectorActor[RetriesExhaustedException]
@@ -318,7 +318,7 @@ def build_nexus_task_test_setup(
 ) -> NexusTaskTestSetup:
     """Construct a full NexusTask runtime using local, deterministic test actors."""
 
-    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyProcessedInput]()
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
     resolved_retry = retry or RetryStrategy[DummyTaskInput](
         "nexus-task-test-retry",
         max_attempts=3,

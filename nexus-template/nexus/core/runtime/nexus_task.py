@@ -28,7 +28,7 @@ class NexusTask[Input, Output, ExecutorPayload]:
     payload_creator: PayloadCreator[Input, ExecutorPayload]
     router: NeuronRouter[ExecutorPayload]
     executor_communicator: ExecutorCommunicator[ExecutorPayload, Output]
-    task_result_storer: TaskResultStorer[Routed[ExecutorPayload], Output]
+    task_result_storer: TaskResultStorer[ExecutorPayload, Output]
 
     def __init__(
         self,
@@ -38,8 +38,7 @@ class NexusTask[Input, Output, ExecutorPayload]:
         payload_creator: PayloadCreator[Input, ExecutorPayload],
         router: NeuronRouter[ExecutorPayload],
         executor_communicator: ExecutorCommunicator[ExecutorPayload, Output],
-        task_result_store_provider: TaskResultStoreProvider[ProcessedInput[Routed[ExecutorPayload], Output]]
-        | None = None,
+        task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, Output] | None = None,
     ) -> None:
         self.name = name
         self.timestamper = TimestamperNode[
@@ -51,10 +50,8 @@ class NexusTask[Input, Output, ExecutorPayload]:
         self.router = router
         self.executor_communicator = executor_communicator
         if task_result_store_provider is None:
-            task_result_store_provider = DefaultTaskResultStoreProvider[
-                ProcessedInput[Routed[ExecutorPayload], Output]
-            ]()
-        self.task_result_storer = TaskResultStorer[Routed[ExecutorPayload], Output](
+            task_result_store_provider = DefaultTaskResultStoreProvider[ExecutorPayload, Output]()
+        self.task_result_storer = TaskResultStorer[ExecutorPayload, Output](
             _id=NodeId(f"{name}-task-result-storer"),
             name=name,
             task_result_store_provider=task_result_store_provider,
