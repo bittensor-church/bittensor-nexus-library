@@ -1,30 +1,14 @@
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import NewType
 
-from nexus.actors import (
-    RestEntryPoint,
-)
+from nexus.actors import RestEntryPoint
 from nexus.actors.stringify import Stringify
 from nexus.actors.uppercase_or_error import UppercaseOrError
 from nexus.core.dsl.flow import Flow
 from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
-from pydantic import BaseModel
 
-S3Url = NewType("S3Url", str)
-ImageName = NewType("ImageName", str)
-
-
-class SingleCatImageInput(BaseModel):
-    """
-    User request model for the cat-images subnet.
-
-    `image_s3_url` refers to the original background image stored on S3; `image_name` is a file name used in
-    constructing upload keys.
-    """
-
-    image_s3_url: S3Url
-    image_name: ImageName
+from .subnet import SingleCatImageInput
 
 
 class Validator:
@@ -54,10 +38,7 @@ class Validator:
             Flow.from_connectable(self.entry)
             .then(self.stringify)
             .then(self.mining_task)
-            .then(
-                ok=self.entry,
-                error=Flow.from_connectable(self.stringify_error).then(self.entry)
-            )
+            .then(ok=self.entry, error=Flow.from_connectable(self.stringify_error).then(self.entry))
         )
 
         nodes = [self.entry, self.stringify, self.mining_task, self.stringify_error]
@@ -68,3 +49,18 @@ class Validator:
     def running(self, shutdown_timeout_seconds: float = 30.0) -> Generator[SubnetRuntime]:
         with self.runtime.running(shutdown_timeout_seconds=shutdown_timeout_seconds) as runtime:
             yield runtime
+
+
+def main() -> None:
+    validator = Validator()
+    with validator.running():
+        print("Validator running. Press Ctrl+C to stop.")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+
+
+if __name__ == "__main__":
+    main()

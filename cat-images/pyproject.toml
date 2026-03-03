@@ -3,7 +3,8 @@ name = "cat-images"
 version = "0.1.0"
 description = "A cat-images subnet"
 authors = [
-    { name = "Jakub Zytka", email = "jakub.zytka@reef.pl" }
+    { name = "Jakub Zytka", email = "jakub.zytka@reef.pl" },
+    { name = "Kordian Kowalski", email = "kordian.kowalski@reef.pl" }
 ]
 requires-python = ">=3.14"
 dependencies = [
@@ -11,27 +12,28 @@ dependencies = [
     "pydantic",
     "litestar[standard,prometheus]",
     "bittensor-nexus-lib",
-    "basedpyright>=1.36.1",
-    "ruff>=0.14.8",
-    "ty>=0.0.1a32",
 ]
-
-[project.scripts]
-cat-images = "cat_images.cat_images:main"
 
 [project.optional-dependencies]
 dev = [
     "uv",
     "pytest",
     "pytest-asyncio>=1.0.0",
+    "basedpyright>=1.36.1",
+    "ruff>=0.14.8",
+    "ty>=0.0.1a32",
 ]
 format = [
     "ruff",
     "ty",
     "pyright",
     "freezegun",
-    "sentry-sdk[litestar]"
+    "sentry-sdk[litestar]",
 ]
+
+[dependency-groups]
+# bittensor pinned to 9.8.* — testnet runs this version, higher versions may break
+miner = ["bittensor==9.8.*"]
 
 [tool.ruff]
 line-length = 120

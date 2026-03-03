@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+tests/
+test_scripts/
+.env
+.env.*
+!.env.example
+*.png
+*.svg
+*.drawio
+*.pseudo
+docker/
