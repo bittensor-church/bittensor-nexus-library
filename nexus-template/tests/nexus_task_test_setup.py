@@ -16,14 +16,13 @@ from typing import Protocol, override
 
 from fake_pylon_client import FakePylonClientProvider
 from pylon_client.artanis.v1 import Neuron
-from utils import CollectorActor, build_neuron, dummy_block_beat
+from utils import CollectorActor, InMemoryTestTaskResultStoreProvider, build_neuron, dummy_block_beat
 
 from nexus.actors.chain_beat.block_beat import BlockBeat
 from nexus.actors.executor_communicator import CommunicatorActor, ExecutorCommunicator, ProcessedInput
 from nexus.actors.neuron_router import NeuronRouter, Routed
 from nexus.actors.payload_creator import PayloadCreator
 from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
-from nexus.actors.task_result_store_provider import TaskResultStoreProvider
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Source
 from nexus.core.runtime.actor import Actor, ActorBuilder
@@ -34,7 +33,7 @@ from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, S
 from nexus.core.runtime.nexus_task import NexusTask
 from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
 from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
-from nexus.core.runtime.task_result_store import InMemoryTaskResultStore, TaskResultStore
+from nexus.core.runtime.task_result_store import TaskResultStore
 from nexus.utils.exceptions import NexusException
 
 DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_SECONDS = 1.5
@@ -237,19 +236,6 @@ class TrivialExecutorCommunicatorActor(CommunicatorActor[DummyExecutorPayload, D
 type DummyProcessedInput = ProcessedInput[Routed[DummyExecutorPayload], DummyExecutorOutput]
 
 
-class InMemoryTestTaskResultStoreProvider(TaskResultStoreProvider[DummyProcessedInput]):
-    """TaskResultStoreProvider with isolated in-memory state per test setup."""
-
-    _store: TaskResultStore[DummyProcessedInput]
-
-    def __init__(self) -> None:
-        self._store = InMemoryTaskResultStore[DummyProcessedInput]()
-
-    @override
-    def get_task_result_store(self) -> TaskResultStore[DummyProcessedInput]:
-        return self._store
-
-
 @dataclass(frozen=True)
 class NexusTaskTestSetup:
     """Runtime and endpoints needed to drive NexusTask wiring tests."""
@@ -332,7 +318,7 @@ def build_nexus_task_test_setup(
 ) -> NexusTaskTestSetup:
     """Construct a full NexusTask runtime using local, deterministic test actors."""
 
-    task_result_store_provider = InMemoryTestTaskResultStoreProvider()
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyProcessedInput]()
     resolved_retry = retry or RetryStrategy[DummyTaskInput](
         "nexus-task-test-retry",
         max_attempts=3,

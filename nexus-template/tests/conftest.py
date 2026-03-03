@@ -21,12 +21,12 @@ from transform_test_utils import (
     TransformActorTestSetupFactory,
     build_runtime,
 )
+from utils import DEFAULT_TEST_NETUID
 
 from nexus.core.dsl.nodes import Transform
 from nexus.utils.types import NetUid
 
 DEFAULT_TEST_S3_BUCKET = "uploads"
-DEFAULT_TEST_NETUID = NetUid(1)
 
 
 @dataclass

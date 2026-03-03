@@ -12,12 +12,17 @@ from tenacity import RetryError, retry, stop_after_delay, wait_fixed
 from nexus.actors.chain_beat.block_beat import BlockBeat
 from nexus.actors.chain_beat.epoch_beat import EpochBeat
 from nexus.actors.pylon_client_provider import OpenAccessPylonApiLike, PylonClientProvider, SyncPylonClientLike
+from nexus.actors.task_result_store_provider import TaskResultStoreProvider
 from nexus.core.dsl.nodes import Sink
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
+from nexus.core.runtime.nexus_task_types import NexusTaskName
+from nexus.core.runtime.task_result_store import InMemoryTaskResultStore, SingleTaskResult, TaskResultStore
 from nexus.utils.chain import get_epoch_containing_block
 from nexus.utils.types import BlockHash, BlockNumber, NetUid, Timestamp
+
+DEFAULT_TEST_NETUID = NetUid(1)
 
 
 class NeuronFactory(ModelFactory[Neuron]):
@@ -104,6 +109,30 @@ def dummy_block_beat(block_number: BlockNumber | int) -> BlockBeat:
         block_timestamp=Timestamp(block_number * 1000),
         block_hash=BlockHash(f"0x{block_number:064x}"),
     )
+
+
+class InMemoryTestTaskResultStoreProvider[Result](TaskResultStoreProvider[Result]):
+    """TaskResultStoreProvider with isolated in-memory state per test setup."""
+
+    _store: TaskResultStore[Result]
+
+    def __init__(self) -> None:
+        self._store = InMemoryTaskResultStore[Result]()
+
+    @override
+    def get_task_result_store(self) -> TaskResultStore[Result]:
+        return self._store
+
+
+def get_stored_results_for_block[Result](
+    *,
+    store: TaskResultStore[Result],
+    task_name: NexusTaskName,
+    block_number: int,
+    netuid: NetUid = DEFAULT_TEST_NETUID,
+) -> tuple[SingleTaskResult[Result], ...]:
+    epoch = get_epoch_containing_block(BlockNumber(block_number), netuid=netuid)
+    return store.get_tasks_for_epoch(task_name, epoch)
 
 
 class MockPylonClientProvider(PylonClientProvider):
