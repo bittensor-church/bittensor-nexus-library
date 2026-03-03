@@ -21,8 +21,9 @@ from nexus.actors.executor_communicator import (
     RemoteResponseTimeoutException,
     UnsupportedAxonProtocolException,
 )
+from nexus.actors.executor_communicator.embedded_executor_communicator import EmbeddedExecutorCommunicator
 from nexus.actors.neuron_router import Routed
-from nexus.utils.exceptions import ExecutorFailureException
+from nexus.utils.exceptions import EmbeddedExecutorFailureException, ExecutorFailureException
 
 DEFAULT_SERVICE_PATH = "/process"
 DEFAULT_RESPONSE_PATH = "/response"
@@ -247,3 +248,54 @@ def test_async_http_neuron_communicator_rejects_non_http_axon_protocol(
     assert isinstance(failure, UnsupportedAxonProtocolException)
     assert failure.expected_protocol == AxonProtocol.HTTP
     assert failure.actual_protocol == AxonProtocol.TCP
+
+
+def test_embedded_executor_communicator_actor_emits_processed_on_happy_path(
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    communicator = EmbeddedExecutorCommunicator[CommunicatorInput, CommunicatorOutput](
+        "embedded-communicator-happy-path",
+        input_model=CommunicatorInput,
+        output_model=CommunicatorOutput,
+        executor_func=lambda payload: CommunicatorOutput(text=payload.text.upper()),
+    )
+    setup = transform_actor_test_setup_factory(communicator)
+    routed_input = Routed(input=CommunicatorInput(text="hello"), target=build_test_neuron(port=Port(1234)))
+
+    with setup.running():
+        setup.send(input_payload=routed_input)
+        wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
+
+    assert len(setup.error_collector.received_events) == 0
+    processed_payload = setup.processed_collector.received_events[0].payload
+    assert processed_payload == ProcessedInput(
+        input=routed_input,
+        output=CommunicatorOutput(text="HELLO"),
+    )
+
+
+def test_embedded_executor_communicator_actor_emits_executor_failure_on_execution_error(
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    def fail_executor(_: CommunicatorInput) -> CommunicatorOutput:
+        raise RuntimeError("executor boom")
+
+    communicator = EmbeddedExecutorCommunicator[CommunicatorInput, CommunicatorOutput](
+        "embedded-communicator-failure-path",
+        input_model=CommunicatorInput,
+        output_model=CommunicatorOutput,
+        executor_func=fail_executor,
+    )
+    setup = transform_actor_test_setup_factory(communicator)
+    routed_input = Routed(input=CommunicatorInput(text="hello"), target=build_test_neuron(port=Port(1234)))
+
+    with setup.running():
+        setup.send(input_payload=routed_input)
+        wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
+
+    assert len(setup.error_collector.received_events) == 0
+    failure = setup.processed_collector.received_events[0].payload
+    assert failure.input == routed_input
+    assert isinstance(failure.output, ExecutorFailureException)
+    assert isinstance(failure.output.executor_error, EmbeddedExecutorFailureException)
+    assert isinstance(failure.output.executor_error.__cause__, RuntimeError)
