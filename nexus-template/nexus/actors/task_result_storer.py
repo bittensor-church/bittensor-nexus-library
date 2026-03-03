@@ -6,16 +6,16 @@ from nexus.core.runtime.actor import Actor, ActorBuilder
 from nexus.core.runtime.actor_patterns import TransformActor
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import PipeToBus
-from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
-from nexus.core.runtime.task_result_store import StoredTaskExecution, TaskResultStore
+from nexus.core.runtime.nexus_task_types import NexusTaskName
+from nexus.core.runtime.task_result_store import SingleTaskResult, StoredTaskExecution, TaskResultStore
 from nexus.utils.exceptions import ExecutorFailureException, RetryTaskAfterExecutorFailureException
 
 
 class TaskResultStorer[ExecutorPayload, Output](
-    Transform[StoredTaskExecution[ExecutorPayload, Output], TaskResultId],
+    Transform[StoredTaskExecution[ExecutorPayload, Output], SingleTaskResult[ExecutorPayload, Output]],
     ActorBuilder,
 ):
-    task_result_ids: Source[TaskResultId]
+    task_result: Source[SingleTaskResult[ExecutorPayload, Output]]
     task_name: NexusTaskName
     task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, Output]
 
@@ -30,7 +30,7 @@ class TaskResultStorer[ExecutorPayload, Output](
         self.task_result_store_provider = task_result_store_provider
 
         # aliases for convenience
-        self.task_result_ids = self.ok
+        self.task_result = self.ok
 
     @override
     def sinks(self) -> NodeSinks:
@@ -40,10 +40,10 @@ class TaskResultStorer[ExecutorPayload, Output](
     def sources(self) -> NodeSources:
         return NodeSources(
             sources={
-                SourceName("task-result-ids"): self.task_result_ids,
+                SourceName("task_result"): self.task_result,
                 SourceName("error"): self.error,
             },
-            default_source=self.task_result_ids,
+            default_source=self.task_result,
         )
 
     @override
@@ -52,7 +52,7 @@ class TaskResultStorer[ExecutorPayload, Output](
 
 
 class TaskResultStorerActor[ExecutorPayload, Output](
-    TransformActor[StoredTaskExecution[ExecutorPayload, Output], TaskResultId]
+    TransformActor[StoredTaskExecution[ExecutorPayload, Output], SingleTaskResult[ExecutorPayload, Output]]
 ):
     store: TaskResultStore[ExecutorPayload, Output]
     storer_spec: TaskResultStorer[ExecutorPayload, Output]
@@ -68,9 +68,13 @@ class TaskResultStorerActor[ExecutorPayload, Output](
         self.store = spec.task_result_store_provider.get_task_result_store()
 
     @override
-    def _transform(self, ctx: Context, payload: StoredTaskExecution[ExecutorPayload, Output]) -> TaskResultId:
-        task_result_id = self.store.add_task_result(ctx, self.storer_spec.task_name, payload)
+    def _transform(
+        self,
+        ctx: Context,
+        payload: StoredTaskExecution[ExecutorPayload, Output],
+    ) -> SingleTaskResult[ExecutorPayload, Output]:
+        task_result = self.store.add_task_result(ctx, self.storer_spec.task_name, payload)
         if isinstance(payload.executor_output.output, ExecutorFailureException):
             # the executor produced an error result; we saved it, but we also want to retry the task
             raise RetryTaskAfterExecutorFailureException() from payload.executor_output.output
-        return task_result_id
+        return task_result

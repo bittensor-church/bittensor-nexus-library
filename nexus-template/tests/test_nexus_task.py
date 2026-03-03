@@ -17,7 +17,6 @@ from utils import build_neuron, get_stored_results_for_block, wait_until
 
 from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
 from nexus.core.runtime.context_store_types import ContextId
-from nexus.core.runtime.nexus_task_types import TaskResultId
 from nexus.core.runtime.task_result_store import SingleTaskResult
 from nexus.utils.exceptions import ExecutorFailureException
 from nexus.utils.types import BlockNumber
@@ -30,12 +29,8 @@ def assert_stored_task_result(
     input_payload: DummyTaskInput,
     expected_failure: bool = False,
     block_number: int,
-    expected_result_id: TaskResultId | None = None,
 ) -> None:
     """Verify one stored task result entry for success output or executor failure output."""
-    if expected_result_id is not None:
-        # Identity linkage: this stored entry should be the one identified by the emitted task-result id.
-        assert stored_result.id == expected_result_id
 
     # Expected transformation contract comes from the dummy actors used in setup, not hardcoded test literals.
     expected_executor_payload = setup.payload_creator.to_executor_payload(input_payload)
@@ -72,15 +67,16 @@ def assert_successful_task_result(
     input_ctx_id: ContextId,
     block_number: int,
     expected_stored_results_for_epoch: int = 1,
-) -> tuple[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput], TaskResultId]:
-    """Validate emitted-success linkage and return the matched stored success entry + emitted id."""
+) -> SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]:
+    """Validate emitted-success linkage and return the matched stored + emitted task results."""
     # Runtime outcome: no terminal retries-exhausted error and exactly one emitted successful task-result event.
     assert len(setup.error_collector.received_events) == 0
     assert len(setup.result_collector.received_events) == 1
     result_event = setup.result_collector.received_events[0]
-    # Emitted event must belong to the same processing context and carry a TaskResultId payload.
+    # Emitted event must belong to the same processing context and carry a SingleTaskResult payload.
     assert result_event.ctx_id == input_ctx_id
-    emitted_result_id = result_event.payload
+    emitted_result = result_event.payload
+    assert isinstance(emitted_result, SingleTaskResult)
 
     # Store lookup is scoped to expected epoch and task identity.
     stored_results = get_stored_results_for_block(
@@ -91,17 +87,20 @@ def assert_successful_task_result(
     # Expected number of persisted entries may vary by scenario (e.g. failure + retry success).
     assert len(stored_results) == expected_stored_results_for_epoch
 
-    # Emitted result id must map to exactly one stored entry.
-    stored_result = next((entry for entry in stored_results if entry.id == emitted_result_id), None)
-    assert stored_result is not None
-    return stored_result, emitted_result_id
+    # Emitted result id must map to one stored entry and that entry must match emitted payload.
+    stored_result = setup.task_result_store.get_task_result(
+        task_name=setup.task.name,
+        task_result_id=emitted_result.id,
+    )
+    assert stored_result == emitted_result
+    return stored_result
 
 
-def test_nexus_task_happy_path_routes_input_to_task_result_id(
+def test_nexus_task_happy_path_routes_input_to_task_result(
     nexus_task_test_setup_factory: NexusTaskTestSetupFactory,
 ) -> None:
     # Scenario: with a BlockBeat available, an input should flow through retry -> payload creator -> router ->
-    # communicator -> timestamper -> task-result-storer and emit exactly one TaskResultId.
+    # communicator -> timestamper -> task-result-storer and emit exactly one SingleTaskResult.
     setup = nexus_task_test_setup_factory()
     block_number = 123
     input_payload = DummyTaskInput(
@@ -114,7 +113,7 @@ def test_nexus_task_happy_path_routes_input_to_task_result_id(
         input_ctx_id = setup.send_input(input_payload=input_payload)
         wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
 
-    stored_success_result, emitted_result_id = assert_successful_task_result(
+    stored_success_result = assert_successful_task_result(
         setup=setup,
         input_ctx_id=input_ctx_id,
         block_number=block_number,
@@ -124,14 +123,14 @@ def test_nexus_task_happy_path_routes_input_to_task_result_id(
         stored_result=stored_success_result,
         input_payload=input_payload,
         block_number=block_number,
-        expected_result_id=emitted_result_id,
     )
 
 
 def test_nexus_task_waits_for_block_beat_before_emitting_result(
     nexus_task_test_setup_factory: NexusTaskTestSetupFactory,
 ) -> None:
-    # Scenario: communicator output is produced first, but no TaskResultId should be emitted until a BlockBeat arrives
+    # Scenario: communicator output is produced first, but no SingleTaskResult should be emitted
+    # until a BlockBeat arrives
     # at the NexusTask block_beat sink.
     setup = nexus_task_test_setup_factory()
     input_payload = DummyTaskInput(
@@ -153,7 +152,7 @@ def test_nexus_task_waits_for_block_beat_before_emitting_result(
         setup.send_block_beat(block_number=block_number)
         wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
 
-    stored_success_result, emitted_result_id = assert_successful_task_result(
+    stored_success_result = assert_successful_task_result(
         setup=setup,
         input_ctx_id=input_ctx_id,
         block_number=block_number,
@@ -163,7 +162,6 @@ def test_nexus_task_waits_for_block_beat_before_emitting_result(
         stored_result=stored_success_result,
         input_payload=input_payload,
         block_number=block_number,
-        expected_result_id=emitted_result_id,
     )
 
 
@@ -188,7 +186,7 @@ def test_nexus_task_retries_after_payload_creator_failure(
         input_ctx_id = setup.send_input(input_payload=input_payload)
         wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
 
-    stored_success_result, emitted_result_id = assert_successful_task_result(
+    stored_success_result = assert_successful_task_result(
         setup=setup,
         input_ctx_id=input_ctx_id,
         block_number=block_number,
@@ -198,7 +196,6 @@ def test_nexus_task_retries_after_payload_creator_failure(
         stored_result=stored_success_result,
         input_payload=input_payload,
         block_number=block_number,
-        expected_result_id=emitted_result_id,
     )
     assert payload_creator.attempts_by_ctx[input_ctx_id] == 2
 
@@ -225,7 +222,7 @@ def test_nexus_task_retries_after_router_failure(
         input_ctx_id = setup.send_input(input_payload=input_payload)
         wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
 
-    stored_success_result, emitted_result_id = assert_successful_task_result(
+    stored_success_result = assert_successful_task_result(
         setup=setup,
         input_ctx_id=input_ctx_id,
         block_number=block_number,
@@ -235,7 +232,6 @@ def test_nexus_task_retries_after_router_failure(
         stored_result=stored_success_result,
         input_payload=input_payload,
         block_number=block_number,
-        expected_result_id=emitted_result_id,
     )
     assert router.attempts_by_ctx[input_ctx_id] == 2
 
@@ -261,7 +257,7 @@ def test_nexus_task_retries_after_communicator_internal_error(
         input_ctx_id = setup.send_input(input_payload=input_payload)
         wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
 
-    stored_success_result, emitted_result_id = assert_successful_task_result(
+    stored_success_result = assert_successful_task_result(
         setup=setup,
         input_ctx_id=input_ctx_id,
         block_number=block_number,
@@ -271,7 +267,6 @@ def test_nexus_task_retries_after_communicator_internal_error(
         stored_result=stored_success_result,
         input_payload=input_payload,
         block_number=block_number,
-        expected_result_id=emitted_result_id,
     )
     assert communicator.attempts_by_ctx[input_ctx_id] == 2
 
@@ -297,7 +292,7 @@ def test_nexus_task_retries_after_executor_failure_result_is_stored(
         setup.send_block_beat(block_number=block_number)
         wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
 
-    stored_success_result, emitted_result_id = assert_successful_task_result(
+    stored_success_result = assert_successful_task_result(
         setup=setup,
         input_ctx_id=input_ctx_id,
         block_number=block_number,
@@ -308,7 +303,6 @@ def test_nexus_task_retries_after_executor_failure_result_is_stored(
         stored_result=stored_success_result,
         input_payload=input_payload,
         block_number=block_number,
-        expected_result_id=emitted_result_id,
     )
     assert communicator.attempts_by_ctx[input_ctx_id] == 2
 

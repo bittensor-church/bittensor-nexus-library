@@ -31,9 +31,9 @@ from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.context_store_types import ContextId
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 from nexus.core.runtime.nexus_task import NexusTask
-from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
+from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
-from nexus.core.runtime.task_result_store import TaskResultStore
+from nexus.core.runtime.task_result_store import SingleTaskResult, TaskResultStore
 from nexus.utils.exceptions import NexusException
 
 DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_SECONDS = 1.5
@@ -245,7 +245,7 @@ class NexusTaskTestSetup:
     executor_communicator: DummyExecutorCommunicator
     task_result_store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput]
     runtime: SubnetRuntime
-    result_collector: CollectorActor[TaskResultId]
+    result_collector: CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]]
     error_collector: CollectorActor[RetriesExhaustedException]
     input_source: Source[DummyTaskInput]
     block_beat_source: DummyBlockBeatSource
@@ -341,7 +341,7 @@ def build_nexus_task_test_setup(
     )
 
     builder = SubnetBuilder(nodes=task.internal_nodes())
-    result_collector = CollectorActor[TaskResultId](
+    result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]](
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
         name="nexus-task-result-collector",

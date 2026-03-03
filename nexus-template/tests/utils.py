@@ -21,7 +21,7 @@ from nexus.core.dsl.nodes import Sink
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
-from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
+from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.core.runtime.task_result_store import (
     InMemoryTaskResultStore,
     SingleTaskResult,
@@ -185,7 +185,7 @@ def store_nexus_task_result[ExecutorPayload, Output](
     task_result_store: TaskResultStore[ExecutorPayload, Output],
     task_name: NexusTaskName,
     result: StoredTaskExecution[ExecutorPayload, Output],
-) -> TaskResultId:
+) -> SingleTaskResult[ExecutorPayload, Output]:
     with context_store.create_context() as ctx:
         return task_result_store.add_task_result(ctx=ctx, task_name=task_name, result=result)
 
