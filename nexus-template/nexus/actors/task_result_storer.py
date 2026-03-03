@@ -53,9 +53,7 @@ class TaskResultStorer[Input, Output](
         return TaskResultStorerActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
-class TaskResultStorerActor[Input, Output](
-    TransformActor[Timestamped[ProcessedInput[Input, Output]], TaskResultId]
-):
+class TaskResultStorerActor[Input, Output](TransformActor[Timestamped[ProcessedInput[Input, Output]], TaskResultId]):
     store: TaskResultStore[ProcessedInput[Input, Output]]
     storer_spec: TaskResultStorer[Input, Output]
 

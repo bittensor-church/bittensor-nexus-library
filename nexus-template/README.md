@@ -40,5 +40,5 @@ nexus/
 ├── actors/           # Built-in actors (scheduler, retry, REST, S3, etc.)
 ├── examples/         # Examples of actor usage
 └── utils/            # Shared utilities
-tests/                # pytest suite
+tests/                # pytest suite (includes NexusTask wiring scaffolds in tests/nexus_task_test_setup.py)
 ```
