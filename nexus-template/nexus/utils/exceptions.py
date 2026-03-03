@@ -44,23 +44,21 @@ class ActorMisconfiguredException(NexusException):
     pass
 
 
-class ExecutorFailureException[Input](NexusException):
+class ExecutorFailureException(NexusException):
     """Raised when executor fails while handling a specific input.
 
     We persist context payloads using deep-copy/pickling paths. Exception
     reconstruction for custom exceptions relies on constructor arguments, so we
-    implement ``__reduce__`` to restore this type with ``(input, executor_error)``.
+    implement ``__reduce__`` to restore this type with ``(executor_error)``.
     """
-    input: Input
     executor_error: NexusException
 
-    def __init__(self, _input: Input, executor_error: NexusException) -> None:
+    def __init__(self, executor_error: NexusException) -> None:
         super().__init__("Executor failed to process input")
-        self.input = _input
         self.executor_error = executor_error
 
-    def __reduce__(self) -> tuple[type[ExecutorFailureException[Input]], tuple[Input, NexusException]]:
-        return type(self), (self.input, self.executor_error)
+    def __reduce__(self) -> tuple[type[ExecutorFailureException], tuple[NexusException]]:
+        return type(self), (self.executor_error, )
 
 
 class UnsupportedAxonProtocolException(NexusException):
@@ -141,4 +139,9 @@ class WeightSettingException(NexusException):
     """Raised when the weight setting actor fails when executing the weighing
     function or has trouble reaching pylon"""
 
+    pass
+
+
+class RetryTaskAfterExecutorFailureException(NexusException):
+    """Raised by task result storer to indicate that a task should be retried after an executor failure."""
     pass

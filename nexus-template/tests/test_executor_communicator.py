@@ -164,13 +164,13 @@ def test_async_http_neuron_communicator_emits_error_when_target_request_fails(
 
     with setup.running():
         setup.send(input_payload=routed_input)
-        wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+        wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
 
-    assert len(setup.processed_collector.received_events) == 0
-    failure = setup.error_collector.received_events[0].payload
-    assert isinstance(failure, ExecutorFailureException)
+    assert len(setup.error_collector.received_events) == 0
+    failure = setup.processed_collector.received_events[0].payload
+    assert isinstance(failure.output, ExecutorFailureException)
     assert failure.input == routed_input
-    assert isinstance(failure.executor_error, RemoteRequestFailedException)
+    assert isinstance(failure.output.executor_error, RemoteRequestFailedException)
 
 
 def test_async_http_neuron_communicator_emits_timeout_when_no_callback_is_received(
@@ -194,13 +194,13 @@ def test_async_http_neuron_communicator_emits_timeout_when_no_callback_is_receiv
 
         with setup.running():
             setup.send(input_payload=routed_input)
-            wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+            wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
 
-        assert len(setup.processed_collector.received_events) == 0
-        failure = setup.error_collector.received_events[0].payload
-        assert isinstance(failure, ExecutorFailureException)
+        assert len(setup.error_collector.received_events) == 0
+        failure = setup.processed_collector.received_events[0].payload
+        assert isinstance(failure.output, ExecutorFailureException)
         assert failure.input == routed_input
-        assert isinstance(failure.executor_error, RemoteResponseTimeoutException)
+        assert isinstance(failure.output.executor_error, RemoteResponseTimeoutException)
 
 
 def test_async_http_neuron_communicator_emits_remote_error_when_service_processing_fails(
@@ -220,13 +220,13 @@ def test_async_http_neuron_communicator_emits_remote_error_when_service_processi
 
         with setup.running():
             setup.send(input_payload=routed_input)
-            wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+            wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
 
-        assert len(setup.processed_collector.received_events) == 0
-        failure = setup.error_collector.received_events[0].payload
-        assert isinstance(failure, ExecutorFailureException)
+        assert len(setup.error_collector.received_events) == 0
+        failure = setup.processed_collector.received_events[0].payload
+        assert isinstance(failure.output, ExecutorFailureException)
         assert failure.input == routed_input
-        assert isinstance(failure.executor_error, RemoteExecutionException)
+        assert isinstance(failure.output.executor_error, RemoteExecutionException)
 
 
 def test_async_http_neuron_communicator_rejects_non_http_axon_protocol(
@@ -244,8 +244,6 @@ def test_async_http_neuron_communicator_rejects_non_http_axon_protocol(
 
     assert len(setup.processed_collector.received_events) == 0
     failure = setup.error_collector.received_events[0].payload
-    assert isinstance(failure, ExecutorFailureException)
-    assert failure.input == routed_input
-    assert isinstance(failure.executor_error, UnsupportedAxonProtocolException)
-    assert failure.executor_error.expected_protocol == AxonProtocol.HTTP
-    assert failure.executor_error.actual_protocol == AxonProtocol.TCP
+    assert isinstance(failure, UnsupportedAxonProtocolException)
+    assert failure.expected_protocol == AxonProtocol.HTTP
+    assert failure.actual_protocol == AxonProtocol.TCP
