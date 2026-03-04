@@ -1,0 +1,8 @@
+<div>
+    {% if job.result %}
+    <div class="image-frame"><img src="/images/{{ job.id }}/result" alt="Catified image"></div>
+    <a href="/images/{{ job.id }}/result" download class="big-btn">Download</a>
+    {% else %}
+    <p>Completed but no result image was returned.</p>
+    {% endif %}
+</div>

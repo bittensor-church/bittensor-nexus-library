@@ -1,0 +1,7 @@
+<div class="error-box" style="margin-top: 1rem;">
+    {% if job %}
+    <strong>Job {{ job.id }} failed:</strong> {{ job.latest_status }}
+    {% else %}
+    <strong>Error:</strong> {{ error_message }}
+    {% endif %}
+</div>

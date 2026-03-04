@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Catificator — Add Cats to Everything{% endblock %}
+{% block content %}
+<h1>Catificator</h1>
+
+<div id="workspace">
+    <!-- State 1: Dropzone -->
+    <div id="dropzone" class="dropzone" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept="image/*" style="display:none">
+        <p class="dropzone-label">Click or drop an image here</p>
+    </div>
+
+    <!-- State 2: Preview + catify button (hidden initially) -->
+    <div id="preview-area" style="display:none">
+        <div class="image-frame"><img id="preview"></div>
+        <button id="catify-btn" class="big-btn" onclick="catify()">Catify this!</button>
+    </div>
+
+    <!-- State 3: Status stream overlaid on grayed image (hidden initially) -->
+    <div id="status-area" style="display:none">
+        <div class="image-frame status-frame">
+            <img id="status-preview">
+            <div class="status-overlay">
+                <div id="status-log" class="status-log"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- State 4: Result (hidden initially) -->
+    <div id="result-area" style="display:none"></div>
+</div>
+
+<script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const previewArea = document.getElementById('preview-area');
+    const preview = document.getElementById('preview');
+    const statusArea = document.getElementById('status-area');
+    const statusPreview = document.getElementById('status-preview');
+    const statusLog = document.getElementById('status-log');
+    const resultArea = document.getElementById('result-area');
+    const catifyBtn = document.getElementById('catify-btn');
+
+    let selectedFile = null;
+
+    // Drag-and-drop
+    dropzone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropzone.classList.add('dropzone-hover');
+    });
+    dropzone.addEventListener('dragleave', function() {
+        dropzone.classList.remove('dropzone-hover');
+    });
+    dropzone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropzone.classList.remove('dropzone-hover');
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', function() {
+        if (this.files[0]) handleFile(this.files[0]);
+    });
+
+    function handleFile(file) {
+        selectedFile = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            dropzone.style.display = 'none';
+            previewArea.style.display = '';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function showOnly(el) {
+        [dropzone, previewArea, statusArea, resultArea].forEach(
+            s => s.style.display = 'none'
+        );
+        el.style.display = '';
+    }
+
+    async function catify() {
+        catifyBtn.disabled = true;
+        catifyBtn.textContent = 'Uploading…';
+
+        const form = new FormData();
+        form.append('image', selectedFile);
+
+        const resp = await fetch('/catify', { method: 'POST', body: form });
+        const html = await resp.text();
+
+        // Parse job ID from the response to connect to SSE
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const jobId = tmp.querySelector('[data-job-id]')?.dataset.jobId;
+
+        if (!jobId) {
+            // Error response — show it directly
+            showOnly(resultArea);
+            resultArea.innerHTML = html;
+            return;
+        }
+
+        // Transition to status stream
+        statusPreview.src = preview.src;
+        statusLog.innerHTML = '';
+        const frame = document.querySelector('.status-frame');
+        frame.classList.remove('active');
+        showOnly(statusArea);
+        // Double rAF so the browser paints the un-blurred state before transitioning
+        requestAnimationFrame(() => requestAnimationFrame(() => frame.classList.add('active')));
+
+        // Connect SSE
+        const evtSource = new EventSource('/jobs/' + jobId + '/stream');
+        evtSource.addEventListener('status', function(e) {
+            statusLog.insertAdjacentHTML('beforeend', e.data);
+            statusLog.scrollTop = statusLog.scrollHeight;
+        });
+        evtSource.addEventListener('result', function(e) {
+            evtSource.close();
+            showOnly(resultArea);
+            resultArea.innerHTML = e.data;
+        });
+        evtSource.addEventListener('error', function(e) {
+            // SSE error event from the server (job failed)
+            if (e.data) {
+                evtSource.close();
+                showOnly(resultArea);
+                resultArea.innerHTML = e.data;
+            }
+        });
+        evtSource.addEventListener('close', function() {
+            evtSource.close();
+        });
+    }
+</script>
+{% endblock %}

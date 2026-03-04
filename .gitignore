@@ -210,3 +210,9 @@ __marimo__/
 
 # pyright stubs
 .pyright-stubs/
+
+
+.env.validator
+.env.miner
+.env.facilitator
+
