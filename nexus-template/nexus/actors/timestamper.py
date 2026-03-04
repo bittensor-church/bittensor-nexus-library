@@ -38,7 +38,7 @@ QUEUE_AGE_ERROR_THRESHOLD = timedelta(minutes=5)
 class Timestamped[Output]:
     """Output enriched with processing timing and the most recently seen block beat."""
 
-    output: Output
+    executor_output: Output
     processing_started: datetime
     processing_finished: datetime
     block_at_finish: BlockBeat
@@ -60,7 +60,7 @@ class TimestamperNode[Input, Output](Node, ActorBuilder):
     """
 
     input: Sink[Input]
-    output: Sink[Output]
+    executor_output: Sink[Output]
     block_beat: Sink[BlockBeat]
 
     forwarded_input: Source[Input]
@@ -72,7 +72,7 @@ class TimestamperNode[Input, Output](Node, ActorBuilder):
         super().__init__(_id)
 
         self.input = Sink[Input](f"{self.id}-input-sink")
-        self.output = Sink[Output](f"{self.id}-output-sink")
+        self.executor_output = Sink[Output](f"{self.id}-executor-output-sink")
         self.block_beat = Sink[BlockBeat](f"{self.id}-block-beat-sink")
 
         self.forwarded_input = Source[Input](f"{self.id}-input-source")
@@ -85,7 +85,7 @@ class TimestamperNode[Input, Output](Node, ActorBuilder):
         return NodeSinks(
             sinks={
                 SinkName("input"): self.input,
-                SinkName("output"): self.output,
+                SinkName("output"): self.executor_output,
                 SinkName("block_beat"): self.block_beat,
             }
         )
@@ -135,7 +135,7 @@ class TimestamperActor[Input, Output](Actor):
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {
             self.spec.input: self.handle_input,
-            self.spec.output: self.handle_output,
+            self.spec.executor_output: self.handle_output,
             self.spec.block_beat: self.handle_block_beat,
         }
 
@@ -243,7 +243,7 @@ class TimestamperActor[Input, Output](Actor):
             raise InternalStateCorruptionException("Block beat is required to timestamp output but is missing.")
 
         return Timestamped(
-            output=output,
+            executor_output=output,
             processing_started=started_at.astimezone(UTC),
             processing_finished=datetime.now(tz=UTC),
             block_at_finish=block_beat,

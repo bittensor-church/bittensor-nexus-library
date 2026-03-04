@@ -15,12 +15,15 @@ from nexus.actors.executor_communicator import (
     AsyncHttpNeuronCommunicator,
     AsyncHttpNeuronService,
     HttpBindEndpoint,
+    ProcessedInput,
     RemoteExecutionException,
     RemoteRequestFailedException,
     RemoteResponseTimeoutException,
     UnsupportedAxonProtocolException,
 )
+from nexus.actors.executor_communicator.embedded_executor_communicator import EmbeddedExecutorCommunicator
 from nexus.actors.neuron_router import Routed
+from nexus.utils.exceptions import EmbeddedExecutorFailureException, ExecutorFailureException
 
 DEFAULT_SERVICE_PATH = "/process"
 DEFAULT_RESPONSE_PATH = "/response"
@@ -131,13 +134,17 @@ def test_async_http_neuron_communicator_emits_processed_on_valid_response(
         neuron = build_test_neuron(port=service.bound_port)
 
         with setup.running():
+            routed_input = Routed(input=CommunicatorInput(text="hello"), target=neuron)
             setup.send(
-                input_payload=Routed(input=CommunicatorInput(text="hello"), target=neuron),
+                input_payload=routed_input,
             )
             wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=3.0)
 
         processed_payload = setup.processed_collector.received_events[0].payload
-        assert processed_payload == CommunicatorOutput(text="HELLO")
+        assert processed_payload == ProcessedInput(
+            input=routed_input,
+            output=CommunicatorOutput(text="HELLO"),
+        )
         assert len(setup.error_collector.received_events) == 0
 
 
@@ -154,15 +161,17 @@ def test_async_http_neuron_communicator_emits_error_when_target_request_fails(
     )
     setup = transform_actor_test_setup_factory(communicator)
     neuron = build_test_neuron(port=unavailable_port)
+    routed_input = Routed(input=CommunicatorInput(text="hello"), target=neuron)
 
     with setup.running():
-        setup.send(
-            input_payload=Routed(input=CommunicatorInput(text="hello"), target=neuron),
-        )
-        wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+        setup.send(input_payload=routed_input)
+        wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
 
-    assert len(setup.processed_collector.received_events) == 0
-    assert isinstance(setup.error_collector.received_events[0].payload, RemoteRequestFailedException)
+    assert len(setup.error_collector.received_events) == 0
+    failure = setup.processed_collector.received_events[0].payload
+    assert isinstance(failure.output, ExecutorFailureException)
+    assert failure.input == routed_input
+    assert isinstance(failure.output.executor_error, RemoteRequestFailedException)
 
 
 def test_async_http_neuron_communicator_emits_timeout_when_no_callback_is_received(
@@ -182,15 +191,17 @@ def test_async_http_neuron_communicator_emits_timeout_when_no_callback_is_receiv
         )
         setup = transform_actor_test_setup_factory(communicator)
         neuron = build_test_neuron(port=service.bound_port)
+        routed_input = Routed(input=CommunicatorInput(text="hello"), target=neuron)
 
         with setup.running():
-            setup.send(
-                input_payload=Routed(input=CommunicatorInput(text="hello"), target=neuron),
-            )
-            wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+            setup.send(input_payload=routed_input)
+            wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
 
-        assert len(setup.processed_collector.received_events) == 0
-        assert isinstance(setup.error_collector.received_events[0].payload, RemoteResponseTimeoutException)
+        assert len(setup.error_collector.received_events) == 0
+        failure = setup.processed_collector.received_events[0].payload
+        assert isinstance(failure.output, ExecutorFailureException)
+        assert failure.input == routed_input
+        assert isinstance(failure.output.executor_error, RemoteResponseTimeoutException)
 
 
 def test_async_http_neuron_communicator_emits_remote_error_when_service_processing_fails(
@@ -206,15 +217,17 @@ def test_async_http_neuron_communicator_emits_remote_error_when_service_processi
         communicator = communicator_factory(communicator_id="communicator-remote-error")
         setup = transform_actor_test_setup_factory(communicator)
         neuron = build_test_neuron(port=service.bound_port)
+        routed_input = Routed(input=CommunicatorInput(text="hello"), target=neuron)
 
         with setup.running():
-            setup.send(
-                input_payload=Routed(input=CommunicatorInput(text="hello"), target=neuron),
-            )
-            wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+            setup.send(input_payload=routed_input)
+            wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
 
-        assert len(setup.processed_collector.received_events) == 0
-        assert isinstance(setup.error_collector.received_events[0].payload, RemoteExecutionException)
+        assert len(setup.error_collector.received_events) == 0
+        failure = setup.processed_collector.received_events[0].payload
+        assert isinstance(failure.output, ExecutorFailureException)
+        assert failure.input == routed_input
+        assert isinstance(failure.output.executor_error, RemoteExecutionException)
 
 
 def test_async_http_neuron_communicator_rejects_non_http_axon_protocol(
@@ -224,15 +237,65 @@ def test_async_http_neuron_communicator_rejects_non_http_axon_protocol(
     communicator = communicator_factory(communicator_id="communicator-protocol-check")
     setup = transform_actor_test_setup_factory(communicator)
     neuron = build_test_neuron(port=Port(1234), protocol=AxonProtocol.TCP)
+    routed_input = Routed(input=CommunicatorInput(text="hello"), target=neuron)
 
     with setup.running():
-        setup.send(
-            input_payload=Routed(input=CommunicatorInput(text="hello"), target=neuron),
-        )
+        setup.send(input_payload=routed_input)
         wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
 
     assert len(setup.processed_collector.received_events) == 0
-    error = setup.error_collector.received_events[0].payload
-    assert isinstance(error, UnsupportedAxonProtocolException)
-    assert error.expected_protocol == AxonProtocol.HTTP
-    assert error.actual_protocol == AxonProtocol.TCP
+    failure = setup.error_collector.received_events[0].payload
+    assert isinstance(failure, UnsupportedAxonProtocolException)
+    assert failure.expected_protocol == AxonProtocol.HTTP
+    assert failure.actual_protocol == AxonProtocol.TCP
+
+
+def test_embedded_executor_communicator_actor_emits_processed_on_happy_path(
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    communicator = EmbeddedExecutorCommunicator[CommunicatorInput, CommunicatorOutput](
+        "embedded-communicator-happy-path",
+        input_model=CommunicatorInput,
+        output_model=CommunicatorOutput,
+        executor_func=lambda payload: CommunicatorOutput(text=payload.text.upper()),
+    )
+    setup = transform_actor_test_setup_factory(communicator)
+    routed_input = Routed(input=CommunicatorInput(text="hello"), target=build_test_neuron(port=Port(1234)))
+
+    with setup.running():
+        setup.send(input_payload=routed_input)
+        wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
+
+    assert len(setup.error_collector.received_events) == 0
+    processed_payload = setup.processed_collector.received_events[0].payload
+    assert processed_payload == ProcessedInput(
+        input=routed_input,
+        output=CommunicatorOutput(text="HELLO"),
+    )
+
+
+def test_embedded_executor_communicator_actor_emits_executor_failure_on_execution_error(
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    def fail_executor(_: CommunicatorInput) -> CommunicatorOutput:
+        raise RuntimeError("executor boom")
+
+    communicator = EmbeddedExecutorCommunicator[CommunicatorInput, CommunicatorOutput](
+        "embedded-communicator-failure-path",
+        input_model=CommunicatorInput,
+        output_model=CommunicatorOutput,
+        executor_func=fail_executor,
+    )
+    setup = transform_actor_test_setup_factory(communicator)
+    routed_input = Routed(input=CommunicatorInput(text="hello"), target=build_test_neuron(port=Port(1234)))
+
+    with setup.running():
+        setup.send(input_payload=routed_input)
+        wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
+
+    assert len(setup.error_collector.received_events) == 0
+    failure = setup.processed_collector.received_events[0].payload
+    assert failure.input == routed_input
+    assert isinstance(failure.output, ExecutorFailureException)
+    assert isinstance(failure.output.executor_error, EmbeddedExecutorFailureException)
+    assert isinstance(failure.output.executor_error.__cause__, RuntimeError)

@@ -21,7 +21,7 @@ from .async_http_protocol import (
     AsyncHttpNeuronResponseEnvelope,
     RequestId,
 )
-from .base_communicator import ExecutorCommunicator
+from .base_communicator import CommunicatorActor, ExecutorCommunicator, ProcessedInput
 from .common import (
     NormalizedHttpPath,
     UrlHost,
@@ -43,7 +43,9 @@ __all__ = [
     "AsyncHttpNeuronRequestEnvelope",
     "AsyncHttpNeuronResponseEnvelope",
     "AsyncHttpNeuronService",
+    "CommunicatorActor",
     "ExecutorCommunicator",
+    "ProcessedInput",
     "NormalizedHttpPath",
     "UrlHost",
     "format_host_for_url",

@@ -10,18 +10,23 @@ from unittest.mock import patch
 import boto3
 import pytest
 from moto.server import ThreadedMotoServer
+from nexus_task_test_setup import (
+    NexusTaskTestSetup,
+    NexusTaskTestSetupFactory,
+    build_nexus_task_test_setup,
+)
 from pylon_client.artanis import Port
 from transform_test_utils import (
     TransformActorTestSetup,
     TransformActorTestSetupFactory,
     build_runtime,
 )
+from utils import DEFAULT_TEST_NETUID
 
 from nexus.core.dsl.nodes import Transform
 from nexus.utils.types import NetUid
 
 DEFAULT_TEST_S3_BUCKET = "uploads"
-DEFAULT_TEST_NETUID = NetUid(1)
 
 
 @dataclass
@@ -150,6 +155,25 @@ def transform_actor_test_setup_factory() -> TransformActorTestSetupFactory:
             processed_collector=processed_collector,
             error_collector=error_collector,
             upstream_source=upstream_source,
+        )
+
+    return _build
+
+
+@pytest.fixture
+def nexus_task_test_setup_factory() -> NexusTaskTestSetupFactory:
+    def _build(
+        *,
+        retry=None,
+        payload_creator=None,
+        router=None,
+        executor_communicator=None,
+    ) -> NexusTaskTestSetup:
+        return build_nexus_task_test_setup(
+            retry=retry,
+            payload_creator=payload_creator,
+            router=router,
+            executor_communicator=executor_communicator,
         )
 
     return _build

@@ -25,6 +25,7 @@ from .context_store_types import (
     MessageSent,
     StepIdx,
     UserDataChange,
+    UserNote,
 )
 from .serialization import unsafe_pickle_load
 
@@ -225,6 +226,10 @@ class Context:
 
         self._user_data[key] = copy.deepcopy(value)
 
+    def append_user_note(self, note: str) -> None:
+        self._assert_mutable()
+        self._context_store._append_entry(self._id, UserNote(note=note))  # pyright: ignore[reportPrivateUsage]
+
     def complete(self) -> None:
         self._assert_mutable()
         self._context_store._append_entry(self._id, ContextCompleted())  # pyright: ignore[reportPrivateUsage]
@@ -344,6 +349,9 @@ class ContextStore:
                         )
                     context._payload += deepdiff.Delta(payload_delta, deserializer=DELTA_DESERIALIZER)  # pyright: ignore[reportPrivateUsage]
                     last_messages[ctx] = message
+                case UserNote():
+                    # UserNotes do not affect the context state, so we can ignore them during recovery
+                    pass
                 case UserDataChange(key=key, value_delta=value_delta):
                     context = contexts.get(ctx, None)
                     if context is None:
@@ -415,6 +423,32 @@ class ContextStore:
                 raise InvalidContextIdException(f"Context {ctx} not found")
 
             yield self.__contexts[ctx]
+
+    def get_user_data[T](
+        self,
+        ctx_id: ContextId,
+        key: str,
+        *,
+        expected_type: type[T],
+    ) -> T:
+        """
+        Load a user_data value from a context and validate its runtime type.
+
+        Raises:
+            InvalidContextIdException: if the context does not exist.
+            InternalStateCorruptionException: if the key is missing or value has unexpected type.
+        """
+        with self.get_context(ctx_id) as context:
+            value = context.user_data.get(key)
+
+        if value is None:
+            raise InternalStateCorruptionException(f"Missing context user_data for ctx={ctx_id}, key={key!r}.")
+        if not isinstance(value, expected_type):
+            raise InternalStateCorruptionException(
+                f"Unexpected context user_data type for ctx={ctx_id}, key={key!r}: "
+                f"expected {expected_type!r}, got {type(value)!r}."
+            )
+        return value
 
     def _append_entry(self, ctx: ContextId, entry: LogEntryData) -> None:
         context = self.__contexts.get(ctx, None)

@@ -1,3 +1,7 @@
+from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
+from nexus.utils.types import AxonProtocol
+
+
 class NexusException(Exception):
     """Base exception for all Nexus errors."""
 
@@ -44,30 +48,48 @@ class ActorMisconfiguredException(NexusException):
     pass
 
 
+class ExecutorFailureException(NexusException):
+    """Raised when executor fails while handling a specific input.
+
+    We persist context payloads using deep-copy/pickling paths. Exception
+    reconstruction for custom exceptions relies on constructor arguments, so we
+    implement ``__reduce__`` to restore this type with ``(executor_error)``.
+    """
+
+    executor_error: NexusException
+
+    def __init__(self, executor_error: NexusException) -> None:
+        super().__init__("Executor failed to process input")
+        self.executor_error = executor_error
+
+    def __reduce__(self) -> tuple[type[ExecutorFailureException], tuple[NexusException]]:
+        return type(self), (self.executor_error,)
+
+
 class UnsupportedAxonProtocolException(NexusException):
     """Raised when an operation expects one axon protocol but receives another one.
 
     Stores both `expected_protocol` and `actual_protocol` for downstream handling.
+
+    We persist context payloads using deep-copy/pickling paths, so this
+    exception stores typed protocol fields and implements ``__reduce__`` for
+    stable reconstruction.
     """
 
-    expected_protocol: object | None
-    actual_protocol: object | None
+    expected_protocol: AxonProtocol
+    actual_protocol: AxonProtocol
 
     def __init__(
         self,
-        message: str | None = None,
-        *,
-        expected_protocol: object | None = None,
-        actual_protocol: object | None = None,
+        expected_protocol: AxonProtocol,
+        actual_protocol: AxonProtocol,
     ) -> None:
         self.expected_protocol = expected_protocol
         self.actual_protocol = actual_protocol
-        if message is None:
-            if expected_protocol is None and actual_protocol is None:
-                message = "Unsupported axon protocol."
-            else:
-                message = f"Unsupported axon protocol: expected={expected_protocol!r}, actual={actual_protocol!r}."
-        super().__init__(message)
+        super().__init__(f"Unsupported axon protocol: expected={expected_protocol!r}, actual={actual_protocol!r}.")
+
+    def __reduce__(self) -> tuple[type[UnsupportedAxonProtocolException], tuple[AxonProtocol, AxonProtocol]]:
+        return type(self), (self.expected_protocol, self.actual_protocol)
 
 
 class AsyncHttpNeuronCommunicatorException(NexusException):
@@ -121,5 +143,37 @@ class RemoteExecutionException(AsyncHttpNeuronCommunicatorException):
 class WeightSettingException(NexusException):
     """Raised when the weight setting actor fails when executing the weighing
     function or has trouble reaching pylon"""
+
+    pass
+
+
+class RetryTaskAfterExecutorFailureException(NexusException):
+    """Raised by task result storer to indicate that a task should be retried after an executor failure."""
+
+    pass
+
+
+class TaskResultNotFoundException(NexusException):
+    """Raised when a task result id cannot be found for a given task name.
+
+    We persist context payloads using deep-copy/pickling paths, so this
+    exception stores typed lookup fields and implements ``__reduce__`` for
+    stable reconstruction.
+    """
+
+    task_name: NexusTaskName
+    task_result_id: TaskResultId
+
+    def __init__(self, task_name: NexusTaskName, task_result_id: TaskResultId) -> None:
+        self.task_name = task_name
+        self.task_result_id = task_result_id
+        super().__init__(f"Task result {task_result_id} not found for task {task_name}")
+
+    def __reduce__(self) -> tuple[type[TaskResultNotFoundException], tuple[NexusTaskName, TaskResultId]]:
+        return type(self), (self.task_name, self.task_result_id)
+
+
+class EmbeddedExecutorFailureException(NexusException):
+    """Raised when an exception happens during execution in embedded executor."""
 
     pass

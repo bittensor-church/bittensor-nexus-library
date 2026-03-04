@@ -6,6 +6,7 @@ from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
 from typing import cast, override
 
+from polyfactory.factories.pydantic_factory import ModelFactory
 from pydantic import BaseModel
 from pylon_client.artanis import NetUid, PylonClient
 from pylon_client.artanis.v1 import GetNeuronsResponse, Neuron
@@ -195,3 +196,25 @@ class RoundRobinNeuronRouterActor[Input](NeuronRouterActor[Input]):
         ordered_neurons = sorted(neurons, key=lambda neuron: neuron.hotkey)
         random.Random(str(ctx.id)).shuffle(ordered_neurons)
         return ordered_neurons
+
+
+class NoopRouter[Input](NeuronRouter[Input], ActorBuilder):
+    """
+    a noop router which doesn't attach any neuron information to the input
+    useful if you want to use an embedded executor which just runs the provided
+    code locally.
+    """
+
+    @override
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
+        return NoopRouterActor[Input](spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
+
+
+class NeuronFactory(ModelFactory[Neuron]):
+    __model__ = Neuron
+
+
+class NoopRouterActor[Input](NeuronRouterActor[Input]):
+    @override
+    def select_neuron(self, *, ctx: Context, neurons: Sequence[Neuron]) -> Neuron:
+        return NeuronFactory.build(hotkey="local-neuron")
