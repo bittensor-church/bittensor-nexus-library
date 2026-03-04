@@ -1,0 +1,16 @@
+<tr id="vali-{{ v.hotkey }}">
+    <td>{{ v.hotkey }}</td>
+    <td style="font-family: monospace; font-size: 0.85rem;">{{ v.job_submission_url }}</td>
+    <td>
+        {% if v.available %}<span class="badge badge-ok">Available</span>
+        {% else %}<span class="badge badge-off">Unavailable</span>{% endif %}
+    </td>
+    <td>
+        <button class="secondary" hx-post="/validators/{{ v.hotkey }}/toggle" hx-target="#vali-{{ v.hotkey }}" hx-swap="outerHTML">
+            {{ "Disable" if v.available else "Enable" }}
+        </button>
+        <button class="danger" hx-post="/validators/{{ v.hotkey }}/delete" hx-target="#vali-{{ v.hotkey }}" hx-swap="outerHTML">
+            Delete
+        </button>
+    </td>
+</tr>

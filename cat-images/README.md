@@ -8,16 +8,65 @@ A subnet where miners add cats to images using AI image generation via OpenRoute
 uv sync --all-groups --all-extras
 ```
 
+## Facilitator (Catificator)
+
+Web UI that lets users upload images, dispatches catification jobs to validators, and streams progress back via SSE.
+
+### Configuration
+
+```bash
+cp .env.facilitator.example .env
+# edit .env and fill in your S3 credentials and validator endpoints
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `FACI_S3_ENDPOINT_URL` | *(none — uses AWS)* | S3-compatible endpoint (set for MinIO, etc.) |
+| `FACI_S3_BUCKET` | *(required)* | Bucket for uploaded images |
+| `FACI_S3_ACCESS_KEY` | *(required)* | S3 access key |
+| `FACI_S3_SECRET_KEY` | *(required)* | S3 secret key |
+| `FACI_S3_REGION` | `""` | S3 region |
+| `FACI_VALIDATORS` | *(required)* | JSON map of known validators: `{"hotkey": "http://host:port/submit"}` |
+| `FACI_PORT` | `8080` | Port the facilitator listens on |
+| `FACI_HOST` | `0.0.0.0` | Bind address |
+| `FACI_PUBLIC_BASE_URL` | `http://localhost:{port}` | Base URL for callback URLs sent to validators |
+| `FACI_SUBMIT_MAX_RETRIES` | `3` | Max retries when submitting a job to a validator |
+| `FACI_SUBMIT_TIMEOUT_SECONDS` | `10.0` | Timeout per submission attempt |
+
+### Running
+
+```bash
+uv run --group facilitator -m cat_images.facilitator
+```
+
+Open `http://localhost:8080` — upload an image, pick a validator, hit "Catify this!".
+
+### Pages
+
+- `/` — Upload form with live SSE progress
+- `/jobs` — Job list
+- `/validators` — Validator admin (toggle availability, delete)
+
+### Status callback
+
+Validators push status updates to `POST /api/jobs/{job_id}/status`. The payload is a discriminated union on `liveness`:
+
+```json
+{"liveness": "in_progress", "status": "Processing...", "timestamp": "2026-03-04T12:00:00Z"}
+{"liveness": "success", "status": "Catified!", "timestamp": "...", "result": {"result_image_url": "https://..."}}
+{"liveness": "failed", "status": "Out of cats", "timestamp": "..."}
+```
+
 ## Validator
 
 ```bash
 uv run -m cat_images.validator
 ```
 
-Starts the validator on port 8081 at `/cat-images`. Accepts POST requests with:
+Starts the validator on port 8081 at `/cat-images`. Accepts POST requests with a `JobSubmission`:
 
 ```json
-{"image_s3_url": "https://...", "image_name": "photo.png"}
+{"job_spec": {"image_s3_url": "https://..."}, "callback_url": "http://facilitator/api/jobs/{id}/status"}
 ```
 
 Returns JSON:
@@ -61,7 +110,7 @@ When enabled, the miner periodically registers its serving address (IP/port) on 
 ### Running locally
 
 ```bash
-uv run -m cat_images.miner
+uv run --group miner -m cat_images.miner
 ```
 
 Starts the miner on port 9090 (default). Receives tasks from the validator, downloads the source image, generates a cat version via OpenRouter, uploads the result to S3, and sends back an image hash.

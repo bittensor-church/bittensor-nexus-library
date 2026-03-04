@@ -1,0 +1,84 @@
+# Note - this is kind of a duplication of what currently exists in the docker directory.
+# We'll figure this out soon.
+
+name: cat-images
+
+services:
+  pylon:
+    image: backenddevelopersltd/bittensor-pylon:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PYLON_UVICORN_HOST: "0.0.0.0"
+      PYLON_UVICORN_PORT: "8000"
+      PYLON_WALLET_NAME: ${WALLET_NAME}
+    volumes:
+      - ~/.bittensor/wallets:/root/.bittensor/wallets:ro
+    networks:
+      catnet:
+        ipv4_address: 172.30.0.20
+
+  validator:
+    image: cat-validator:compose
+    build:
+      context: .
+      dockerfile: docker/validator.Dockerfile
+      additional_contexts:
+        nexus-lib: ../nexus-template
+    restart: unless-stopped
+    depends_on:
+      - pylon
+    env_file: .env
+    environment:
+      # Wire to other services via static IPs.
+      VALIDATOR_EXTERNAL_IP: "172.30.0.10"
+      VALIDATOR_PYLON_SERVICE_ADDRESS: "http://172.30.0.20:8000"
+    networks:
+      catnet:
+        ipv4_address: 172.30.0.10
+
+  miner:
+    image: cat-miner:compose
+    build:
+      context: .
+      dockerfile: docker/miner.Dockerfile
+      additional_contexts:
+        nexus-lib: ../nexus-template
+    restart: unless-stopped
+    depends_on:
+      - validator
+    env_file: .env
+    environment:
+      # Wire miner to the validator callback address.
+      MINER_EXTERNAL_IP: "172.30.0.30"
+    volumes:
+      - ~/.bittensor/wallets:/root/.bittensor/wallets:ro
+    networks:
+      catnet:
+        ipv4_address: 172.30.0.30
+
+  facilitator:
+    image: cat-facilitator:compose
+    build:
+      context: .
+      dockerfile: docker/facilitator.Dockerfile
+      additional_contexts:
+        nexus-lib: ../nexus-template
+    restart: unless-stopped
+    depends_on:
+      - validator
+    env_file: .env
+    environment:
+      FACI_VALIDATORS: '{"validator-01": "http://172.30.0.10:8081/cat-images"}'
+    ports:
+      - "8080:8080"
+    networks:
+      catnet:
+        ipv4_address: 172.30.0.40
+
+networks:
+  catnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24

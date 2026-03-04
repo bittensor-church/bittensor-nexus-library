@@ -35,7 +35,7 @@ _RETRY_TRANSPORT = httpx.HTTPTransport(retries=3)
 
 
 class CatMinerSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="MINER_", env_file=".env")
+    model_config = SettingsConfigDict(env_prefix="MINER_", env_file=".env", extra="ignore")
 
     openrouter_api_key: str
     openrouter_url: str = DEFAULT_OPENROUTER_URL
@@ -117,7 +117,7 @@ def _sha256(data: bytes) -> ImageHash:
 
 def make_processor(settings: CatMinerSettings):
     def process(task: MinerInput) -> MinerResult:
-        log.info(f"Processing task: image_name={task.input.image_name}")
+        log.info(f"Processing task: image_s3_url={task.input.image_s3_url}")
         source_bytes = _download_image(str(task.input.image_s3_url))
         cat_bytes = _add_cat_to_image(source_bytes, settings=settings)
         log.info(f"Uploading result to {task.presigned_url}")
@@ -176,6 +176,7 @@ def make_axon_updater_service(settings: CatMinerSettings) -> AxonUpdaterService 
 
 def main() -> None:
     settings = _load_settings()
+    log.info("Miner config:\n%s", settings.model_dump_json(indent=2))
     service = make_miner_service(settings)
     updater = make_axon_updater_service(settings)
 

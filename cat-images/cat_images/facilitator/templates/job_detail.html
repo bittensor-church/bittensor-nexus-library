@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job.id }} — Catificator{% endblock %}
+{% block content %}
+<h1>Job {{ job.id }}</h1>
+
+<div class="card">
+    <h2>Info</h2>
+    <table>
+        <tr><th>Status</th><td>
+            {% if job.liveness.value == "in_progress" %}<span class="badge badge-progress">In Progress</span>
+            {% elif job.liveness.value == "success" %}<span class="badge badge-success">Success</span>
+            {% else %}<span class="badge badge-failed">Failed</span>{% endif %}
+            — {{ job.latest_status }}
+        </td></tr>
+        <tr><th>Validator</th><td>{{ job.validator_hotkey }}</td></tr>
+        <tr><th>Created</th><td>{{ job.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Input</h2>
+    <div class="image-frame"><img src="/images/{{ job.id }}/original" alt="Original image"></div>
+</div>
+
+{% if job.result %}
+<div class="card">
+    <h2>Output</h2>
+    <div class="image-frame"><img src="/images/{{ job.id }}/result" alt="Catified image"></div>
+    <a href="/images/{{ job.id }}/result" download class="big-btn">Download</a>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>Status Log</h2>
+    {% if job.status_updates %}
+    <div style="font-family: monospace; font-size: 0.85rem;">
+        {% for update in job.status_updates %}
+        <div class="status-entry">{{ update.received_at.strftime('%H:%M:%S') }} — [{{ update.liveness.value }}] {{ update.status }}</div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p>No status updates yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

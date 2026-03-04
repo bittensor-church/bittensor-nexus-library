@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Jobs — Catificator{% endblock %}
+{% block content %}
+<h1>Jobs</h1>
+{% if jobs %}
+<div class="card">
+    <table>
+        <thead><tr><th>ID</th><th>Validator</th><th>Status</th><th>Created</th></tr></thead>
+        <tbody>
+        {% for job in jobs %}
+        <tr>
+            <td><a href="/jobs/{{ job.id }}">{{ job.id }}</a></td>
+            <td>{{ job.validator_hotkey }}</td>
+            <td>
+                {% if job.liveness.value == "in_progress" %}<span class="badge badge-progress">In Progress</span>
+                {% elif job.liveness.value == "success" %}<span class="badge badge-success">Success</span>
+                {% else %}<span class="badge badge-failed">Failed</span>{% endif %}
+                — {{ job.latest_status }}
+            </td>
+            <td>{{ job.created_at.strftime('%H:%M:%S') }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p>No jobs yet.</p>
+{% endif %}
+{% endblock %}

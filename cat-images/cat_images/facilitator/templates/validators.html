@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Validators — Catificator{% endblock %}
+{% block content %}
+<h1>Validators</h1>
+{% if validators %}
+<div class="card">
+    <table>
+        <thead><tr><th>Hotkey</th><th>URL</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for v in validators %}
+        {% include "fragments/_validator_row.html" %}
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p>No validators configured.</p>
+{% endif %}
+{% endblock %}
