@@ -59,9 +59,12 @@ class EventBus:
         """
         events_passed_downstream = 0
         for sink in self.connections[event.source]:
-            logger.debug(f"Sending event from {event.source} to {sink} with payload: {event.payload}")
+            logger.info(f"Sending event from {event.source.id} to {sink.id} with payload: {event.payload}")
             self.sinks[sink].pipe_from_bus.put(ReceiveEvent(ctx_id=event.ctx_id, target=sink, payload=event.payload))
             events_passed_downstream += 1
 
         if events_passed_downstream == 0:
-            logger.error(f"No connections found for source: {event.source}; connections: {self.connections}")
+            logger.warning(
+                "No connections found for source: %s.",
+                event.source.id,
+            )

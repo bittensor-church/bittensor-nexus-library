@@ -166,19 +166,23 @@ class CallbackHttpServerRuntime[OutputModel: BaseModel]:
                     media_type=MediaType.TEXT,
                 )
 
-            status_code, response_body = CallbackHttpServerRuntime._process_callback(
-                body=body,
-                communicator_id=communicator_id,
-                output_model=output_model,
-                pending_request_store=pending_request_store,
-                processed_callback=processed_callback,
-                error_callback=error_callback,
-            )
-            return Response(
-                content=response_body,
-                status_code=status_code,
-                media_type=MediaType.TEXT,
-            )
+            try:
+                status_code, response_body = CallbackHttpServerRuntime._process_callback(
+                    body=body,
+                    communicator_id=communicator_id,
+                    output_model=output_model,
+                    pending_request_store=pending_request_store,
+                    processed_callback=processed_callback,
+                    error_callback=error_callback,
+                )
+                return Response(
+                    content=response_body,
+                    status_code=status_code,
+                    media_type=MediaType.TEXT,
+                )
+            except Exception as exc:
+                logger.exception("Unhandled callback processing error in communicator=%s", communicator_id, exc_info=exc)
+                return Response(content="Internal callback error\n", status_code=500, media_type=MediaType.TEXT)
 
         return Litestar(route_handlers=[callback])
 

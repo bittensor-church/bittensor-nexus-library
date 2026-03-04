@@ -114,11 +114,11 @@ class ThreadContextStoreLocks(ContextStoreLocks):
             )
             context_lock.acquire()
         try:
-            logger.info(f"Context {ctx} locked for processing.")
+            logger.debug(f"Context {ctx} locked for processing.")
             yield
         finally:
             context_lock.release()
-            logger.info(f"Context {ctx} released from processing.")
+            logger.debug(f"Context {ctx} released from processing.")
 
 
 @dataclass(frozen=True)

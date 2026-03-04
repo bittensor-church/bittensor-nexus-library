@@ -140,11 +140,6 @@ class CommunicatorActor[Input, Output](Actor, ABC):
             ),
         )
 
-        if not isinstance(communicator_input.input, self.__spec.input_model):
-            raise InternalStateCorruptionException(
-                f"Expected input of type {self.__spec.input_model} for communicator {self.__spec.id!r}, "
-                f"but found {type(communicator_input.input)} in context store under key {self._input_user_data_key!r}"
-            )
         return cast(Routed[Input], communicator_input)
 
     def _processed_event(self, ctx_id: ContextId, payload: Output) -> SendEvent[ProcessedInput[Routed[Input], Output]]:
