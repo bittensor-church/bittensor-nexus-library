@@ -22,18 +22,14 @@ logger = get_logger(__name__)
 
 class RetryState[T]:
     original_input: T
-    _attempts: AttemptNumber
+    attempts: AttemptNumber
 
     def __init__(self, original_input: T) -> None:
         self.original_input = original_input
-        self._attempts = AttemptNumber(0)
-
-    @property
-    def attempts(self) -> AttemptNumber:
-        return self._attempts
+        self.attempts = AttemptNumber(0)
 
     def next_attempt(self) -> None:
-        self._attempts = AttemptNumber(int(self._attempts) + 1)
+        self.attempts = AttemptNumber(int(self.attempts) + 1)
 
 
 class RetriesExhaustedException(NexusException):

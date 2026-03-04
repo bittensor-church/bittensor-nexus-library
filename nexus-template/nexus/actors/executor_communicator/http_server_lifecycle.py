@@ -31,7 +31,6 @@ def start_uvicorn_server(
         host=host,
         port=int(port),
         ws="none",
-        log_config=None,
         access_log=False,
         timeout_keep_alive=keep_alive_timeout_seconds,
         server_header=False,
