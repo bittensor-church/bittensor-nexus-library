@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from threading import Thread
 from time import monotonic
 
+from nexus.actors import BlockBeatNode, PylonClientProvider
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Node
 from nexus.core.dsl.piping import Piping

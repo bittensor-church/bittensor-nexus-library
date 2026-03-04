@@ -18,16 +18,19 @@ from nexus.logging_utils import get_logger
 logger: logging.Logger = get_logger(__name__)
 
 
+DEFAULT_BIND_IP="0.0.0.0"
+
 class RestEntryPoint[Model: BaseModel](Node, ActorBuilder):
     source: Source[Model]
-    sink: Sink[str]
+    sink: Sink[Any]
     path: str
     port: int
     user_data_model: type[Model]
 
-    def __init__(self, *, _id: str, path: str, port: int, user_data_model: type[Model]) -> None:
+    def __init__(self, *, _id: str, bind_ip: str = DEFAULT_BIND_IP, path: str, port: int, user_data_model: type[Model]) -> None:
         super().__init__(_id=_id)
         self.path = path if path.startswith("/") else f"/{path}"
+        self.bind_ip = bind_ip
         self.port = port
         self.user_data_model = user_data_model
         self.source = Source(f"{self.id}-source")
@@ -83,7 +86,7 @@ class RestEntryPointActor[Model: BaseModel](Actor):
             return
 
         handler_cls = self._make_http_handler()
-        server = ThreadingHTTPServer(("", self.spec.port), handler_cls)
+        server = ThreadingHTTPServer((self.spec.bind_ip, self.spec.port), handler_cls)
         server.daemon_threads = True
         self._server = server
 
@@ -114,9 +117,7 @@ class RestEntryPointActor[Model: BaseModel](Actor):
 
     def _handle_response(self, context: Context, event: ReceiveEvent[Any]) -> MessagesToSend:
         ctx_id = context.id
-        if not isinstance(event.payload, str):
-            logger.error(f"RestEntryPoint expected str response, got {type(event.payload)!r} for ctx={ctx_id}")
-            return ()
+        response = str(event.payload)
 
         with self._pending_lock:
             response_queue = self._pending_by_ctx_id.get(ctx_id)
@@ -126,7 +127,7 @@ class RestEntryPointActor[Model: BaseModel](Actor):
             return ()
 
         try:
-            response_queue.put_nowait(event.payload)
+            response_queue.put_nowait(response)
         except queue.Full:
             logger.warning(f"Multiple responses received for ctx={ctx_id}; dropping subsequent response.")
         return ()
