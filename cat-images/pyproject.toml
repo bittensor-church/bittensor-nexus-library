@@ -34,6 +34,7 @@ format = [
 [dependency-groups]
 # bittensor pinned to 9.8.* — testnet runs this version, higher versions may break
 miner = ["bittensor==9.8.*"]
+validator = []
 
 [tool.ruff]
 line-length = 120
