@@ -391,6 +391,7 @@ provides-extras = ["dev", "format"]
 
 [package.metadata.requires-dev]
 miner = [{ name = "bittensor", specifier = "==9.8.*" }]
+validator = []
 
 [[package]]
 name = "certifi"
