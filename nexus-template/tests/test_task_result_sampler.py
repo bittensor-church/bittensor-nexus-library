@@ -10,7 +10,6 @@ from utils import (
 )
 
 from nexus.actors.task_result_sampler import EveryTaskResultSampler
-from nexus.core.dsl.nodes import SinkName, SourceName
 from nexus.core.runtime.nexus_task_types import NexusTaskName
 
 type DummyExecutorPayload = str

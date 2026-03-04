@@ -47,6 +47,10 @@ class SingleTaskResult[ExecutorPayload, Output]:
         return self.result.executor_output.output
 
     @property
+    def is_failure(self) -> bool:
+        return isinstance(self.result.executor_output.output, NexusException)
+
+    @property
     def target(self) -> Neuron:
         return self.result.executor_output.input.target
 
