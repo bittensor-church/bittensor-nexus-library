@@ -3,7 +3,8 @@ import socket
 import time
 from urllib import error, request
 
-from cat_images.validator import SingleCatImageInput, Validator
+from cat_images.subnet import SingleCatImageInput
+from cat_images.validator import Validator
 
 
 def _find_free_port() -> int:

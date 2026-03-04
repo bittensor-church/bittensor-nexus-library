@@ -1,0 +1,102 @@
+# cat-images subnet
+
+A subnet where miners add cats to images using AI image generation via OpenRouter.
+
+## Development setup
+
+```bash
+uv sync --all-groups --all-extras
+```
+
+## Validator
+
+```bash
+uv run -m cat_images.validator
+```
+
+Starts the validator on port 8081 at `/cat-images`. Accepts POST requests with:
+
+```json
+{"image_s3_url": "https://...", "image_name": "photo.png"}
+```
+
+## Miner
+
+### Configuration
+
+```bash
+cp .env.miner.example .env
+# edit .env and fill in your OpenRouter API key
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `MINER_OPENROUTER_URL` | `https://openrouter.ai/api/v1/chat/completions` | OpenRouter API endpoint |
+| `MINER_OPENROUTER_MODEL` | `google/gemini-2.5-flash-image` | Model to use for image generation |
+| `MINER_PROMPT` | *(built-in cat prompt)* | Prompt sent to the model |
+| `MINER_PORT` | `9090` | Port the miner listens on |
+| `MINER_PATH` | `/process` | HTTP path for the miner endpoint |
+
+#### Axon updater
+
+When enabled, the miner periodically registers its serving address (IP/port) on the Bittensor chain and updates it if it drifts. Bittensor SDK work runs in an isolated subprocess to avoid polluting the main process.
+
+| Variable | Default | Description |
+|---|---|---|
+| `MINER_UPDATE_AXON` | `false` | Enable automatic axon registration |
+| `MINER_NETUID` | *(required when enabled)* | Subnet UID to register on |
+| `MINER_EXTERNAL_IP` | *(auto-detected)* | IP address to advertise. `127.0.0.1`/`localhost` are rejected by subtensor — use `127.0.0.2` for local testing |
+| `MINER_EXTERNAL_PORT` | same as `MINER_PORT` | Port to advertise (if different from listen port) |
+| `MINER_SERVE_INTERVAL` | `60` (seconds) | How often to check and update axon info |
+| `MINER_WALLET_NAME` | `default` | Bittensor wallet name |
+| `MINER_HOTKEY_NAME` | `default` | Bittensor hotkey name |
+| `MINER_SUBTENSOR_NETWORK` | `finney` | Subtensor network (`finney`, `test`, or a URL) |
+
+### Running locally
+
+```bash
+uv run -m cat_images.miner
+```
+
+Starts the miner on port 9090 (default). Receives tasks from the validator, downloads the source image, generates a cat version via OpenRouter, uploads the result to S3, and sends back an image hash.
+
+### Docker
+
+Build (requires BuildKit, default since Docker 23+):
+
+```bash
+./build_miner.sh cat-miner:latest
+```
+
+Run:
+
+```bash
+docker run --rm -p 9090:9090 \
+  -e MINER_OPENROUTER_API_KEY=sk-or-... \
+  cat-miner
+```
+
+Or with an env file:
+
+```bash
+docker run --rm -p 9090:9090 --env-file .env cat-miner
+```
+
+When axon updates are enabled, the container needs access to the wallet keys:
+
+```bash
+docker run --rm -p 9090:9090 --env-file .env \
+  -v "$HOME/.bittensor:/root/.bittensor:ro" \
+  cat-miner
+```
+
+### Test script
+
+`test_scripts/miner_test.py` sends an image to a running miner and saves the result locally. Spins up a local HTTP server that fakes S3 (serves the source image, accepts the upload) and receives the miner's callback.
+
+```bash
+uv run test_scripts/miner_test.py photo.png result.png
+uv run test_scripts/miner_test.py photo.png result.png --miner-url http://10.0.0.5:9090/process
+```
+
+Requires the miner to be running separately.
