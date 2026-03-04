@@ -83,7 +83,8 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
     send_timeout: datetime.timedelta
     total_processing_timeout: datetime.timedelta
     max_in_flight: int
-    response_bind: HttpBindEndpoint
+    callback_bind_ip: IPv4Address
+    callback_port: Port
     response_path: NormalizedHttpPath
     callback_base_url: AnyHttpUrl
     pending_request_store: PendingAsyncHttpRequestStore
@@ -96,8 +97,9 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
         send_timeout: datetime.timedelta,
         total_processing_timeout: datetime.timedelta,
         max_in_flight: int = 16,
-        response_bind: HttpBindEndpoint,
-        response_path: str,
+        callback_bind_ip: IPv4Address,
+        callback_port: Port,
+        callback_path: str,
         callback_base_url: AnyHttpUrl | str,
         input_model: type[InputModel],
         output_model: type[OutputModel],
@@ -115,9 +117,11 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
                 until a callback is received. Once exceeded, the request is timed out.
             max_in_flight: Maximum number of concurrent requests being processed by this
                 communicator instance.
-            response_bind: Local host/port binding for the callback HTTP server that
+            callback_bind_ip: Local host for binding the callback HTTP server that
                 receives processed responses.
-            response_path: Callback path exposed by the local callback HTTP server.
+            callback_port: Local port for binding the callback HTTP server that
+                receives processed responses.
+            callback_path: Callback path exposed by the local callback HTTP server.
                 The value is normalized to a canonical HTTP path.
             callback_base_url: Public base URL used when advertising callback endpoints
                 to remote neurons. Must be an HTTP(S) URL without query or fragment.
@@ -140,8 +144,8 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
         )
         if max_in_flight <= 0:
             raise ActorMisconfiguredException("max_in_flight must be > 0")
-        if not (0 <= int(response_bind.port) <= 65535):
-            raise ActorMisconfiguredException("response_bind.port must be in [0, 65535]")
+        if not (0 <= int(callback_port) <= 65535):
+            raise ActorMisconfiguredException("callback_port must be in [0, 65535]")
         parsed_callback_base_url = _ANY_HTTP_URL_ADAPTER.validate_python(callback_base_url)
         parsed_callback_base_url_parts = urlparse(str(parsed_callback_base_url))
         if parsed_callback_base_url_parts.query != "" or parsed_callback_base_url_parts.fragment != "":
@@ -150,8 +154,9 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
         self.send_timeout = send_timeout
         self.total_processing_timeout = total_processing_timeout
         self.max_in_flight = max_in_flight
-        self.response_bind = response_bind
-        self.response_path = normalize_http_path(response_path)
+        self.callback_bind_ip = callback_bind_ip
+        self.callback_port = callback_port
+        self.response_path = normalize_http_path(callback_path)
         self.callback_base_url = parsed_callback_base_url
         self.pending_request_store = pending_request_store or InMemoryPendingAsyncHttpRequestStore()
 
@@ -244,8 +249,8 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
         self._callback_server = CallbackHttpServerRuntime.start(
             config=CallbackHttpServerRuntimeConfig(
                 communicator_id=self.spec.id,
-                bind_host=self.spec.response_bind.host,
-                bind_port=self.spec.response_bind.port,
+                bind_host=self.spec.callback_bind_ip,
+                bind_port=self.spec.callback_port,
                 response_path=self.spec.response_path,
                 output_model=self.spec.output_model,
             ),
@@ -260,7 +265,7 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
         )
         logger.info(
             "AsyncHttpNeuronCommunicator listening for responses on host=%s port=%s path=%r",
-            self.spec.response_bind.host,
+            self.spec.callback_bind_ip,
             self._callback_server.bound_port,
             self.spec.response_path,
         )
