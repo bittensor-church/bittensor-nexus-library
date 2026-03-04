@@ -245,7 +245,8 @@ class NexusTaskTestSetup:
     executor_communicator: DummyExecutorCommunicator
     task_result_store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput]
     runtime: SubnetRuntime
-    result_collector: CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]]
+    task_result_collector: CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]]
+    executor_output_collector: CollectorActor[DummyExecutorOutput | NexusException]
     error_collector: CollectorActor[RetriesExhaustedException]
     input_source: Source[DummyTaskInput]
     block_beat_source: DummyBlockBeatSource
@@ -341,10 +342,15 @@ def build_nexus_task_test_setup(
     )
 
     builder = SubnetBuilder(nodes=task.internal_nodes())
-    result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]](
+    task_result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]](
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
-        name="nexus-task-result-collector",
+        name="nexus-task-task-result-collector",
+    )
+    executor_output_collector = CollectorActor[DummyExecutorOutput | NexusException](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="nexus-task-executor-output-collector",
     )
     error_collector = CollectorActor[RetriesExhaustedException](
         pipe_to_bus=builder.pipe_to_bus,
@@ -360,10 +366,11 @@ def build_nexus_task_test_setup(
             task.internal_flow,
             Flow.from_connectable(input_source).then(task.input),
             Flow.from_connectable(block_beat_source.source).then(task.block_beat),
-            Flow.from_connectable(task.output).then(result_collector.sink),
+            Flow.from_connectable(task.task_result).then(task_result_collector.sink),
+            Flow.from_connectable(task.executor_output).then(executor_output_collector.sink),
             Flow.from_connectable(task.error).then(error_collector.sink),
         )
-        .add_actors(result_collector, error_collector)
+        .add_actors(task_result_collector, executor_output_collector, error_collector)
         .build()
     )
 
@@ -373,7 +380,8 @@ def build_nexus_task_test_setup(
         executor_communicator=resolved_executor_communicator,
         task_result_store=task_result_store_provider.get_task_result_store(),
         runtime=runtime,
-        result_collector=result_collector,
+        task_result_collector=task_result_collector,
+        executor_output_collector=executor_output_collector,
         error_collector=error_collector,
         input_source=input_source,
         block_beat_source=block_beat_source,

@@ -3,21 +3,24 @@ from nexus.actors.chain_beat.block_beat import BlockBeat
 from nexus.actors.executor_communicator import ProcessedInput
 from nexus.actors.payload_creator import PayloadCreator
 from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
+from nexus.actors.task_result_splitter import TaskResultSplitter
 from nexus.actors.task_result_store_provider import DefaultTaskResultStoreProvider, TaskResultStoreProvider
 from nexus.actors.task_result_storer import TaskResultStorer
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Node, NodeId, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
 from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.core.runtime.task_result_store import SingleTaskResult
+from nexus.utils.exceptions import NexusException
 
 
 class NexusTask[Input, Output, ExecutorPayload]:
-    """Reusable task pipeline composed of retry, payload creation, routing, execution, and result storing."""
+    """Reusable task pipeline with split outputs for persisted task results and raw executor outputs."""
 
     name: NexusTaskName
     input: Sink[Input]
     block_beat: Sink[BlockBeat]
-    output: Source[SingleTaskResult[ExecutorPayload, Output]]
+    task_result: Source[SingleTaskResult[ExecutorPayload, Output]]
+    executor_output: Source[Output | NexusException]
     error: Source[RetriesExhaustedException]
     internal_flow: Flow
 
@@ -30,6 +33,7 @@ class NexusTask[Input, Output, ExecutorPayload]:
     router: NeuronRouter[ExecutorPayload]
     executor_communicator: ExecutorCommunicator[ExecutorPayload, Output]
     task_result_storer: TaskResultStorer[ExecutorPayload, Output]
+    task_result_splitter: TaskResultSplitter[ExecutorPayload, Output]
 
     def __init__(
         self,
@@ -57,10 +61,14 @@ class NexusTask[Input, Output, ExecutorPayload]:
             name=name,
             task_result_store_provider=task_result_store_provider,
         )
+        self.task_result_splitter = TaskResultSplitter[ExecutorPayload, Output](
+            _id=NodeId(f"{name}-task-result-splitter")
+        )
 
         self.block_beat = self.timestamper.block_beat
         self.input = self.retry.input
-        self.output = self.task_result_storer.task_result
+        self.task_result = self.task_result_splitter.task_result
+        self.executor_output = self.task_result_splitter.executor_output
         self.error = self.retry.error
 
         self.internal_flow = Flow(
@@ -68,11 +76,15 @@ class NexusTask[Input, Output, ExecutorPayload]:
                 sinks={SinkName("input"): self.input},
             ),
             exit_sources=NodeSources(
-                sources={SourceName("output"): self.output},
+                sources={
+                    SourceName("task_result"): self.task_result,
+                    SourceName("executor_output"): self.executor_output,
+                },
             ),
         )
         self.internal_flow.sinks.add(self.input)
-        self.internal_flow.sources.add(self.output)
+        self.internal_flow.sources.add(self.task_result)
+        self.internal_flow.sources.add(self.executor_output)
 
         def connect[T](source: Source[T], sink: Sink[T]) -> None:
             self.internal_flow.sources.add(source)
@@ -85,6 +97,7 @@ class NexusTask[Input, Output, ExecutorPayload]:
         connect(self.timestamper.forwarded_input, self.executor_communicator.input)
         connect(self.executor_communicator.processed, self.timestamper.executor_output)
         connect(self.timestamper.timestamped_output, self.task_result_storer.sink)
+        connect(self.task_result_storer.task_result, self.task_result_splitter.task_result_input)
         connect(self.executor_communicator.error, self.retry.failed_attempt)
         connect(self.task_result_storer.error, self.retry.failed_attempt)
         connect(self.payload_creator.error, self.retry.failed_attempt)
@@ -99,4 +112,5 @@ class NexusTask[Input, Output, ExecutorPayload]:
             self.timestamper,
             self.executor_communicator,
             self.task_result_storer,
+            self.task_result_splitter,
         )

@@ -68,15 +68,21 @@ def assert_successful_task_result(
     block_number: int,
     expected_stored_results_for_epoch: int = 1,
 ) -> SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]:
-    """Validate emitted-success linkage and return the matched stored + emitted task results."""
-    # Runtime outcome: no terminal retries-exhausted error and exactly one emitted successful task-result event.
+    """Validate split outputs and return the matched stored + emitted task result."""
+    # Runtime outcome: no terminal retries-exhausted error and one event on each output branch.
     assert len(setup.error_collector.received_events) == 0
-    assert len(setup.result_collector.received_events) == 1
-    result_event = setup.result_collector.received_events[0]
-    # Emitted event must belong to the same processing context and carry a SingleTaskResult payload.
-    assert result_event.ctx_id == input_ctx_id
-    emitted_result = result_event.payload
+    assert len(setup.task_result_collector.received_events) == 1
+    assert len(setup.executor_output_collector.received_events) == 1
+
+    task_result_event = setup.task_result_collector.received_events[0]
+    emitted_result = task_result_event.payload
     assert isinstance(emitted_result, SingleTaskResult)
+    # Task-result branch must use child context, while executor-output branch stays on original context.
+    assert task_result_event.ctx_id != input_ctx_id
+
+    executor_output_event = setup.executor_output_collector.received_events[0]
+    assert executor_output_event.ctx_id == input_ctx_id
+    assert executor_output_event.payload == emitted_result.executor_output
 
     # Store lookup is scoped to expected epoch and task identity.
     stored_results = get_stored_results_for_block(
@@ -111,7 +117,11 @@ def test_nexus_task_happy_path_routes_input_to_task_result(
     with setup.running():
         setup.send_block_beat(block_number=block_number)
         input_ctx_id = setup.send_input(input_payload=input_payload)
-        wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
+        wait_until(
+            lambda: len(setup.task_result_collector.received_events) == 1
+            and len(setup.executor_output_collector.received_events) == 1,
+            timeout=2.0,
+        )
 
     stored_success_result = assert_successful_task_result(
         setup=setup,
@@ -143,14 +153,20 @@ def test_nexus_task_waits_for_block_beat_before_emitting_result(
         input_ctx_id = setup.send_input(input_payload=input_payload)
         with pytest.raises(AssertionError):
             wait_until(
-                lambda: len(setup.result_collector.received_events) == 1,
+                lambda: len(setup.task_result_collector.received_events) == 1
+                or len(setup.executor_output_collector.received_events) == 1,
                 timeout=0.2,
                 interval=0.05,
             )
-        assert len(setup.result_collector.received_events) == 0
+        assert len(setup.task_result_collector.received_events) == 0
+        assert len(setup.executor_output_collector.received_events) == 0
 
         setup.send_block_beat(block_number=block_number)
-        wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
+        wait_until(
+            lambda: len(setup.task_result_collector.received_events) == 1
+            and len(setup.executor_output_collector.received_events) == 1,
+            timeout=2.0,
+        )
 
     stored_success_result = assert_successful_task_result(
         setup=setup,
@@ -184,7 +200,11 @@ def test_nexus_task_retries_after_payload_creator_failure(
     with setup.running():
         setup.send_block_beat(block_number=block_number)
         input_ctx_id = setup.send_input(input_payload=input_payload)
-        wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
+        wait_until(
+            lambda: len(setup.task_result_collector.received_events) == 1
+            and len(setup.executor_output_collector.received_events) == 1,
+            timeout=2.0,
+        )
 
     stored_success_result = assert_successful_task_result(
         setup=setup,
@@ -220,7 +240,11 @@ def test_nexus_task_retries_after_router_failure(
     with setup.running():
         setup.send_block_beat(block_number=block_number)
         input_ctx_id = setup.send_input(input_payload=input_payload)
-        wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
+        wait_until(
+            lambda: len(setup.task_result_collector.received_events) == 1
+            and len(setup.executor_output_collector.received_events) == 1,
+            timeout=2.0,
+        )
 
     stored_success_result = assert_successful_task_result(
         setup=setup,
@@ -255,7 +279,11 @@ def test_nexus_task_retries_after_communicator_internal_error(
     with setup.running():
         setup.send_block_beat(block_number=block_number)
         input_ctx_id = setup.send_input(input_payload=input_payload)
-        wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
+        wait_until(
+            lambda: len(setup.task_result_collector.received_events) == 1
+            and len(setup.executor_output_collector.received_events) == 1,
+            timeout=2.0,
+        )
 
     stored_success_result = assert_successful_task_result(
         setup=setup,
@@ -290,7 +318,11 @@ def test_nexus_task_retries_after_executor_failure_result_is_stored(
     with setup.running():
         input_ctx_id = setup.send_input(input_payload=input_payload)
         setup.send_block_beat(block_number=block_number)
-        wait_until(lambda: len(setup.result_collector.received_events) == 1, timeout=2.0)
+        wait_until(
+            lambda: len(setup.task_result_collector.received_events) == 1
+            and len(setup.executor_output_collector.received_events) == 1,
+            timeout=2.0,
+        )
 
     stored_success_result = assert_successful_task_result(
         setup=setup,
@@ -355,7 +387,8 @@ def test_nexus_task_emits_retries_exhausted_when_max_attempts_are_hit(
         input_ctx_id = setup.send_input(input_payload=input_payload)
         wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
 
-    assert len(setup.result_collector.received_events) == 0
+    assert len(setup.task_result_collector.received_events) == 0
+    assert len(setup.executor_output_collector.received_events) == 0
     assert len(setup.error_collector.received_events) == 1
 
     exhausted_event = setup.error_collector.received_events[0]

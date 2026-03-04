@@ -28,6 +28,7 @@ from nexus.actors.neuron_router import (
     miners_only,
     validators_only,
 )
+from nexus.actors.task_result_splitter import TaskResultSplitter, TaskResultSplitterActor
 from nexus.utils.exceptions import (
     AsyncHttpNeuronCommunicatorException,
     NeuronAddressInvalidException,
@@ -76,6 +77,8 @@ __all__ = [
     "Neuron",
     "StaticConfigPylonClientProvider",
     "UnsupportedAxonProtocolException",
+    "TaskResultSplitter",
+    "TaskResultSplitterActor",
     "keep_all_neurons",
     "miners_only",
     "validators_only",
