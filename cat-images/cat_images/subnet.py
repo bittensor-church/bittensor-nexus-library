@@ -1,7 +1,7 @@
 from typing import NewType
 
 from nexus.actors.payload_creator import WithPresignedUrl
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 S3Url = NewType("S3Url", str)
 ImageName = NewType("ImageName", str)
@@ -32,4 +32,4 @@ type MinerPublicResult = WithPresignedUrl[MinerResult]
 
 
 class ValidationResult(BaseModel):
-    score: int
+    score: int = Field(ge=1, le=100)
