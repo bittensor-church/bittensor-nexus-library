@@ -3,30 +3,37 @@
 import logging
 import sys
 import time
-from collections.abc import Sequence
 from datetime import timedelta
 from ipaddress import IPv4Address
 
 from nexus.actors import (
     AsyncHttpNeuronCommunicator,
+    EpochBeatNode,
     RestEntryPoint,
     RoundRobinNeuronRouter,
     miners_only,
 )
-from nexus.actors.payload_creator import S3PresignedUrlCreator
+from nexus.actors.executor_communicator.embedded_executor_communicator import EmbeddedExecutorCommunicator
+from nexus.actors.neuron_router import NoopRouter
+from nexus.actors.payload_creator import NoopPayloadCreator, PresignedUrlCreator, WithPresignedUrl
 from nexus.actors.retry_strategy import RetryStrategy
-from nexus.core.runtime.nexus_task import NexusTask
+from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskInputOutputCreator
+from nexus.actors.task_result_sampler import EveryTaskResultSampler, TaskResultSampler
+from nexus.actors.weight_setter import WeightSetterNode
+from nexus.core.runtime.nexus_task import NexusTask, SingleTaskResult
 from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.core.runtime.subnet_runtime import SubnetRuntime
 from nexus.nexus_validator import NexusValidator
-from nexus.utils.types import NetUid, Port
-from pylon_client.artanis.v1 import Neuron
+from nexus.utils.types import BlockCount, NetUid, Port
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .subnet import MinerPayload, MinerPayloadModel, MinerResult, SingleCatImageInput
+from cat_images import validation_algorithm
+
+from .subnet import MinerPayload, MinerPayloadModel, MinerResult, SingleCatImageInput, ValidationResult
 
 MINING_TASK_NAME = NexusTaskName("add-cat-to-image")
+VALIDATION_TASK_NAME = NexusTaskName("validation-task")
 NETUID = NetUid(1)
 
 logging.basicConfig(
@@ -58,23 +65,21 @@ class CatValidatorSettings(BaseSettings):
     s3_bucket: str = DEFAULT_S3_BUCKET
 
 
-# def _make_miner_filter(target_hotkey: str | None):
-#     def _filter(neurons: Sequence[Neuron]) -> Sequence[Neuron]:
-#         filtered = miners_only(neurons)
-#         if target_hotkey is None:
-#             return filtered
-#         return [neuron for neuron in filtered if neuron.hotkey == target_hotkey]
-#
-#     return _filter
-
-
 class Validator(NexusValidator):
     # these annotations are optional but help with readability and IDE support
     # they are also a perfect source of knowledge for an LLM
     entry: RestEntryPoint[SingleCatImageInput]
 
-    mining_task: NexusTask[SingleCatImageInput, MinerResult, MinerPayload]
-    # miner_result_sampler: TaskResultSampler[MinerPayload, MinerResult]
+    mining_task: NexusTask[SingleCatImageInput, MinerPayload, MinerResult, WithPresignedUrl[MinerResult]]
+    miner_result_sampler: TaskResultSampler[MinerPayload, MinerResult]
+    validation_task: NexusTask[
+        tuple[SingleTaskResult[MinerPayload, MinerResult], ...],
+        BatchedTaskInputOutput[MinerPayload, MinerResult],
+        BatchedTaskInputOutput[MinerPayload, ValidationResult],
+    ]
+
+    epoch_beat: EpochBeatNode
+    weight_setter: WeightSetterNode
 
     runtime: SubnetRuntime
 
@@ -91,7 +96,7 @@ class Validator(NexusValidator):
         self.mining_task = NexusTask(
             name=MINING_TASK_NAME,
             retry=RetryStrategy("mining-task-retry", max_attempts=6, delay=timedelta(seconds=1.0)),
-            payload_creator=S3PresignedUrlCreator("create-payload-for-mining-task", bucket=settings.s3_bucket),
+            payload_creator=PresignedUrlCreator("miner-upload-url", bucket=settings.s3_bucket, method="PUT"),
             router=RoundRobinNeuronRouter(
                 "mining-router",
                 netuid=settings.netuid,
@@ -110,13 +115,67 @@ class Validator(NexusValidator):
                 input_model=MinerPayloadModel,
                 output_model=MinerResult,
             ),
+            executor_result_converter=PresignedUrlCreator(
+                "create-get-url-for-miner-image",
+                method="GET",
+                load_s3_key="miner-upload-url",
+                bucket=settings.s3_bucket),
+            task_result_store_provider=self.task_result_store_provider,  # this should go once we set up dependency injection
         )
 
-        self.add_nodes(self.entry, self.mining_task)
+        self.miner_result_sampler = EveryTaskResultSampler("miner-result-sampler")
 
+        self.validation_task = NexusTask(
+            name=VALIDATION_TASK_NAME,
+            retry=RetryStrategy("validation-task-retry", max_attempts=1, delay=timedelta(seconds=1.0)),
+            payload_creator=TaskInputOutputCreator("create-payload-for-validation-task"),
+            router=NoopRouter("validation-router"),
+            executor_communicator=EmbeddedExecutorCommunicator(
+                "validator-communicator",
+                input_model=BatchedTaskInputOutput[MinerPayload, MinerResult],
+                output_model=BatchedTaskInputOutput[MinerPayload, ValidationResult],
+                executor_func=validation_algorithm.validate,
+            ),
+            executor_result_converter=NoopPayloadCreator("validation-result-converter"),
+            task_result_store_provider=self.task_result_store_provider,  # this should go once we set up dependency injection
+        )
+
+        self.epoch_beat = EpochBeatNode(
+            "weight-setting-trigger",
+            netuid=settings.netuid,
+            delay=BlockCount(20),
+            pylon_client_provider=self.pylon_client_provider,  # this should go once we set up dependency injection
+        )
+
+        self.weight_setter = WeightSetterNode(
+            "cat-images-weight-setter",
+            pylon_client_provider=self.pylon_client_provider,  # this should go once we set up dependency injection
+            task_result_store_provider=self.task_result_store_provider,  # this should go once we set up dependency injection
+            weighing_func=lambda task_results_bundle: validation_algorithm.weighing_func(
+                MINING_TASK_NAME, VALIDATION_TASK_NAME, task_results_bundle
+            ),
+        )
+
+        self.add_nodes(
+            self.entry,
+            self.mining_task,
+            self.miner_result_sampler,
+            self.validation_task,
+            self.epoch_beat,
+            self.weight_setter,
+        )
+
+        # mining
         self.connect(self.entry.source, self.mining_task.input)
         self.connect(self.mining_task.executor_output, self.entry.sink)
         self.connect(self.mining_task.error, self.entry.sink)
+
+        # validation
+        self.connect(self.mining_task.task_result, self.miner_result_sampler.task_results)
+        self.connect(self.miner_result_sampler.sampled_batch, self.validation_task.input)
+
+        # weight setting
+        self.connect(self.epoch_beat.source, self.weight_setter.sink)
 
 
 def _load_settings() -> CatValidatorSettings:
@@ -130,6 +189,7 @@ def _load_settings() -> CatValidatorSettings:
 
 
 def main() -> None:
+    logging.getLogger("httpx").setLevel(logging.WARN)
     settings = _load_settings()
 
     validator = Validator(settings)

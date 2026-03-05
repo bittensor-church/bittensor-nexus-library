@@ -12,7 +12,7 @@ from pylon_client.artanis import NetUid, PylonClient
 from pylon_client.artanis.v1 import GetNeuronsResponse, Neuron
 
 from nexus import get_logger
-from nexus.actors.pylon_client_provider import PylonClientProvider
+from nexus.actors.pylon_client_provider import PylonClientProvider, StaticConfigPylonClientProvider
 from nexus.core.dsl.nodes import (
     NodeSinks,
     NodeSources,
@@ -198,12 +198,25 @@ class RoundRobinNeuronRouterActor[Input](NeuronRouterActor[Input]):
         return ordered_neurons
 
 
+class NoopPylonClientProvider(PylonClientProvider):
+    """
+    This shouldn't be needed, but we need to generalize the router to support the noop case smoothly
+    """
+    def get_client(self) -> PylonClient:
+        raise NotImplementedError("Pylon client should not be used with NoopRouter")
+
 class NoopRouter[Input](NeuronRouter[Input], ActorBuilder):
     """
     a noop router which doesn't attach any neuron information to the input
     useful if you want to use an embedded executor which just runs the provided
     code locally.
     """
+    def __init__(self, _id: str) -> None:
+        super().__init__(
+            _id,
+            netuid=0,
+            pylon_client_provider=NoopPylonClientProvider(),  # this router doesn't need a pylon client
+        )
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
@@ -215,6 +228,14 @@ class NeuronFactory(ModelFactory[Neuron]):
 
 
 class NoopRouterActor[Input](NeuronRouterActor[Input]):
+    @override
+    def _transform(self, ctx: Context, payload: Input) -> Routed[Input]:
+        selected_neuron = self.select_neuron(ctx=ctx, neurons=())
+        return Routed(
+            input=payload,
+            target=selected_neuron,
+        )
+
     @override
     def select_neuron(self, *, ctx: Context, neurons: Sequence[Neuron]) -> Neuron:
         return NeuronFactory.build(hotkey="local-neuron")
