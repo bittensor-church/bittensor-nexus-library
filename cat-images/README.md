@@ -26,7 +26,7 @@ cp .env.facilitator.example .env
 | `FACI_S3_ACCESS_KEY` | *(required)* | S3 access key |
 | `FACI_S3_SECRET_KEY` | *(required)* | S3 secret key |
 | `FACI_S3_REGION` | `""` | S3 region |
-| `FACI_VALIDATORS` | *(required)* | JSON map of known validators: `{"hotkey": "http://host:port/submit"}` |
+| `FACI_VALIDATORS` | *(required)* | JSON map of known validators: `{"hotkey": "http://host:port/cat-images"}` |
 | `FACI_PORT` | `8080` | Port the facilitator listens on |
 | `FACI_HOST` | `0.0.0.0` | Bind address |
 | `FACI_PUBLIC_BASE_URL` | `http://localhost:{port}` | Base URL for callback URLs sent to validators |
@@ -63,17 +63,25 @@ Validators push status updates to `POST /api/jobs/{job_id}/status`. The payload 
 uv run -m cat_images.validator
 ```
 
-Starts the validator on port 8081 at `/cat-images`. Accepts POST requests with a `JobSubmission`:
+Starts the validator on port 8081 at `/cat-images`. Accepts POST requests with:
 
 ```json
-{"job_spec": {"image_s3_url": "https://..."}, "callback_url": "http://facilitator/api/jobs/{id}/status"}
+{"image_s3_url": "https://..."}
 ```
 
 Returns JSON:
 
 ```json
-{"image_hash":"<sha256-like-hash>"}
+{
+  "input": {
+    "image_hash": "<sha256-like-hash>"
+  },
+  "presigned_url": "https://<bucket>.s3.amazonaws.com/<key>?<query>"
+}
 ```
+
+For facilitator UI testing with `test_scripts/fake_validator.py`, the fake endpoint still listens on `/submit` and
+returns `{"result_image_url":"..."}`.
 
 ## Miner
 

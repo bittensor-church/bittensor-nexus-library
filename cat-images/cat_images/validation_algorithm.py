@@ -173,7 +173,6 @@ def validate(
     score_lines = [
         (
             f"task_result_id={task_input_output.task_result_id} "
-            f"image_name={task_input_output.task_input.input.image_name} "
             f"score={scores_by_task_id[str(task_input_output.task_result_id)]}"
         )
         for task_input_output in batch_to_validate.task_input_outputs

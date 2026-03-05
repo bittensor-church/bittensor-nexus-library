@@ -97,8 +97,8 @@ class EventBus:
                 sink.id,
                 _payload_for_log(event.payload),
             )
-            if isinstance(event.payload, BaseException) and logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
+            if isinstance(event.payload, BaseException):
+                logger.info(
                     "Exception payload traceback for %s -> %s:\n%s",
                     event.source.id,
                     sink.id,

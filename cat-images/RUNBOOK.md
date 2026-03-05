@@ -1,170 +1,88 @@
-# Cat-Images Local Scenario Manual
+# Cat-Images Local Scenario Manual (All 4 Services)
 
-This guide runs the full local flow:
+This guide starts the full stack together with one Compose file:
 
-1. validator + pylon (compose)
-2. miner (compose, same Docker network)
-3. request to `POST /cat-images`
-4. validator returns `input.image_hash` and `presigned_url`
+1. `pylon`
+2. `validator`
+3. `miner`
+4. `facilitator` (user-facing UI/API on `http://127.0.0.1:8080`)
 
-All secrets are passed as command-prefixed environment variables, not stored in env files.
-
-Important: Docker Compose interpolates required variables on every command (`up`, `ps`, `logs`, `down`), so keep the same secret prefixes for all `run_validator.sh` and `run_miner.sh` commands.
-
-## 1) Prepare non-secret env files
-
-Create runtime files from examples:
+## 1) Prepare `.env` for compose
 
 ```bash
 cd /home/kuba/repos/nexus-poc/cat-images
-
-cp docker/.env.validator-compose.example docker/.env.validator
-cp docker/.env.miner-compose.example docker/.env.miner
+cp .env.compose.example .env
 ```
 
-Append non-secret overrides for this scenario:
+Then edit `.env` and fill real values. Facilitator-specific examples are in `.env.facilitator.example`, but compose still reads from `.env`.
+
+Required variables:
+
+- Shared: `WALLET_NAME`
+- Pylon: `PYLON_BITTENSOR_NETWORK`, `PYLON_HOTKEY_NAME`, `PYLON_OPEN_ACCESS_TOKEN`, `PYLON_RECENT_OBJECTS_NETUIDS`
+- Validator: `VALIDATOR_NETUID`, `VALIDATOR_OPENROUTER_API_KEY`, `VALIDATOR_PYLON_OPEN_ACCESS_TOKEN`, `VALIDATOR_S3_BUCKET`
+- Miner: `MINER_OPENROUTER_API_KEY`, `MINER_HOTKEY_NAME`, `MINER_UPDATE_AXON`
+- AWS/S3: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`
+- Facilitator: `FACI_S3_BUCKET`, `FACI_S3_ACCESS_KEY`, `FACI_S3_SECRET_KEY` (optional `FACI_S3_REGION`, `FACI_S3_ENDPOINT_URL`)
+
+Notes:
+
+- For local smoke tests, `MINER_UPDATE_AXON=false` is usually the easiest option.
+- `FACI_VALIDATORS` is already wired in `compose.yaml` to the validator container.
+
+## 2) Start all services
 
 ```bash
-cat <<'EOF' >> docker/.env.validator
-VALIDATOR_NETUID=278
-VALIDATOR_S3_BUCKET=kuba-cat-images-bucket
-PYLON_BITTENSOR_NETWORK=test
-PYLON_RECENT_OBJECTS_NETUIDS=[278]
-EOF
-
-cat <<'EOF' >> docker/.env.miner
-MINER_UPDATE_AXON=true
-MINER_SUBTENSOR_NETWORK=test
-MINER_NETUID=278
-MINER_WALLET_NAME=cat-images-miner-kuba
-MINER_HOTKEY_NAME=default
-MINER_EXTERNAL_IP=172.30.0.30
-MINER_EXTERNAL_PORT=9090
-EOF
+docker compose -f compose.yaml --env-file .env up --build -d
+docker compose -f compose.yaml --env-file .env ps
 ```
 
-## 2) Build images
+Expected: all four services are `Up` and facilitator is exposed on `0.0.0.0:8080`.
+
+## 3) Manual smoke test through facilitator
+
+Submit an image (example uses `mouse.jpg` from this directory):
 
 ```bash
-./build_validator.sh cat-validator:compose
-./build_miner.sh cat-miner:latest
+curl -sS -X POST -F "image=@mouse.jpg;type=image/jpeg" http://127.0.0.1:8080/catify
 ```
 
-## 3) Start validator + pylon
+You can also use the Web UI for that by navigating to `http://127.0.0.1:8080/`.
 
-Pass validator/OpenRouter and AWS credentials inline:
+Expected response is an HTML fragment like:
+
+```html
+<div data-job-id="..."></div>
+```
+
+Extract job id:
 
 ```bash
-VALIDATOR_OPENROUTER_API_KEY='<YOUR_OPENROUTER_KEY>' \
-AWS_ACCESS_KEY_ID='<YOUR_AWS_ACCESS_KEY_ID>' \
-AWS_SECRET_ACCESS_KEY='<YOUR_AWS_SECRET_ACCESS_KEY>' \
-AWS_DEFAULT_REGION='eu-north-1' \
-./run_validator.sh up
+JOB_ID="$(curl -sS -X POST -F "image=@mouse.jpg;type=image/jpeg" http://127.0.0.1:8080/catify \
+  | grep -oE 'data-job-id="[^"]+"' | sed -E 's/data-job-id="([^"]+)"/\1/')"
+echo "$JOB_ID"
 ```
 
-If you use temporary AWS credentials, include:
+Check job status page:
 
 ```bash
-AWS_SESSION_TOKEN='<YOUR_AWS_SESSION_TOKEN>'
+curl -sS "http://127.0.0.1:8080/jobs/${JOB_ID}"
 ```
 
-Check status:
+When done, fetch generated image via facilitator proxy:
 
 ```bash
-VALIDATOR_OPENROUTER_API_KEY='<YOUR_OPENROUTER_KEY>' \
-AWS_ACCESS_KEY_ID='<YOUR_AWS_ACCESS_KEY_ID>' \
-AWS_SECRET_ACCESS_KEY='<YOUR_AWS_SECRET_ACCESS_KEY>' \
-AWS_DEFAULT_REGION='eu-north-1' \
-./run_validator.sh ps
+curl -fSs -o /tmp/cat-result-"${JOB_ID}".png "http://127.0.0.1:8080/images/${JOB_ID}/result"
 ```
 
-## 4) Start miner
-
-Pass miner OpenRouter key inline:
+## 4) Observe logs
 
 ```bash
-MINER_OPENROUTER_API_KEY='<YOUR_OPENROUTER_KEY>' \
-./run_miner.sh up
+docker compose -f compose.yaml --env-file .env logs -f facilitator validator miner pylon
 ```
 
-Check status:
+## 5) Stop services
 
 ```bash
-MINER_OPENROUTER_API_KEY='<YOUR_OPENROUTER_KEY>' \
-./run_miner.sh ps
-```
-
-## 5) Upload input image to S3
-
-Example with `chopin-monument.jpg`:
-
-```bash
-AWS_ACCESS_KEY_ID='<YOUR_AWS_ACCESS_KEY_ID>' \
-AWS_SECRET_ACCESS_KEY='<YOUR_AWS_SECRET_ACCESS_KEY>' \
-AWS_DEFAULT_REGION='eu-north-1' \
-aws s3api put-object \
-  --bucket kuba-cat-images-bucket \
-  --key chopin-monument.jpg \
-  --body chopin-monument.jpg
-```
-
-## 6) Issue request to validator
-
-Generate a presigned HTTP GET URL for the uploaded source image:
-
-```bash
-IMAGE_HTTP_URL="$(
-  AWS_ACCESS_KEY_ID='<YOUR_AWS_ACCESS_KEY_ID>' \
-  AWS_SECRET_ACCESS_KEY='<YOUR_AWS_SECRET_ACCESS_KEY>' \
-  AWS_DEFAULT_REGION='eu-north-1' \
-  aws s3 presign "s3://kuba-cat-images-bucket/chopin-monument.jpg" \
-    --expires-in 1800
-)"
-```
-
-Send the request:
-
-```bash
-curl -sS -X POST "http://127.0.0.1:8081/cat-images" \
-  -H "Content-Type: application/json" \
-  --data-binary "{\"image_s3_url\":\"${IMAGE_HTTP_URL}\",\"image_name\":\"manual-$(date +%s).jpg\"}"
-```
-
-Note: the request field is still named `image_s3_url` for backward compatibility, but it should carry an `http(s)` URL.
-
-Expected response shape:
-
-```json
-{
-  "input": {
-    "image_hash": "<sha256-like-hash>"
-  },
-  "presigned_url": "https://<bucket>.s3.amazonaws.com/<key>?<query>"
-}
-```
-
-## 7) Observe logs
-
-```bash
-VALIDATOR_OPENROUTER_API_KEY='<YOUR_OPENROUTER_KEY>' \
-AWS_ACCESS_KEY_ID='<YOUR_AWS_ACCESS_KEY_ID>' \
-AWS_SECRET_ACCESS_KEY='<YOUR_AWS_SECRET_ACCESS_KEY>' \
-AWS_DEFAULT_REGION='eu-north-1' \
-./run_validator.sh logs validator
-
-MINER_OPENROUTER_API_KEY='<YOUR_OPENROUTER_KEY>' \
-./run_miner.sh logs miner
-```
-
-## 8) Stop services
-
-```bash
-MINER_OPENROUTER_API_KEY='<YOUR_OPENROUTER_KEY>' \
-./run_miner.sh down
-
-VALIDATOR_OPENROUTER_API_KEY='<YOUR_OPENROUTER_KEY>' \
-AWS_ACCESS_KEY_ID='<YOUR_AWS_ACCESS_KEY_ID>' \
-AWS_SECRET_ACCESS_KEY='<YOUR_AWS_SECRET_ACCESS_KEY>' \
-AWS_DEFAULT_REGION='eu-north-1' \
-./run_validator.sh down
+docker compose -f compose.yaml --env-file .env down
 ```

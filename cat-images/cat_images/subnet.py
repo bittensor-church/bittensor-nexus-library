@@ -1,7 +1,7 @@
 from typing import NewType
 
 from nexus.actors.payload_creator import WithPresignedUrl
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, AliasPath, BaseModel, Field
 
 S3Url = NewType("S3Url", str)
 ImageHash = NewType("ImageHash", str)
@@ -32,4 +32,8 @@ class ValidationResult(BaseModel):
 
 class ValidatorResult(BaseModel):
     """User-facing result delivered by the validator to the facilitator."""
-    result_image_url: S3Url
+    result_image_url: S3Url = Field(validation_alias=AliasChoices("result_image_url", "presigned_url"))
+    image_hash: ImageHash | None = Field(
+        default=None,
+        validation_alias=AliasChoices(AliasPath("input", "image_hash"), "image_hash"),
+    )
