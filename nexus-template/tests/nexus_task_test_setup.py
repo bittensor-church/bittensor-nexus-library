@@ -21,8 +21,8 @@ from utils import CollectorActor, InMemoryTestTaskResultStoreProvider, build_neu
 from nexus.actors.chain_beat.block_beat import BlockBeat
 from nexus.actors.executor_communicator import CommunicatorActor, ExecutorCommunicator, ProcessedInput
 from nexus.actors.neuron_router import NeuronRouter, Routed
-from nexus.actors.payload_creator import PayloadCreator
-from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
+from nexus.actors.payload_creator import NoopPayloadCreator, PayloadCreator
+from nexus.actors.retry_strategy import RetryStrategy
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Source
 from nexus.core.runtime.actor import Actor, ActorBuilder
@@ -240,14 +240,14 @@ type DummyProcessedInput = ProcessedInput[Routed[DummyExecutorPayload], DummyExe
 class NexusTaskTestSetup:
     """Runtime and endpoints needed to drive NexusTask wiring tests."""
 
-    task: NexusTask[DummyTaskInput, DummyExecutorOutput, DummyExecutorPayload]
+    task: NexusTask[DummyTaskInput, DummyExecutorPayload, DummyExecutorOutput]
     payload_creator: DummyPayloadCreator
     executor_communicator: DummyExecutorCommunicator
     task_result_store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput]
     runtime: SubnetRuntime
     task_result_collector: CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]]
     executor_output_collector: CollectorActor[DummyExecutorOutput | NexusException]
-    error_collector: CollectorActor[RetriesExhaustedException]
+    error_collector: CollectorActor[NexusException]
     input_source: Source[DummyTaskInput]
     block_beat_source: DummyBlockBeatSource
 
@@ -332,13 +332,14 @@ def build_nexus_task_test_setup(
     )
     resolved_executor_communicator = executor_communicator or DummyExecutorCommunicator("nexus-task-test-communicator")
 
-    task = NexusTask[DummyTaskInput, DummyExecutorOutput, DummyExecutorPayload](
+    task = NexusTask[DummyTaskInput, DummyExecutorPayload, DummyExecutorOutput](
         name=NexusTaskName("test-nexus-task"),
         retry=resolved_retry,
         payload_creator=resolved_payload_creator,
         router=resolved_router,
         executor_communicator=resolved_executor_communicator,
         task_result_store_provider=task_result_store_provider,
+        executor_result_converter=NoopPayloadCreator("nexus-task-test-executor-result-converter"),
     )
 
     builder = SubnetBuilder(nodes=task.internal_nodes())
@@ -352,7 +353,7 @@ def build_nexus_task_test_setup(
         context_store=builder.context_store,
         name="nexus-task-executor-output-collector",
     )
-    error_collector = CollectorActor[RetriesExhaustedException](
+    error_collector = CollectorActor[NexusException](
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
         name="nexus-task-error-collector",
