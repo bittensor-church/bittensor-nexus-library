@@ -9,7 +9,7 @@ from typing import Any, Self
 
 import httpx
 from nexus.actors.executor_communicator import AsyncHttpNeuronService
-from nexus.actors.payload_creator import WithS3PresignedUrl
+from nexus.actors.payload_creator import WithPresignedUrl
 from nexus.utils.types import NetUid, Port
 from pydantic import ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -61,7 +61,7 @@ class CatMinerSettings(BaseSettings):
         return self
 
 
-MinerInput = WithS3PresignedUrl[SingleCatImageInput]
+MinerInput = WithPresignedUrl[SingleCatImageInput]
 
 
 def _download_image(url: str) -> bytes:
@@ -120,9 +120,9 @@ def make_processor(settings: CatMinerSettings):
         log.info(f"Processing task: image_name={task.input.image_name}")
         source_bytes = _download_image(str(task.input.image_s3_url))
         cat_bytes = _add_cat_to_image(source_bytes, settings=settings)
-        log.info(f"Uploading result to {task.s3_presigned_url}")
+        log.info(f"Uploading result to {task.presigned_url}")
         with httpx.Client(transport=_RETRY_TRANSPORT) as client:
-            client.put(str(task.s3_presigned_url), content=cat_bytes).raise_for_status()
+            client.put(str(task.presigned_url), content=cat_bytes).raise_for_status()
         image_hash = _sha256(cat_bytes)
         log.info(f"Done: hash={image_hash}")
         return MinerResult(image_hash=image_hash)

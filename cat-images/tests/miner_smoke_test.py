@@ -178,7 +178,7 @@ def test_miner_end_to_end(fake_backend: FakeMinerBackend) -> None:
                     image_s3_url=S3Url(f"{fake_backend.base_url}/source"),
                     image_name=ImageName("test.png"),
                 ),
-                s3_presigned_url=f"{fake_backend.base_url}/upload",
+                presigned_url=f"{fake_backend.base_url}/upload",
             ).model_dump(),
         )
         resp = httpx.post(
