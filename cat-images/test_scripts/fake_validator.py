@@ -2,7 +2,7 @@
 Fake validator for testing the facilitator UI.
 
 Accepts raw SingleCatImageInput, sleeps to simulate work,
-and returns a text response (matching RestEntryPoint behavior).
+and returns a legacy `ValidatorResult` payload with `result_image_url`.
 
 Usage:
     uv run test_scripts/fake_validator.py              # default port 9999
@@ -18,7 +18,11 @@ from litestar import Litestar, post
 
 from cat_images.subnet import S3Url, SingleCatImageInput, ValidatorResult
 
-logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelname)-7s %(message)s", datefmt="%H:%M:%S", level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s.%(msecs)03d %(levelname)-7s %(message)s",
+    datefmt="%H:%M:%S",
+    level=logging.INFO,
+)
 log = logging.getLogger("fake-validator")
 
 
