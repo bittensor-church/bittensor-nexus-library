@@ -1,5 +1,6 @@
 import logging
 from threading import Thread
+from traceback import format_exception
 from typing import Any
 
 from nexus.logging_utils import get_logger
@@ -10,6 +11,37 @@ from .context_store import ContextStore
 from .events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
 
 logger: logging.Logger = get_logger(__name__)
+
+MAX_EXCEPTION_DEPTH = 8
+MAX_PAYLOAD_LOG_CHARS = 2000
+
+def _truncate(text: str, max_chars: int = MAX_PAYLOAD_LOG_CHARS) -> str:
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars]}... <truncated {len(text) - max_chars} chars>"
+
+
+def _format_exception_payload(exception: BaseException) -> str:
+    parts: list[str] = []
+    current: BaseException | None = exception
+    depth = 0
+    while current is not None and depth < MAX_EXCEPTION_DEPTH:
+        message = str(current).strip()
+        parts.append(f"{type(current).__name__}: {message}" if message else type(current).__name__)
+        current = current.__cause__ or current.__context__
+        depth += 1
+    if current is not None:
+        parts.append("... (cause chain truncated)")
+    return " <- ".join(parts)
+
+
+def _payload_for_log(payload: Any) -> str:
+    if isinstance(payload, BaseException):
+        return _format_exception_payload(payload)
+    try:
+        return _truncate(repr(payload))
+    except Exception as exc:
+        return f"<unrepresentable payload type={type(payload).__name__}: {exc!r}>"
 
 
 class EventBus:
@@ -59,7 +91,19 @@ class EventBus:
         """
         events_passed_downstream = 0
         for sink in self.connections[event.source]:
-            logger.info(f"Sending event from {event.source.id} to {sink.id} with payload: {event.payload}")
+            logger.info(
+                "Sending event from %s to %s with payload: %s",
+                event.source.id,
+                sink.id,
+                _payload_for_log(event.payload),
+            )
+            if isinstance(event.payload, BaseException) and logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Exception payload traceback for %s -> %s:\n%s",
+                    event.source.id,
+                    sink.id,
+                    "".join(format_exception(type(event.payload), event.payload, event.payload.__traceback__)),
+                )
             self.sinks[sink].pipe_from_bus.put(ReceiveEvent(ctx_id=event.ctx_id, target=sink, payload=event.payload))
             events_passed_downstream += 1
 
