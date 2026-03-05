@@ -13,7 +13,7 @@ from nexus.utils.types import NetUid
 from pydantic import ValidationError
 
 from cat_images.validator import validation_algorithm
-from cat_images.subnet import ImageHash, MinerResult, S3Url, SingleCatImageInput, ValidationResult
+from cat_images.subnet_models import ImageHash, MinerResult, S3Url, SingleCatImageInput, ValidationResult
 from cat_images.validator import CatValidatorSettings, Validator, clear_validator_settings_cache
 
 

@@ -11,7 +11,7 @@ from cat_images.facilitator.models import RegisteredValidator, StatusUpdate
 from cat_images.facilitator.stores import JobStore
 from cat_images.facilitator.submitter import JobSubmitter, SubmissionError
 from cat_images.facilitator.types import JobId, JobLiveness
-from cat_images.subnet import SingleCatImageInput, ValidatorResult
+from cat_images.subnet_models import SingleCatImageInput, ValidatorResult
 
 log = logging.getLogger("facilitator.worker")
 

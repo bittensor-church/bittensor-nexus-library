@@ -6,7 +6,7 @@ import pytest
 from cat_images.facilitator.models import RegisteredValidator
 from cat_images.facilitator.submitter import JobSubmitter
 from cat_images.facilitator.types import ValidatorHotkey
-from cat_images.subnet import ImageHash, S3Url, SingleCatImageInput
+from cat_images.subnet_models import ImageHash, S3Url, SingleCatImageInput
 
 
 class _FakeResponse:

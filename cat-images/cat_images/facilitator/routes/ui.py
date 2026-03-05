@@ -10,7 +10,7 @@ from litestar.exceptions import NotFoundException
 from litestar.response import Response, ServerSentEvent, Template
 
 from cat_images.facilitator.models import CatificationRequest, Job
-from cat_images.subnet import S3Url, SingleCatImageInput
+from cat_images.subnet_models import S3Url, SingleCatImageInput
 from cat_images.facilitator.types import JobId, JobLiveness, ValidatorHotkey
 from cat_images.facilitator.routing import ValidatorRouter
 from cat_images.facilitator.s3 import S3Client

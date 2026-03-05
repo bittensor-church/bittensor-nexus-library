@@ -26,7 +26,7 @@ from nexus.core.runtime.subnet_runtime import SubnetRuntime
 from nexus.nexus_validator import NexusValidator
 from nexus.utils.types import BlockCount
 
-from cat_images.subnet import (
+from cat_images.subnet_models import (
     MinerPayload,
     MinerPayloadModel,
     MinerPublicResult,

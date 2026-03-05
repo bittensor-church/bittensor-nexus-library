@@ -1,4 +1,4 @@
-from cat_images.subnet import ImageHash, S3Url, ValidatorResult
+from cat_images.subnet_models import ImageHash, S3Url, ValidatorResult
 
 
 def test_validator_result_parses_legacy_payload() -> None:

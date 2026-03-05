@@ -3,7 +3,7 @@ import logging
 import httpx
 
 from cat_images.facilitator.models import RegisteredValidator
-from cat_images.subnet import SingleCatImageInput, ValidatorResult
+from cat_images.subnet_models import SingleCatImageInput, ValidatorResult
 
 log = logging.getLogger("facilitator.submitter")
 

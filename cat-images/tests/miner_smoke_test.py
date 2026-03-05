@@ -24,7 +24,7 @@ from nexus.actors.executor_communicator.async_http_protocol import (
 from pydantic import AnyHttpUrl
 
 from cat_images.miner import CatMinerSettings, MinerInput, make_miner_service
-from cat_images.subnet import S3Url, SingleCatImageInput
+from cat_images.subnet_models import S3Url, SingleCatImageInput
 
 # Minimal valid 1x1 PNGs
 SOURCE_PNG = (
