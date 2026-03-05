@@ -62,7 +62,7 @@ Compose environment variables (typically defined in ${DOCKER_DIR}/.env.miner):
     MINER_HOST_PORT              Host published port (default: 9090)
     MINER_PORT                   Miner listen port in container (default: 9090)
 
-  Miner application environment variables (from cat_images/miner.py):
+  Miner application environment variables (from cat_images/miner/miner.py):
   Required:
     MINER_OPENROUTER_API_KEY     OpenRouter API key.
 
