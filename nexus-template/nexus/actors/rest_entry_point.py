@@ -1,37 +1,60 @@
 from __future__ import annotations
 
+import datetime
 import logging
-import queue
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, override
-from urllib.parse import urlparse
+from typing import Any, cast, override
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
+from pydantic_core import to_jsonable_python
+from pylon_client.artanis import Port
 
 from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.context_store import Context, ContextId, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus.core.runtime.context_store import Context, ContextStore
+from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
 from nexus.logging_utils import get_logger
+
+from .executor_communicator.common import NormalizedHttpPath, normalize_http_path
+from .rest_entry_point_runtime import (
+    MAX_EXCEPTION_DEPTH,
+    InMemoryPendingHttpResponseStore,
+    JsonValue,
+    PendingHttpResponse,
+    PendingHttpResponseStore,
+    RestEntryPointRuntime,
+    RestEntryPointRuntimeConfig,
+    RestEntryPointRuntimeDependencies,
+    RestEntryPointRuntimeStartup,
+    build_error_body,
+    exception_to_error_body,
+)
 
 logger: logging.Logger = get_logger(__name__)
 
+DEFAULT_BIND_IP = "0.0.0.0"
 
-DEFAULT_BIND_IP="0.0.0.0"
 
 class RestEntryPoint[Model: BaseModel](Node, ActorBuilder):
     source: Source[Model]
     sink: Sink[Any]
-    path: str
-    port: int
+    path: NormalizedHttpPath
+    port: Port
+    bind_ip: str
     user_data_model: type[Model]
 
-    def __init__(self, *, _id: str, bind_ip: str = DEFAULT_BIND_IP, path: str, port: int, user_data_model: type[Model]) -> None:
+    def __init__(
+        self,
+        *,
+        _id: str,
+        bind_ip: str = DEFAULT_BIND_IP,
+        path: str,
+        port: Port | int,
+        user_data_model: type[Model],
+    ) -> None:
         super().__init__(_id=_id)
-        self.path = path if path.startswith("/") else f"/{path}"
+        self.path = normalize_http_path(path)
         self.bind_ip = bind_ip
-        self.port = port
+        self.port = Port(int(port))
         self.user_data_model = user_data_model
         self.source = Source(f"{self.id}-source")
         self.sink = Sink(f"{self.id}-sink")
@@ -55,12 +78,8 @@ class RestEntryPointActor[Model: BaseModel](Actor):
     def __init__(self, *, spec: RestEntryPoint[Model], pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
         super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.spec = spec
-
-        self._pending_by_ctx_id: dict[ContextId, queue.Queue[str]] = {}
-        self._pending_lock = threading.Lock()
-
-        self._server: ThreadingHTTPServer | None = None
-        self._server_thread: threading.Thread | None = None
+        self._pending_response_store: PendingHttpResponseStore = InMemoryPendingHttpResponseStore()
+        self._runtime: RestEntryPointRuntime[Model] | None = None
 
     @override
     def handlers(self) -> dict[Sink[Any], EventHandler]:
@@ -69,151 +88,70 @@ class RestEntryPointActor[Model: BaseModel](Actor):
         }
 
     @override
-    def run_loop(self) -> threading.Thread:
-        self._ensure_server_started()
-        return super().run_loop()
+    def on_start(self) -> None:
+        super().on_start()
+        if self._runtime is not None:
+            raise RuntimeError(f"RestEntryPoint runtime already started for actor={self.actor_id}.")
+
+        self._runtime = RestEntryPointRuntime.start(
+            config=RestEntryPointRuntimeConfig(
+                entry_point_id=self.spec.id,
+                bind_host=self.spec.bind_ip,
+                bind_port=self.spec.port,
+                path=self.spec.path,
+                user_data_model=self.spec.user_data_model,
+                response_timeout=datetime.timedelta(seconds=self._RESPONSE_TIMEOUT_S),
+            ),
+            dependencies=RestEntryPointRuntimeDependencies(
+                context_store=self.context_store,
+                pipe_to_bus=self._pipe_to_bus,
+                source=self.spec.source,
+                pending_response_store=self._pending_response_store,
+            ),
+            startup=RestEntryPointRuntimeStartup(
+                thread_name=f"RestEntryPointHTTP-{self.spec.id}",
+            ),
+        )
 
     @override
-    def _loop(self) -> None:
-        self._ensure_server_started()
-        try:
-            super()._loop()
-        finally:
-            self._stop_server()
-
-    def _ensure_server_started(self) -> None:
-        if self._server_thread is not None:
-            return
-
-        handler_cls = self._make_http_handler()
-        server = ThreadingHTTPServer((self.spec.bind_ip, self.spec.port), handler_cls)
-        server.daemon_threads = True
-        self._server = server
-
-        t = threading.Thread(
-            target=server.serve_forever,
-            daemon=True,
-            name=f"RestEntryPointHTTP-{self.spec.id}",
-        )
-        t.start()
-        self._server_thread = t
-        bound_port = server.server_address[1]
-        logger.info(f"RestEntryPoint listening on port={bound_port} path={self.spec.path!r}")
-
-    def _stop_server(self) -> None:
-        server = self._server
-        if server is None:
+    def on_stop(self) -> None:
+        super().on_stop()
+        self._pending_response_store.cancel_all()
+        runtime = self._runtime
+        self._runtime = None
+        if runtime is None:
             return
         try:
-            server.shutdown()
+            runtime.stop()
         except Exception as exc:
-            logger.warning("Failed to shutdown RestEntryPoint HTTP server cleanly", exc_info=exc)
-        try:
-            server.server_close()
-        except Exception as exc:
-            logger.warning("Failed to close RestEntryPoint HTTP server cleanly", exc_info=exc)
-        self._server = None
-        self._server_thread = None
+            logger.warning("Failed to stop RestEntryPoint HTTP server cleanly", exc_info=exc)
 
     def _handle_response(self, context: Context, event: ReceiveEvent[Any]) -> MessagesToSend:
-        ctx_id = context.id
-        response = str(event.payload)
-
-        with self._pending_lock:
-            response_queue = self._pending_by_ctx_id.get(ctx_id)
-
-        if response_queue is None:
-            logger.warning(f"No pending HTTP request found for ctx={ctx_id}; dropping response.")
-            return ()
-
-        try:
-            response_queue.put_nowait(response)
-        except queue.Full:
-            logger.warning(f"Multiple responses received for ctx={ctx_id}; dropping subsequent response.")
+        response = self._build_http_response(event.payload)
+        resolved = self._pending_response_store.resolve(context.id, response)
+        if not resolved:
+            logger.warning(
+                "No pending HTTP request found for ctx=%s; dropping late or duplicate response payload=%r.",
+                context.id,
+                event.payload,
+            )
         return ()
 
-    def _make_http_handler(self) -> type[BaseHTTPRequestHandler]:
-        actor = self
-
-        class Handler(BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
-
-            def do_POST(self) -> None:  # noqa: N802 (http.server convention)
-                actor._handle_post(self)
-
-            def do_GET(self) -> None:  # noqa: N802 (http.server convention)
-                actor._send_text(self, status=405, body="Method Not Allowed\n")
-
-            def log_message(self, format: str, *args: Any) -> None:
-                try:
-                    message = format % args
-                except Exception:
-                    message = format
-                logger.info("%s - %s", self.client_address[0], message)
-
-        return Handler
-
-    def _handle_post(self, request: BaseHTTPRequestHandler) -> None:
-        request_path = urlparse(request.path).path
-        if request_path != self.spec.path:
-            self._send_text(request, status=404, body="Not Found\n")
-            return
-
-        content_length_raw = request.headers.get("Content-Length")
-        if content_length_raw is None:
-            self._send_text(request, status=411, body="Content-Length required\n")
-            return
-
+    def _build_http_response(self, payload: Any) -> PendingHttpResponse:
+        if isinstance(payload, BaseException):
+            return PendingHttpResponse(
+                status_code=500,
+                body=exception_to_error_body(payload, max_depth=MAX_EXCEPTION_DEPTH),
+            )
         try:
-            content_length = int(content_length_raw)
-        except ValueError:
-            self._send_text(request, status=400, body="Invalid Content-Length\n")
-            return
-
-        try:
-            body = request.rfile.read(content_length) if content_length > 0 else b""
+            json_payload = cast(JsonValue, to_jsonable_python(payload))
+            return PendingHttpResponse(status_code=200, body=json_payload)
         except Exception as exc:
-            logger.warning("Failed reading HTTP request body", exc_info=exc)
-            self._send_text(request, status=400, body="Failed to read request body\n")
-            return
-
-        try:
-            model = self.spec.user_data_model.model_validate_json(body)
-        except ValidationError as exc:
-            self._send_text(request, status=400, body=f"Invalid request body: {exc}\n")
-            return
-        except Exception as exc:
-            logger.warning("Failed parsing HTTP request body", exc_info=exc)
-            self._send_text(request, status=400, body="Invalid request body\n")
-            return
-
-        with self.context_store.create_context() as context:
-            ctx_id = context.id
-        response_queue: queue.Queue[str] = queue.Queue(maxsize=1)
-
-        with self._pending_lock:
-            self._pending_by_ctx_id[ctx_id] = response_queue
-
-        try:
-            self._pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=self.spec.source, payload=model))
-            try:
-                response = response_queue.get(timeout=self._RESPONSE_TIMEOUT_S)
-            except queue.Empty:
-                self._send_text(request, status=504, body="Gateway Timeout\n")
-                return
-
-            self._send_text(request, status=200, body=response)
-        finally:
-            with self._pending_lock:
-                self._pending_by_ctx_id.pop(ctx_id, None)
-
-    @staticmethod
-    def _send_text(request: BaseHTTPRequestHandler, *, status: int, body: str) -> None:
-        body_bytes = body.encode("utf-8")
-        request.send_response(status)
-        request.send_header("Content-Type", "text/plain; charset=utf-8")
-        request.send_header("Content-Length", str(len(body_bytes)))
-        request.send_header("Connection", "close")
-        request.end_headers()
-        request.wfile.write(body_bytes)
-        request.close_connection = True
+            return PendingHttpResponse(
+                status_code=500,
+                body=build_error_body(
+                    error_type="ResponseSerializationError",
+                    message="Failed to serialize response payload to JSON.",
+                    causes=((type(exc).__name__, str(exc).strip() or type(exc).__name__),),
+                ),
+            )
