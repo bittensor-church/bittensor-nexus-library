@@ -28,5 +28,8 @@ class MinerResult(BaseModel):
     image_hash: ImageHash
 
 
+type MinerPublicResult = WithPresignedUrl[MinerResult]
+
+
 class ValidationResult(BaseModel):
     score: int

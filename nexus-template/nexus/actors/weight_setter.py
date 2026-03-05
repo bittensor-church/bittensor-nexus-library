@@ -39,7 +39,7 @@ class WeightsCalculationBundle:
     """
 
     epoch: Epoch
-    tasks_result_store: TaskResultStore[Any, Any]
+    tasks_result_store: TaskResultStore[Any, Any, Any]
 
 
 class WeightSetterNode(Transform[EpochBeat, WeightSettingSuccess], ActorBuilder):
@@ -57,7 +57,7 @@ class WeightSetterNode(Transform[EpochBeat, WeightSettingSuccess], ActorBuilder)
 
     weighing_func: WeighingFunc
     pylon_client_provider: PylonClientProvider
-    task_result_store_provider: TaskResultStoreProvider[Any, Any]
+    task_result_store_provider: TaskResultStoreProvider[Any, Any, Any]
 
     def __init__(
         self,
@@ -65,7 +65,7 @@ class WeightSetterNode(Transform[EpochBeat, WeightSettingSuccess], ActorBuilder)
         *,
         weighing_func: WeighingFunc,
         pylon_client_provider: PylonClientProvider,
-        task_result_store_provider: TaskResultStoreProvider[Any, Any],
+        task_result_store_provider: TaskResultStoreProvider[Any, Any, Any],
     ) -> None:
         super().__init__(_id)
         self.weighing_func = weighing_func

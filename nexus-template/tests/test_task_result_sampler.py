@@ -14,15 +14,22 @@ from nexus.core.runtime.nexus_task_types import NexusTaskName
 
 type DummyExecutorPayload = str
 type DummyExecutorOutput = int
+type DummyExecutorPublicOutput = str
 
 
 def test_every_task_result_sampler_actor_emits_singleton_batch_for_each_task_result(
     transform_actor_test_setup_factory: TransformActorTestSetupFactory,
 ) -> None:
-    sampler = EveryTaskResultSampler[DummyExecutorPayload, DummyExecutorOutput]("every-task-result-sampler")
+    sampler = EveryTaskResultSampler[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput](
+        "every-task-result-sampler"
+    )
     setup = transform_actor_test_setup_factory(sampler)
 
-    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        DummyExecutorPublicOutput,
+    ]()
     task_result_store = task_result_store_provider.get_task_result_store()
     task_name = NexusTaskName("every-task-result-sampler")
     context_store = empty_context_store()
@@ -36,6 +43,7 @@ def test_every_task_result_sampler_actor_emits_singleton_batch_for_each_task_res
             block_number=100,
             target_hotkey="hotkey-1",
         ),
+        executor_public_output="public-1",
     )
     second_result = store_nexus_task_result(
         context_store=context_store,
@@ -47,6 +55,7 @@ def test_every_task_result_sampler_actor_emits_singleton_batch_for_each_task_res
             block_number=101,
             target_hotkey="hotkey-2",
         ),
+        executor_public_output="public-2",
     )
 
     with setup.running():

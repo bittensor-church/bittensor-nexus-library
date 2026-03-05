@@ -1,6 +1,6 @@
 # pyright: basic
 from contextlib import contextmanager
-from typing import Generator
+from typing import Any, Generator
 
 from pydantic_settings import BaseSettings
 
@@ -14,7 +14,7 @@ from nexus.core.runtime.subnet_runtime import SubnetRuntime, SubnetBuilder
 
 class NexusValidator:
     pylon_client_provider: PylonClientProvider
-    task_result_store_provider: TaskResultStoreProvider
+    task_result_store_provider: TaskResultStoreProvider[Any, Any, Any]
     subnet_clock: BlockBeatNode
 
     nodes: list[Node]

@@ -8,11 +8,14 @@ from nexus.core.runtime.events import PipeToBus
 from nexus.core.runtime.task_result_store import SingleTaskResult
 
 
-class TaskResultSampler[ExecutorPayload, Output](
-    Transform[SingleTaskResult[ExecutorPayload, Output], tuple[SingleTaskResult[ExecutorPayload, Output], ...]]
+class TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+    Transform[
+        SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+        tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
+    ]
 ):
-    task_results: Sink[SingleTaskResult[ExecutorPayload, Output]]
-    sampled_batch: Source[tuple[SingleTaskResult[ExecutorPayload, Output], ...]]
+    task_results: Sink[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
+    sampled_batch: Source[tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]]
 
     def __init__(
         self,
@@ -39,7 +42,9 @@ class TaskResultSampler[ExecutorPayload, Output](
         )
 
 
-class EveryTaskResultSampler[ExecutorPayload, Output](TaskResultSampler[ExecutorPayload, Output], ActorBuilder):
+class EveryTaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+    TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ActorBuilder
+):
     def __init__(
         self,
         _id: str,
@@ -48,23 +53,23 @@ class EveryTaskResultSampler[ExecutorPayload, Output](TaskResultSampler[Executor
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
-        return EveryTaskResultSamplerActor[ExecutorPayload, Output](
+        return EveryTaskResultSamplerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
             spec=self,
             pipe_to_bus=pipe_to_bus,
             context_store=context_store,
         )
 
 
-class EveryTaskResultSamplerActor[ExecutorPayload, Output](
+class EveryTaskResultSamplerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     TransformActor[
-        SingleTaskResult[ExecutorPayload, Output],
-        tuple[SingleTaskResult[ExecutorPayload, Output], ...],
+        SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+        tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
     ]
 ):
     def __init__(
         self,
         *,
-        spec: EveryTaskResultSampler[ExecutorPayload, Output],
+        spec: EveryTaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
         pipe_to_bus: PipeToBus,
         context_store: ContextStore,
     ) -> None:
@@ -74,6 +79,6 @@ class EveryTaskResultSamplerActor[ExecutorPayload, Output](
     def _transform(
         self,
         ctx: Context,
-        payload: SingleTaskResult[ExecutorPayload, Output],
-    ) -> tuple[SingleTaskResult[ExecutorPayload, Output], ...]:
+        payload: SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    ) -> tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
         return (payload,)

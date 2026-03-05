@@ -7,23 +7,30 @@ from nexus.core.runtime.actor_patterns import TransformActor
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import PipeToBus
 from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.task_result_store import SingleTaskResult, StoredTaskExecution, TaskResultStore
+from nexus.core.runtime.task_result_store import (
+    SingleTaskResult,
+    TaskResultStore,
+    TaskResultToPersist,
+)
 from nexus.utils.exceptions import ExecutorFailureException, RetryTaskAfterExecutorFailureException
 
 
-class TaskResultStorer[ExecutorPayload, Output](
-    Transform[StoredTaskExecution[ExecutorPayload, Output], SingleTaskResult[ExecutorPayload, Output]],
+class TaskResultStorer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+    Transform[
+        TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+        SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    ],
     ActorBuilder,
 ):
-    task_result: Source[SingleTaskResult[ExecutorPayload, Output]]
+    task_result: Source[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
     task_name: NexusTaskName
-    task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, Output]
+    task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
 
     def __init__(
         self,
         _id: NodeId,
         name: NexusTaskName,
-        task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, Output],
+        task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
     ) -> None:
         super().__init__(_id)
         self.task_name = name
@@ -51,15 +58,18 @@ class TaskResultStorer[ExecutorPayload, Output](
         return TaskResultStorerActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
-class TaskResultStorerActor[ExecutorPayload, Output](
-    TransformActor[StoredTaskExecution[ExecutorPayload, Output], SingleTaskResult[ExecutorPayload, Output]]
+class TaskResultStorerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+    TransformActor[
+        TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+        SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    ]
 ):
-    store: TaskResultStore[ExecutorPayload, Output]
-    storer_spec: TaskResultStorer[ExecutorPayload, Output]
+    store: TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
+    storer_spec: TaskResultStorer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
 
     def __init__(
         self,
-        spec: TaskResultStorer[ExecutorPayload, Output],
+        spec: TaskResultStorer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
         pipe_to_bus: PipeToBus,
         context_store: ContextStore,
     ) -> None:
@@ -71,10 +81,10 @@ class TaskResultStorerActor[ExecutorPayload, Output](
     def _transform(
         self,
         ctx: Context,
-        payload: StoredTaskExecution[ExecutorPayload, Output],
-    ) -> SingleTaskResult[ExecutorPayload, Output]:
+        payload: TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    ) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
         task_result = self.store.add_task_result(ctx, self.storer_spec.task_name, payload)
-        if isinstance(payload.executor_output.output, ExecutorFailureException):
+        if isinstance(payload.result.executor_output.output, ExecutorFailureException):
             # the executor produced an error result; we saved it, but we also want to retry the task
-            raise RetryTaskAfterExecutorFailureException() from payload.executor_output.output
+            raise RetryTaskAfterExecutorFailureException() from payload.result.executor_output.output
         return task_result

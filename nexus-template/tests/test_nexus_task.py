@@ -75,7 +75,7 @@ class FailingExecutorResultConverterActor(TransformActor[DummyExecutorOutput, st
 def assert_stored_task_result(
     *,
     setup: NexusTaskTestSetup,
-    stored_result: SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput],
+    stored_result: SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput],
     input_payload: DummyTaskInput,
     expected_failure: bool = False,
     block_number: int,
@@ -92,9 +92,11 @@ def assert_stored_task_result(
     # Stored executor output should match expected success output or represent executor failure.
     if expected_failure:
         assert isinstance(processed_result.output, ExecutorFailureException)
+        assert stored_result.executor_public_output is None
     else:
         expected_task_output = setup.executor_communicator.to_executor_output(expected_executor_payload)
         assert processed_result.output == expected_task_output
+        assert stored_result.executor_public_output == expected_task_output
 
     # Routing metadata should target the deterministic dummy neuron configured in test setup.
     assert processed_result.input.target.hotkey == "nexus-task-test-neuron"
@@ -117,7 +119,7 @@ def assert_successful_task_result(
     input_ctx_id: ContextId,
     block_number: int,
     expected_stored_results_for_epoch: int = 1,
-) -> SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]:
+) -> SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]:
     """Validate split outputs and return the matched stored + emitted task result."""
     # Runtime outcome: no terminal retries-exhausted error and one event on each output branch.
     assert len(setup.error_collector.received_events) == 0
@@ -132,7 +134,7 @@ def assert_successful_task_result(
 
     executor_output_event = setup.executor_output_collector.received_events[0]
     assert executor_output_event.ctx_id == input_ctx_id
-    assert executor_output_event.payload == emitted_result.executor_output
+    assert executor_output_event.payload == emitted_result.executor_public_output
 
     # Store lookup is scoped to expected epoch and task identity.
     stored_results = get_stored_results_for_block(
@@ -198,7 +200,11 @@ def test_nexus_task_applies_non_trivial_executor_result_converter() -> None:
         target=build_neuron(uid=1, hotkey="nexus-task-test-neuron", validator_permit=False),
     )
     executor_communicator = DummyExecutorCommunicator("nexus-task-test-communicator")
-    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        str,
+    ]()
     executor_result_converter = PrefixingExecutorResultConverter("nexus-task-test-executor-result-converter")
 
     task = NexusTask[DummyTaskInput, DummyExecutorPayload, DummyExecutorOutput, str](
@@ -212,7 +218,7 @@ def test_nexus_task_applies_non_trivial_executor_result_converter() -> None:
     )
 
     builder = SubnetBuilder(nodes=task.internal_nodes())
-    task_result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]](
+    task_result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, str]](
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
         name="nexus-task-task-result-collector",
@@ -222,7 +228,7 @@ def test_nexus_task_applies_non_trivial_executor_result_converter() -> None:
         context_store=builder.context_store,
         name="nexus-task-executor-output-collector",
     )
-    error_collector = CollectorActor[RetriesExhaustedException](
+    error_collector = CollectorActor[NexusException](
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
         name="nexus-task-error-collector",
@@ -280,6 +286,7 @@ def test_nexus_task_applies_non_trivial_executor_result_converter() -> None:
     expected_output = executor_communicator.to_executor_output(expected_payload)
 
     assert emitted_result.executor_output == expected_output
+    assert emitted_result.executor_public_output == f"public::{expected_output.result_text}"
     assert executor_output_event.payload == f"public::{expected_output.result_text}"
 
     stored_results = get_stored_results_for_block(
@@ -303,7 +310,11 @@ def test_nexus_task_emits_error_when_executor_result_converter_fails_without_ret
         target=build_neuron(uid=1, hotkey="nexus-task-test-neuron", validator_permit=False),
     )
     executor_communicator = DummyExecutorCommunicator("nexus-task-test-communicator")
-    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        str,
+    ]()
     executor_result_converter = FailingExecutorResultConverter("nexus-task-test-failing-executor-result-converter")
 
     task = NexusTask[DummyTaskInput, DummyExecutorPayload, DummyExecutorOutput, str](
@@ -317,7 +328,7 @@ def test_nexus_task_emits_error_when_executor_result_converter_fails_without_ret
     )
 
     builder = SubnetBuilder(nodes=task.internal_nodes())
-    task_result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]](
+    task_result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, str]](
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
         name="nexus-task-task-result-collector",
@@ -369,10 +380,11 @@ def test_nexus_task_emits_error_when_executor_result_converter_fails_without_ret
             )
         )
         wait_until(
-            lambda: len(task_result_collector.received_events) == 1 and len(error_collector.received_events) == 1,
+            lambda: len(error_collector.received_events) == 1,
             timeout=2.0,
         )
 
+    assert len(task_result_collector.received_events) == 0
     assert len(executor_output_collector.received_events) == 0
     assert payload_creator.attempts_by_ctx[input_ctx_id] == 1
     assert executor_communicator.attempts_by_ctx[input_ctx_id] == 1
@@ -387,7 +399,7 @@ def test_nexus_task_emits_error_when_executor_result_converter_fails_without_ret
         task_name=task.name,
         block_number=block_number,
     )
-    assert len(stored_results) == 1
+    assert len(stored_results) == 0
 
 
 def test_nexus_task_waits_for_block_beat_before_emitting_result(

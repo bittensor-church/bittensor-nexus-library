@@ -26,6 +26,7 @@ from nexus.core.runtime.task_result_store import (
     InMemoryTaskResultStore,
     SingleTaskResult,
     StoredTaskExecution,
+    TaskResultToPersist,
     TaskResultStore,
 )
 from nexus.utils.chain import get_epoch_containing_block
@@ -121,26 +122,28 @@ def dummy_block_beat(block_number: BlockNumber | int) -> BlockBeat:
     )
 
 
-class InMemoryTestTaskResultStoreProvider[ExecutorPayload, Output](TaskResultStoreProvider[ExecutorPayload, Output]):
+class InMemoryTestTaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput=ExecutorOutput](
+    TaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
+):
     """TaskResultStoreProvider with isolated in-memory state per test setup."""
 
-    _store: TaskResultStore[ExecutorPayload, Output]
+    _store: TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
 
     def __init__(self) -> None:
-        self._store = InMemoryTaskResultStore[ExecutorPayload, Output]()
+        self._store = InMemoryTaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]()
 
     @override
-    def get_task_result_store(self) -> TaskResultStore[ExecutorPayload, Output]:
+    def get_task_result_store(self) -> TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
         return self._store
 
 
-def get_stored_results_for_block[ExecutorPayload, Output](
+def get_stored_results_for_block[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     *,
-    store: TaskResultStore[ExecutorPayload, Output],
+    store: TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
     task_name: NexusTaskName,
     block_number: int,
     netuid: NetUid = DEFAULT_TEST_NETUID,
-) -> tuple[SingleTaskResult[ExecutorPayload, Output], ...]:
+) -> tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
     epoch = get_epoch_containing_block(BlockNumber(block_number), netuid=netuid)
     return store.get_tasks_for_epoch(task_name, epoch)
 
@@ -179,15 +182,23 @@ def build_nexus_task_result[ExecutorPayload, Output](
     )
 
 
-def store_nexus_task_result[ExecutorPayload, Output](
+def store_nexus_task_result[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     *,
     context_store: ContextStore,
-    task_result_store: TaskResultStore[ExecutorPayload, Output],
+    task_result_store: TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
     task_name: NexusTaskName,
-    result: StoredTaskExecution[ExecutorPayload, Output],
-) -> SingleTaskResult[ExecutorPayload, Output]:
+    result: StoredTaskExecution[ExecutorPayload, ExecutorOutput],
+    executor_public_output: ExecutorPublicOutput | None = None,
+) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
     with context_store.create_context() as ctx:
-        return task_result_store.add_task_result(ctx=ctx, task_name=task_name, result=result)
+        return task_result_store.add_task_result(
+            ctx=ctx,
+            task_name=task_name,
+            result=TaskResultToPersist(
+                result=result,
+                executor_public_output=executor_public_output,
+            ),
+        )
 
 
 class MockPylonClientProvider(PylonClientProvider):
