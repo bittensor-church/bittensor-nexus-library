@@ -28,7 +28,7 @@ log = logging.getLogger("validator")
 
 
 class CatValidatorSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="VALIDATOR_", env_file=".env")
+    model_config = SettingsConfigDict(env_prefix="VALIDATOR_", env_file=".env", extra="ignore")
 
     rest_entry_point_port: Port = DEFAULT_INGRESS_PORT
     miner_callback_port: Port = DEFAULT_MINER_CALLBACK_PORT

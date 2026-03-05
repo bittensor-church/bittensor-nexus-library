@@ -7,7 +7,7 @@ from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskI
 from pydantic import BaseModel, Field, field_validator
 
 from cat_images.subnet import MinerPayload, MinerPublicResult, MinerResult, ValidationResult
-from cat_images.validator_settings import CatValidatorSettings
+from .validator_settings import CatValidatorSettings
 
 log = logging.getLogger("validation-algorithm")
 _RETRY_TRANSPORT = httpx.HTTPTransport(retries=3)

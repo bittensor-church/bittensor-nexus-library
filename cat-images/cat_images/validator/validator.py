@@ -26,9 +26,7 @@ from nexus.core.runtime.subnet_runtime import SubnetRuntime
 from nexus.nexus_validator import NexusValidator
 from nexus.utils.types import BlockCount
 
-from cat_images import validation_algorithm, weighing_algorithm
-
-from .subnet import (
+from cat_images.subnet import (
     MinerPayload,
     MinerPayloadModel,
     MinerPublicResult,
@@ -36,6 +34,7 @@ from .subnet import (
     SingleCatImageInput,
     ValidationResult,
 )
+from . import validation_algorithm, weighing_algorithm
 from .validator_settings import CatValidatorSettings, load_validator_settings
 
 MINING_TASK_NAME = NexusTaskName("add-cat-to-image")

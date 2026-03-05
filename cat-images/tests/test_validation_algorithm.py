@@ -12,10 +12,9 @@ from nexus.core.runtime.nexus_task_types import TaskResultId
 from nexus.utils.types import NetUid
 from pydantic import ValidationError
 
-from cat_images import validation_algorithm
-from cat_images.subnet import ImageHash, ImageName, MinerResult, S3Url, SingleCatImageInput, ValidationResult
-from cat_images.validator import Validator
-from cat_images.validator_settings import CatValidatorSettings, clear_validator_settings_cache
+from cat_images.validator import validation_algorithm
+from cat_images.subnet import ImageHash, MinerResult, S3Url, SingleCatImageInput, ValidationResult
+from cat_images.validator import CatValidatorSettings, Validator, clear_validator_settings_cache
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +34,6 @@ def _build_test_batch() -> BatchedTaskInputOutput[
         task_input=WithPresignedUrl(
             input=SingleCatImageInput(
                 image_s3_url=S3Url("https://example.com/source-1.png"),
-                image_name=ImageName("source-1.png"),
             ),
             presigned_url=S3PresignedUrl("https://example.com/upload-1.png"),
         ),
@@ -50,7 +48,6 @@ def _build_test_batch() -> BatchedTaskInputOutput[
         task_input=WithPresignedUrl(
             input=SingleCatImageInput(
                 image_s3_url=S3Url("https://example.com/source-2.png"),
-                image_name=ImageName("source-2.png"),
             ),
             presigned_url=S3PresignedUrl("https://example.com/upload-2.png"),
         ),
@@ -330,3 +327,18 @@ def test_validator_binds_settings_to_validation_executor() -> None:
     assert executor_func.func is validation_algorithm.validate
     assert executor_func.keywords is not None
     assert executor_func.keywords["settings"] is settings
+
+
+def test_validator_settings_ignore_unrelated_env_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MINER_OPENROUTER_API_KEY", "miner-key")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test-access-key")
+    settings = CatValidatorSettings(
+        netuid=NetUid(278),
+        openrouter_api_key="validator-key",
+        external_ip="127.0.0.1",
+        pylon_service_address="http://127.0.0.1:18000",
+        pylon_open_access_token="token",
+    )
+
+    assert settings.openrouter_api_key == "validator-key"
+    assert settings.pylon_open_access_token == "token"
