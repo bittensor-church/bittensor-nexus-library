@@ -270,9 +270,7 @@ def test_rest_entry_point_returns_504_when_downstream_does_not_respond(
 
     runtime = _build_runtime(
         nodes=(entry, consume_only),
-        flows=(
-            Flow.from_connectable(entry.source).then(consume_only.input),
-        ),
+        flows=(Flow.from_connectable(entry.source).then(consume_only.input),),
     )
     url = _entry_url(entry)
 

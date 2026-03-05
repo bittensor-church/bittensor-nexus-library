@@ -26,8 +26,8 @@ from nexus.core.runtime.task_result_store import (
     InMemoryTaskResultStore,
     SingleTaskResult,
     StoredTaskExecution,
-    TaskResultToPersist,
     TaskResultStore,
+    TaskResultToPersist,
 )
 from nexus.utils.chain import get_epoch_containing_block
 from nexus.utils.exceptions import NexusException
@@ -122,7 +122,7 @@ def dummy_block_beat(block_number: BlockNumber | int) -> BlockBeat:
     )
 
 
-class InMemoryTestTaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput=ExecutorOutput](
+class InMemoryTestTaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput = ExecutorOutput](
     TaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
 ):
     """TaskResultStoreProvider with isolated in-memory state per test setup."""

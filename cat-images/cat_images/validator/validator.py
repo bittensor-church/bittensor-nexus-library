@@ -169,7 +169,7 @@ class Validator(NexusValidator):
 def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARN)
     settings = load_validator_settings()
-    log.info("Validator config:\n%s", settings.model_dump_json(indent=2))
+    # log.info("Validator config:\n%s", settings.model_dump_json(indent=2))
 
     validator = Validator(settings)
     with validator.start_runtime():

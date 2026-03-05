@@ -39,9 +39,9 @@ def test_task_result_splitter_emits_public_output_with_parent_context_and_task_r
     ](NodeId("task-result-splitter"))
     builder = SubnetBuilder(nodes=[splitter], context_store=context_store)
 
-    upstream_source = Source[
-        SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]
-    ]("task-result-upstream")
+    upstream_source = Source[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]](
+        "task-result-upstream"
+    )
     task_result_collector = CollectorActor[
         SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]
     ](
@@ -134,9 +134,9 @@ def test_task_result_splitter_emits_executor_failure_when_public_output_missing(
     ](NodeId("task-result-splitter"))
     builder = SubnetBuilder(nodes=[splitter], context_store=context_store)
 
-    upstream_source = Source[
-        SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]
-    ]("task-result-upstream")
+    upstream_source = Source[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]](
+        "task-result-upstream"
+    )
     task_result_collector = CollectorActor[
         SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]
     ](

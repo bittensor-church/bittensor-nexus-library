@@ -181,7 +181,9 @@ class CallbackHttpServerRuntime[OutputModel: BaseModel]:
                     media_type=MediaType.TEXT,
                 )
             except Exception as exc:
-                logger.exception("Unhandled callback processing error in communicator=%s", communicator_id, exc_info=exc)
+                logger.exception(
+                    "Unhandled callback processing error in communicator=%s", communicator_id, exc_info=exc
+                )
                 return Response(content="Internal callback error\n", status_code=500, media_type=MediaType.TEXT)
 
         return Litestar(route_handlers=[callback])

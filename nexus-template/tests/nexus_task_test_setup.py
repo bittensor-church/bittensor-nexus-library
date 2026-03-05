@@ -245,7 +245,9 @@ class NexusTaskTestSetup:
     executor_communicator: DummyExecutorCommunicator
     task_result_store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]
     runtime: SubnetRuntime
-    task_result_collector: CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]]
+    task_result_collector: CollectorActor[
+        SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]
+    ]
     executor_output_collector: CollectorActor[DummyExecutorOutput | NexusException]
     error_collector: CollectorActor[NexusException]
     input_source: Source[DummyTaskInput]

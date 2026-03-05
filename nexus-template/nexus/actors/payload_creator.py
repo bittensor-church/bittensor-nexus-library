@@ -119,7 +119,9 @@ class PresignedUrlCreatorActor[Input](TransformActor[Input, WithPresignedUrl[Inp
                     HttpMethod="GET",
                 )
             case _:
-                raise ActorMisconfiguredException(f"Unsupported HTTP method for presigned URL: {self.creator_spec.method}")
+                raise ActorMisconfiguredException(
+                    f"Unsupported HTTP method for presigned URL: {self.creator_spec.method}"
+                )
 
         return WithPresignedUrl(
             input=payload,

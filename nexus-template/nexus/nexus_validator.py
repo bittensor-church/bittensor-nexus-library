@@ -1,15 +1,16 @@
 # pyright: basic
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Generator
+from typing import Any
 
 from pydantic_settings import BaseSettings
 
-from nexus.actors import PylonClientProvider, StaticConfigPylonClientProvider, BlockBeatNode
-from nexus.actors.task_result_store_provider import TaskResultStoreProvider, DefaultTaskResultStoreProvider
+from nexus.actors import BlockBeatNode, PylonClientProvider, StaticConfigPylonClientProvider
+from nexus.actors.task_result_store_provider import DefaultTaskResultStoreProvider, TaskResultStoreProvider
 from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import NodeSinks, NodeSources, Source, Sink, SourceName, Node
+from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, Source, SourceName
 from nexus.core.runtime.nexus_task import NexusTask
-from nexus.core.runtime.subnet_runtime import SubnetRuntime, SubnetBuilder
+from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
 
 
 class NexusValidator:
@@ -26,7 +27,8 @@ class NexusValidator:
         map = settings.model_dump()
         self.pylon_client_provider = StaticConfigPylonClientProvider(
             pylon_service_address=map["pylon_service_address"],
-            open_access_token=map["pylon_open_access_token"],)
+            open_access_token=map["pylon_open_access_token"],
+        )
 
         self.task_result_store_provider = DefaultTaskResultStoreProvider()
 
@@ -36,16 +38,13 @@ class NexusValidator:
 
         self.subnet_flow = Flow(
             entry_sinks=NodeSinks(sinks={}),
-            exit_sources=NodeSources(sources={
-                SourceName("internal-subnet-clock"): self.subnet_clock.source
-            }),
+            exit_sources=NodeSources(sources={SourceName("internal-subnet-clock"): self.subnet_clock.source}),
         )
 
     def connect[T](self, source: Source[T], sink: Sink[T]) -> None:
         self.subnet_flow.sources.add(source)
         self.subnet_flow.sinks.add(sink)
         self.subnet_flow.pipes[source].add(sink)
-
 
     def add_nodes(self, *nodes: Node | NexusTask) -> None:
         for node in nodes:
@@ -61,14 +60,7 @@ class NexusValidator:
             self.connect(self.subnet_clock.source, task.block_beat)
             all_nodes.extend(task.internal_nodes())
             task_flows.append(task.internal_flow)
-        return (
-            SubnetBuilder(
-                nodes=all_nodes
-            )
-            .add_flows(self.subnet_flow)
-            .add_flows(*task_flows)
-            .build()
-        )
+        return SubnetBuilder(nodes=all_nodes).add_flows(self.subnet_flow).add_flows(*task_flows).build()
 
     @contextmanager
     def start_runtime(self, shutdown_timeout_seconds: float = 30.0) -> Generator[SubnetRuntime]:

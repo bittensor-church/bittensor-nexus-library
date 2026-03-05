@@ -270,7 +270,8 @@ def test_nexus_task_applies_non_trivial_executor_result_converter() -> None:
             )
         )
         wait_until(
-            lambda: len(task_result_collector.received_events) == 1 and len(executor_output_collector.received_events) == 1,
+            lambda: len(task_result_collector.received_events) == 1
+            and len(executor_output_collector.received_events) == 1,
             timeout=2.0,
         )
 
