@@ -12,7 +12,7 @@ from pylon_client.artanis import NetUid, PylonClient
 from pylon_client.artanis.v1 import GetNeuronsResponse, Neuron
 
 from nexus import get_logger
-from nexus.actors.pylon_client_provider import PylonClientProvider, StaticConfigPylonClientProvider
+from nexus.actors.pylon_client_provider import PylonClientProvider
 from nexus.core.dsl.nodes import (
     NodeSinks,
     NodeSources,
@@ -202,8 +202,10 @@ class NoopPylonClientProvider(PylonClientProvider):
     """
     This shouldn't be needed, but we need to generalize the router to support the noop case smoothly
     """
+
     def get_client(self) -> PylonClient:
         raise NotImplementedError("Pylon client should not be used with NoopRouter")
+
 
 class NoopRouter[Input](NeuronRouter[Input], ActorBuilder):
     """
@@ -211,6 +213,7 @@ class NoopRouter[Input](NeuronRouter[Input], ActorBuilder):
     useful if you want to use an embedded executor which just runs the provided
     code locally.
     """
+
     def __init__(self, _id: str) -> None:
         super().__init__(
             _id,

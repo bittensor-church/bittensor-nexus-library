@@ -28,6 +28,7 @@ class BatchedTaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutp
 
     task_input_outputs: tuple[TaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]
 
+
 class TaskInputOutputCreator[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     PayloadCreator[
         tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],

@@ -176,7 +176,7 @@ def make_axon_updater_service(settings: CatMinerSettings) -> AxonUpdaterService 
 
 def main() -> None:
     settings = _load_settings()
-    log.info("Miner config:\n%s", settings.model_dump_json(indent=2))
+    # log.info("Miner config:\n%s", settings.model_dump_json(indent=2))
     service = make_miner_service(settings)
     updater = make_axon_updater_service(settings)
 

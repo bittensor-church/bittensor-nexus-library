@@ -15,6 +15,7 @@ logger: logging.Logger = get_logger(__name__)
 MAX_EXCEPTION_DEPTH = 8
 MAX_PAYLOAD_LOG_CHARS = 80
 
+
 def _truncate(text: str, max_chars: int = MAX_PAYLOAD_LOG_CHARS) -> str:
     if len(text) <= max_chars:
         return text

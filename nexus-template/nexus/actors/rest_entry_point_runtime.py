@@ -302,7 +302,9 @@ class RestEntryPointRuntime[Model: BaseModel]:
         try:
             content_length = int(content_length_header)
         except ValueError:
-            return 400, build_error_body(error_type="InvalidContentLength", message="Content-Length must be an integer.")
+            return 400, build_error_body(
+                error_type="InvalidContentLength", message="Content-Length must be an integer."
+            )
 
         try:
             body = await request.body()

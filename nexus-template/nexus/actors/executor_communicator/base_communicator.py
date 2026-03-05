@@ -9,7 +9,7 @@ from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.context_store_types import ContextId
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.utils.exceptions import ExecutorFailureException, InternalStateCorruptionException, NexusException
+from nexus.utils.exceptions import ExecutorFailureException, NexusException
 
 
 @dataclass(frozen=True)

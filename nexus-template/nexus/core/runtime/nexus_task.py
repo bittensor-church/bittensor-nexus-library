@@ -1,7 +1,7 @@
 from nexus.actors import ExecutorCommunicator, NeuronRouter, Routed, TimestamperNode
-from nexus.actors.mux import Mux2
 from nexus.actors.chain_beat.block_beat import BlockBeat
 from nexus.actors.executor_communicator import ProcessedInput
+from nexus.actors.mux import Mux2
 from nexus.actors.payload_creator import PayloadCreator
 from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
 from nexus.actors.task_result_preparer import TaskResultPreparer
@@ -15,7 +15,7 @@ from nexus.core.runtime.task_result_store import SingleTaskResult
 from nexus.utils.exceptions import NexusException
 
 
-class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput=ExecutorOutput]:
+class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput = ExecutorOutput]:
     """Reusable task pipeline with split outputs for persisted task results and raw executor outputs."""
 
     name: NexusTaskName
@@ -53,7 +53,8 @@ class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput=Exe
             ExecutorPayload,
             ExecutorOutput,
             ExecutorPublicOutput,
-        ] | None = None,
+        ]
+        | None = None,
     ) -> None:
         self.name = name
         self.timestamper = TimestamperNode[
