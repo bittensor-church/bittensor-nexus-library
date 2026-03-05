@@ -3,6 +3,7 @@
 import datetime
 from collections.abc import Callable
 from ipaddress import IPv4Address
+from typing import cast
 
 import pytest
 from pydantic import BaseModel
@@ -96,6 +97,7 @@ def communicator_factory(
     response_listener: ResponseListener,
 ) -> CommunicatorFactory:
     response_bind, callback_base_url = response_listener
+    callback_bind_ip = cast(IPv4Address, response_bind.host)
 
     def _build(
         *,
@@ -111,7 +113,8 @@ def communicator_factory(
             target_path=target_path,
             send_timeout=send_timeout,
             total_processing_timeout=total_processing_timeout,
-            callback_bind_ip=response_bind,
+            callback_bind_ip=callback_bind_ip,
+            callback_port=response_bind.port,
             callback_path=response_path,
             callback_base_url=callback_url_override or callback_base_url,
             input_model=CommunicatorInput,
