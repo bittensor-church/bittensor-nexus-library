@@ -1,13 +1,9 @@
 import json
 import logging
-from collections.abc import Mapping
 from typing import Any, cast
 
 import httpx
 from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskInputOutput
-from nexus.actors.weight_setter import WeightsCalculationBundle
-from nexus.utils.exceptions import NexusTaskName
-from nexus.utils.types import Hotkey, Weight
 from pydantic import BaseModel, Field, field_validator
 
 from cat_images.subnet import MinerPayload, MinerPublicResult, MinerResult, ValidationResult
@@ -195,11 +191,3 @@ def validate(
             for task_input_output in batch_to_validate.task_input_outputs
         )
     )
-
-
-def weighing_func(
-    mining_task_name: NexusTaskName,
-    validation_task_name: NexusTaskName,
-    task_results_bundle: WeightsCalculationBundle
-) -> Mapping[Hotkey, Weight]:
-    return {}
