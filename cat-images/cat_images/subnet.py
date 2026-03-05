@@ -1,6 +1,6 @@
 from typing import NewType
 
-from nexus.actors.payload_creator import WithS3PresignedUrl
+from nexus.actors.payload_creator import WithPresignedUrl
 from pydantic import BaseModel
 
 S3Url = NewType("S3Url", str)
@@ -20,9 +20,13 @@ class SingleCatImageInput(BaseModel):
     image_name: ImageName
 
 
-type MinerPayload = WithS3PresignedUrl[SingleCatImageInput]
+type MinerPayload = WithPresignedUrl[SingleCatImageInput]
 MinerPayloadModel = MinerPayload.__value__
 
 
 class MinerResult(BaseModel):
     image_hash: ImageHash
+
+
+class ValidationResult(BaseModel):
+    score: int
