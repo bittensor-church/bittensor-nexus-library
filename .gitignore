@@ -143,6 +143,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+cat-images/docker/.env.validator
+cat-images/docker/.env.miner
 
 # Spyder project settings
 .spyderproject
