@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from cat_images.facilitator.types import JobId, JobLiveness, ValidatorHotkey
-from cat_images.subnet import SingleCatImageInput, ValidatorResult
+from cat_images.subnet_models import SingleCatImageInput, ValidatorResult
 
 
 class RegisteredValidator(BaseModel):

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 from cat_images.facilitator.models import Job, RegisteredValidator, StatusUpdate
-from cat_images.subnet import SingleCatImageInput
+from cat_images.subnet_models import SingleCatImageInput
 from cat_images.facilitator.types import JobId, ValidatorHotkey
 
 

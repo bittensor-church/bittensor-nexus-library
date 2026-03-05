@@ -16,7 +16,7 @@ import time
 import uvicorn
 from litestar import Litestar, post
 
-from cat_images.subnet import S3Url, SingleCatImageInput, ValidatorResult
+from cat_images.subnet_models import S3Url, SingleCatImageInput, ValidatorResult
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-7s %(message)s",

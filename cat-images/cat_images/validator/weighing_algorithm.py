@@ -11,7 +11,7 @@ from nexus.actors.weight_setter import WeightsCalculationBundle
 from nexus.utils.exceptions import NexusTaskName
 from nexus.utils.types import Hotkey, Weight
 
-from cat_images.subnet import MinerPayload, ValidationResult
+from cat_images.subnet_models import MinerPayload, ValidationResult
 
 log = logging.getLogger("weighing-algorithm")
 
