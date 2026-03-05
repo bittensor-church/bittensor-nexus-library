@@ -1,12 +1,15 @@
-from typing import Any, override
+from typing import Any, override, Callable
 
-from nexus.core.dsl.nodes import Node, NodeId, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
+from nexus import logging_utils
+from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 from nexus.core.runtime.task_result_store import SingleTaskResult
 from nexus.utils.exceptions import NexusException
 
+
+logger = logging_utils.get_logger(__name__)
 
 class TaskResultSplitter[ExecutorPayload, Output](Node, ActorBuilder):
     """Splits one stored task result into two branches with different context semantics."""
@@ -15,7 +18,7 @@ class TaskResultSplitter[ExecutorPayload, Output](Node, ActorBuilder):
     task_result: Source[SingleTaskResult[ExecutorPayload, Output]]
     executor_output: Source[Output | NexusException]
 
-    def __init__(self, _id: NodeId) -> None:
+    def __init__(self, _id: str) -> None:
         super().__init__(_id)
         self.task_result_input = Sink[SingleTaskResult[ExecutorPayload, Output]](f"{self.id}-task-result-input")
         self.task_result = Source[SingleTaskResult[ExecutorPayload, Output]](f"{self.id}-task-result")
