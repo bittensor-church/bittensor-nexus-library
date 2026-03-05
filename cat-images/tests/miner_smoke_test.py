@@ -24,7 +24,7 @@ from nexus.actors.executor_communicator.async_http_protocol import (
 from pydantic import AnyHttpUrl
 
 from cat_images.miner import CatMinerSettings, MinerInput, make_miner_service
-from cat_images.subnet import ImageName, S3Url, SingleCatImageInput
+from cat_images.subnet import S3Url, SingleCatImageInput
 
 # Minimal valid 1x1 PNGs
 SOURCE_PNG = (
@@ -176,7 +176,6 @@ def test_miner_end_to_end(fake_backend: FakeMinerBackend) -> None:
             input=MinerInput(
                 input=SingleCatImageInput(
                     image_s3_url=S3Url(f"{fake_backend.base_url}/source"),
-                    image_name=ImageName("test.png"),
                 ),
                 presigned_url=f"{fake_backend.base_url}/upload",
             ).model_dump(),
