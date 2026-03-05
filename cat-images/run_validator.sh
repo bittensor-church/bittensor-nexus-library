@@ -67,6 +67,11 @@ Compose environment variables (typically defined in ${DOCKER_DIR}/.env.validator
     VALIDATOR_MINER_CALLBACK_PORT  Validator callback port (default: 9091)
     VALIDATOR_OPENROUTER_URL       OpenRouter endpoint
     VALIDATOR_OPENROUTER_MODEL     OpenRouter model
+    VALIDATOR_VALIDATION_PROMPT    Prompt used for validator-side image scoring
+    VALIDATOR_VALIDATION_OPENROUTER_TIMEOUT_SECONDS
+                                  Timeout for validator OpenRouter call (default: 120.0)
+    VALIDATOR_VALIDATION_OPENROUTER_TEMPERATURE
+                                  Temperature for validator OpenRouter call (default: 0.0)
     VALIDATOR_S3_BUCKET            Bucket used for generated presigned upload URLs
                                    (default: my-cat-images-bucket)
     VALIDATOR_PYLON_SERVICE_ADDRESS Pylon service URL (default: http://pylon:8000)

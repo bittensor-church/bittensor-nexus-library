@@ -1,9 +1,9 @@
 # pyright: basic
 
 import logging
-import sys
 import time
 from datetime import timedelta
+from functools import partial
 from ipaddress import IPv4Address
 
 from nexus.actors import (
@@ -15,7 +15,7 @@ from nexus.actors import (
 )
 from nexus.actors.executor_communicator.embedded_executor_communicator import EmbeddedExecutorCommunicator
 from nexus.actors.neuron_router import NoopRouter
-from nexus.actors.payload_creator import NoopPayloadCreator, PresignedUrlCreator, WithPresignedUrl
+from nexus.actors.payload_creator import NoopPayloadCreator, PresignedUrlCreator
 from nexus.actors.retry_strategy import RetryStrategy
 from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskInputOutputCreator
 from nexus.actors.task_result_sampler import EveryTaskResultSampler, TaskResultSampler
@@ -24,9 +24,7 @@ from nexus.core.runtime.nexus_task import NexusTask, SingleTaskResult
 from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.core.runtime.subnet_runtime import SubnetRuntime
 from nexus.nexus_validator import NexusValidator
-from nexus.utils.types import BlockCount, NetUid, Port
-from pydantic import ValidationError
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from nexus.utils.types import BlockCount
 
 from cat_images import validation_algorithm
 
@@ -38,38 +36,15 @@ from .subnet import (
     SingleCatImageInput,
     ValidationResult,
 )
+from .validator_settings import CatValidatorSettings, load_validator_settings
 
 MINING_TASK_NAME = NexusTaskName("add-cat-to-image")
 VALIDATION_TASK_NAME = NexusTaskName("validation-task")
-NETUID = NetUid(1)
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-7s %(message)s", datefmt="%H:%M:%S", level=logging.INFO
 )
 log = logging.getLogger("validator")
-
-DEFAULT_OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_OPENROUTER_MODEL = "google/gemini-2.5-flash-image"
-DEFAULT_S3_BUCKET = "my-cat-images-bucket"
-DEFAULT_INGRESS_PORT = Port(8081)
-DEFAULT_MINER_CALLBACK_PORT = Port(9091)
-
-
-class CatValidatorSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="VALIDATOR_", env_file=".env")
-
-    rest_entry_point_port: Port = DEFAULT_INGRESS_PORT
-    miner_callback_port: Port = DEFAULT_MINER_CALLBACK_PORT
-
-    openrouter_url: str = DEFAULT_OPENROUTER_URL
-    openrouter_model: str = DEFAULT_OPENROUTER_MODEL
-
-    netuid: NetUid
-    openrouter_api_key: str
-    external_ip: str
-    pylon_service_address: str
-    pylon_open_access_token: str
-    s3_bucket: str = DEFAULT_S3_BUCKET
 
 
 class Validator(NexusValidator):
@@ -77,8 +52,8 @@ class Validator(NexusValidator):
     # they are also a perfect source of knowledge for an LLM
     entry: RestEntryPoint[SingleCatImageInput]
 
-    mining_task: NexusTask[SingleCatImageInput, MinerPayload, MinerResult, WithPresignedUrl[MinerResult]]
-    miner_result_sampler: TaskResultSampler[MinerPayload, MinerResult, WithPresignedUrl[MinerResult]]
+    mining_task: NexusTask[SingleCatImageInput, MinerPayload, MinerResult, MinerPublicResult]
+    miner_result_sampler: TaskResultSampler[MinerPayload, MinerResult, MinerPublicResult]
     validation_task: NexusTask[
         tuple[SingleTaskResult[MinerPayload, MinerResult, MinerPublicResult], ...],
         BatchedTaskInputOutput[MinerPayload, MinerResult, MinerPublicResult],
@@ -126,8 +101,10 @@ class Validator(NexusValidator):
                 "create-get-url-for-miner-image",
                 method="GET",
                 load_s3_key="miner-upload-url",
-                bucket=settings.s3_bucket),
-            task_result_store_provider=self.task_result_store_provider,  # this should go once we set up dependency injection
+                bucket=settings.s3_bucket,
+            ),
+            # this should go once we set up dependency injection
+            task_result_store_provider=self.task_result_store_provider,
         )
 
         self.miner_result_sampler = EveryTaskResultSampler("miner-result-sampler")
@@ -141,10 +118,14 @@ class Validator(NexusValidator):
                 "validator-communicator",
                 input_model=BatchedTaskInputOutput[MinerPayload, MinerResult, MinerPublicResult],
                 output_model=BatchedTaskInputOutput[MinerPayload, ValidationResult, ValidationResult],
-                executor_func=validation_algorithm.validate,
+                executor_func=partial(
+                    validation_algorithm.validate,
+                    settings=settings,
+                ),
             ),
             executor_result_converter=NoopPayloadCreator("validation-result-converter"),
-            task_result_store_provider=self.task_result_store_provider,  # this should go once we set up dependency injection
+            # this should go once we set up dependency injection
+            task_result_store_provider=self.task_result_store_provider,
         )
 
         self.epoch_beat = EpochBeatNode(
@@ -157,7 +138,8 @@ class Validator(NexusValidator):
         self.weight_setter = WeightSetterNode(
             "cat-images-weight-setter",
             pylon_client_provider=self.pylon_client_provider,  # this should go once we set up dependency injection
-            task_result_store_provider=self.task_result_store_provider,  # this should go once we set up dependency injection
+            # this should go once we set up dependency injection
+            task_result_store_provider=self.task_result_store_provider,
             weighing_func=lambda task_results_bundle: validation_algorithm.weighing_func(
                 MINING_TASK_NAME, VALIDATION_TASK_NAME, task_results_bundle
             ),
@@ -185,19 +167,9 @@ class Validator(NexusValidator):
         self.connect(self.epoch_beat.source, self.weight_setter.sink)
 
 
-def _load_settings() -> CatValidatorSettings:
-    try:
-        return CatValidatorSettings()  # type: ignore[call-arg]
-    except ValidationError as e:
-        fields = ", ".join(str(err["loc"][-1]) for err in e.errors() if err.get("loc"))
-        log.error(f"Configuration error: missing or invalid fields: {fields}")
-        log.error("Check your .env file or environment variables.")
-        sys.exit(1)
-
-
 def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARN)
-    settings = _load_settings()
+    settings = load_validator_settings()
 
     validator = Validator(settings)
     with validator.start_runtime():
