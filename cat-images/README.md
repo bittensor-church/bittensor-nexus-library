@@ -20,6 +20,12 @@ Starts the validator on port 8081 at `/cat-images`. Accepts POST requests with:
 {"image_s3_url": "https://...", "image_name": "photo.png"}
 ```
 
+Returns JSON:
+
+```json
+{"image_hash":"<sha256-like-hash>"}
+```
+
 ## Miner
 
 ### Configuration

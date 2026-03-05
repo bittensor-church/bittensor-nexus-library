@@ -134,8 +134,8 @@ Note: the request field is still named `image_s3_url` for backward compatibility
 
 Expected response shape:
 
-```text
-image_hash='<sha256-like-hash>'
+```json
+{"image_hash":"<sha256-like-hash>"}
 ```
 
 ## 7) Observe logs
