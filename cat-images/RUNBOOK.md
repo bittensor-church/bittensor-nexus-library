@@ -5,7 +5,7 @@ This guide runs the full local flow:
 1. validator + pylon (compose)
 2. miner (compose, same Docker network)
 3. request to `POST /cat-images`
-4. validator returns `image_hash`
+4. validator returns `input.image_hash` and `presigned_url`
 
 All secrets are passed as command-prefixed environment variables, not stored in env files.
 
@@ -135,7 +135,12 @@ Note: the request field is still named `image_s3_url` for backward compatibility
 Expected response shape:
 
 ```json
-{"image_hash":"<sha256-like-hash>"}
+{
+  "input": {
+    "image_hash": "<sha256-like-hash>"
+  },
+  "presigned_url": "https://<bucket>.s3.amazonaws.com/<key>?<query>"
+}
 ```
 
 ## 7) Observe logs
