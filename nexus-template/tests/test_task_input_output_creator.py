@@ -55,12 +55,12 @@ def test_task_input_output_creator_transforms_batch_into_task_result_id_input_an
     result_event = setup.processed_collector.received_events[0]
     assert result_event.ctx_id == ctx_id
     assert result_event.payload == (
-        TaskInputOutput[DummyExecutorPayload, DummyExecutorOutput](
+        TaskInputOutput(
             task_result_id=single_task_result_1.id,
             task_input="task-input-1",
             task_output=7,
         ),
-        TaskInputOutput[DummyExecutorPayload, DummyExecutorOutput](
+        TaskInputOutput(
             task_result_id=single_task_result_2.id,
             task_input="task-input-2",
             task_output=9,

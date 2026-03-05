@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import override
 
+from pydantic import BaseModel
+
 from nexus.actors.payload_creator import PayloadCreator
 from nexus.core.runtime.actor import Actor, ActorBuilder
 from nexus.core.runtime.actor_patterns import TransformActor
@@ -20,10 +22,15 @@ class TaskInputOutput[ExecutorPayload, Output]:
     task_output: Output
 
 
+class BatchedTaskInputOutput[ExecutorPayload, Output](BaseModel):
+    """A batch of task input/output tuples."""
+
+    task_input_outputs: tuple[TaskInputOutput[ExecutorPayload, Output], ...]
+
 class TaskInputOutputCreator[ExecutorPayload, Output](
     PayloadCreator[
         tuple[SingleTaskResult[ExecutorPayload, Output], ...],
-        tuple[TaskInputOutput[ExecutorPayload, Output], ...],
+        BatchedTaskInputOutput[ExecutorPayload, Output],
     ],
     ActorBuilder,
 ):
@@ -44,7 +51,7 @@ class TaskInputOutputCreator[ExecutorPayload, Output](
 class TaskInputOutputCreatorActor[ExecutorPayload, Output](
     TransformActor[
         tuple[SingleTaskResult[ExecutorPayload, Output], ...],
-        tuple[TaskInputOutput[ExecutorPayload, Output], ...],
+        BatchedTaskInputOutput[ExecutorPayload, Output],
     ]
 ):
     """Actor for transforming task result batches into executor input/output payloads."""
@@ -63,7 +70,7 @@ class TaskInputOutputCreatorActor[ExecutorPayload, Output](
         self,
         ctx: Context,
         payload: tuple[SingleTaskResult[ExecutorPayload, Output], ...],
-    ) -> tuple[TaskInputOutput[ExecutorPayload, Output], ...]:
+    ) -> BatchedTaskInputOutput[ExecutorPayload, Output]:
         transformed: list[TaskInputOutput[ExecutorPayload, Output]] = []
         for task_result in payload:
             task_output = task_result.executor_output
@@ -72,10 +79,10 @@ class TaskInputOutputCreatorActor[ExecutorPayload, Output](
                     "failed task results should have been filtered out before reaching TaskInputOutputCreatorActor"
                 )
             transformed.append(
-                TaskInputOutput[ExecutorPayload, Output](
+                TaskInputOutput(
                     task_result_id=task_result.id,
                     task_input=task_result.executor_payload,
                     task_output=task_output,
                 )
             )
-        return tuple(transformed)
+        return BatchedTaskInputOutput(task_input_outputs=tuple(transformed))

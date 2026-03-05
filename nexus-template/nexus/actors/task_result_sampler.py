@@ -56,7 +56,10 @@ class EveryTaskResultSampler[ExecutorPayload, Output](TaskResultSampler[Executor
 
 
 class EveryTaskResultSamplerActor[ExecutorPayload, Output](
-    TransformActor[SingleTaskResult[ExecutorPayload, Output], tuple[SingleTaskResult[ExecutorPayload, Output], ...]]
+    TransformActor[
+        SingleTaskResult[ExecutorPayload, Output],
+        tuple[SingleTaskResult[ExecutorPayload, Output], ...],
+    ]
 ):
     def __init__(
         self,

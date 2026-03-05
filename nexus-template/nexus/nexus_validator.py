@@ -5,6 +5,7 @@ from typing import Generator
 from pydantic_settings import BaseSettings
 
 from nexus.actors import PylonClientProvider, StaticConfigPylonClientProvider, BlockBeatNode
+from nexus.actors.task_result_store_provider import TaskResultStoreProvider, DefaultTaskResultStoreProvider
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import NodeSinks, NodeSources, Source, Sink, SourceName, Node
 from nexus.core.runtime.nexus_task import NexusTask
@@ -13,6 +14,7 @@ from nexus.core.runtime.subnet_runtime import SubnetRuntime, SubnetBuilder
 
 class NexusValidator:
     pylon_client_provider: PylonClientProvider
+    task_result_store_provider: TaskResultStoreProvider
     subnet_clock: BlockBeatNode
 
     nodes: list[Node]
@@ -25,6 +27,8 @@ class NexusValidator:
         self.pylon_client_provider = StaticConfigPylonClientProvider(
             pylon_service_address=map["pylon_service_address"],
             open_access_token=map["pylon_open_access_token"],)
+
+        self.task_result_store_provider = DefaultTaskResultStoreProvider()
 
         self.subnet_clock = BlockBeatNode("internal-subnet-clock", pylon_client_provider=self.pylon_client_provider)
         self.nodes = [self.subnet_clock]

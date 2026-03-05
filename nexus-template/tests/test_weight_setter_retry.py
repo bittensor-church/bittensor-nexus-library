@@ -58,7 +58,7 @@ def _build_and_run(weighing_func: WeighingFunc, pylon_client: SyncPylonClientLik
         "weight-setter",
         weighing_func=weighing_func,
         pylon_client_provider=provider,
-        tasks_result_store_provider=InMemoryTestTaskResultStoreProvider[Any, Any](),
+        task_result_store_provider=InMemoryTestTaskResultStoreProvider[Any, Any](),
     )
 
     builder = SubnetBuilder(nodes=[retry, weight_setter])
