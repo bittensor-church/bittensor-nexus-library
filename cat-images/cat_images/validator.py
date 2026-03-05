@@ -26,7 +26,7 @@ from nexus.core.runtime.subnet_runtime import SubnetRuntime
 from nexus.nexus_validator import NexusValidator
 from nexus.utils.types import BlockCount
 
-from cat_images import validation_algorithm
+from cat_images import validation_algorithm, weighing_algorithm
 
 from .subnet import (
     MinerPayload,
@@ -140,7 +140,7 @@ class Validator(NexusValidator):
             pylon_client_provider=self.pylon_client_provider,  # this should go once we set up dependency injection
             # this should go once we set up dependency injection
             task_result_store_provider=self.task_result_store_provider,
-            weighing_func=lambda task_results_bundle: validation_algorithm.weighing_func(
+            weighing_func=lambda task_results_bundle: weighing_algorithm.weighing_func(
                 MINING_TASK_NAME, VALIDATION_TASK_NAME, task_results_bundle
             ),
         )
