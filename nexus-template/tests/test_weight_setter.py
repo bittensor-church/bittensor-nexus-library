@@ -99,7 +99,7 @@ def _build_and_run(
         "test-weight-setter",
         weighing_func=weighing_func,
         pylon_client_provider=provider,
-        tasks_result_store_provider=task_result_store_provider,
+        task_result_store_provider=task_result_store_provider,
     )
 
     builder = SubnetBuilder(nodes=[node])

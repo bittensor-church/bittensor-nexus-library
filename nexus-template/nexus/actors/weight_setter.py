@@ -65,12 +65,12 @@ class WeightSetterNode(Transform[EpochBeat, WeightSettingSuccess], ActorBuilder)
         *,
         weighing_func: WeighingFunc,
         pylon_client_provider: PylonClientProvider,
-        tasks_result_store_provider: TaskResultStoreProvider[Any, Any],
+        task_result_store_provider: TaskResultStoreProvider[Any, Any],
     ) -> None:
         super().__init__(_id)
         self.weighing_func = weighing_func
         self.pylon_client_provider = pylon_client_provider
-        self.task_result_store_provider = tasks_result_store_provider
+        self.task_result_store_provider = task_result_store_provider
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> WeightSetterActor:
