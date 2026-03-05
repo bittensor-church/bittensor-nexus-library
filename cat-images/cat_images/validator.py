@@ -30,7 +30,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from cat_images import validation_algorithm
 
-from .subnet import MinerPayload, MinerPayloadModel, MinerResult, SingleCatImageInput, ValidationResult
+from .subnet import (
+    MinerPayload,
+    MinerPayloadModel,
+    MinerPublicResult,
+    MinerResult,
+    SingleCatImageInput,
+    ValidationResult,
+)
 
 MINING_TASK_NAME = NexusTaskName("add-cat-to-image")
 VALIDATION_TASK_NAME = NexusTaskName("validation-task")
@@ -71,11 +78,11 @@ class Validator(NexusValidator):
     entry: RestEntryPoint[SingleCatImageInput]
 
     mining_task: NexusTask[SingleCatImageInput, MinerPayload, MinerResult, WithPresignedUrl[MinerResult]]
-    miner_result_sampler: TaskResultSampler[MinerPayload, MinerResult]
+    miner_result_sampler: TaskResultSampler[MinerPayload, MinerResult, WithPresignedUrl[MinerResult]]
     validation_task: NexusTask[
-        tuple[SingleTaskResult[MinerPayload, MinerResult], ...],
-        BatchedTaskInputOutput[MinerPayload, MinerResult],
-        BatchedTaskInputOutput[MinerPayload, ValidationResult],
+        tuple[SingleTaskResult[MinerPayload, MinerResult, MinerPublicResult], ...],
+        BatchedTaskInputOutput[MinerPayload, MinerResult, MinerPublicResult],
+        BatchedTaskInputOutput[MinerPayload, ValidationResult, ValidationResult],
     ]
 
     epoch_beat: EpochBeatNode
@@ -132,8 +139,8 @@ class Validator(NexusValidator):
             router=NoopRouter("validation-router"),
             executor_communicator=EmbeddedExecutorCommunicator(
                 "validator-communicator",
-                input_model=BatchedTaskInputOutput[MinerPayload, MinerResult],
-                output_model=BatchedTaskInputOutput[MinerPayload, ValidationResult],
+                input_model=BatchedTaskInputOutput[MinerPayload, MinerResult, MinerPublicResult],
+                output_model=BatchedTaskInputOutput[MinerPayload, ValidationResult, ValidationResult],
                 executor_func=validation_algorithm.validate,
             ),
             executor_result_converter=NoopPayloadCreator("validation-result-converter"),

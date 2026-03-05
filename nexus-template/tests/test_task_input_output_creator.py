@@ -5,22 +5,31 @@ from typing import cast
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import InMemoryTestTaskResultStoreProvider, build_nexus_task_result, store_nexus_task_result, wait_until
 
-from nexus.actors.task_input_output_creator import TaskInputOutput, TaskInputOutputCreator
+from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskInputOutput, TaskInputOutputCreator
 from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.utils.exceptions import ExecutorFailureException, InternalFrameworkException, NexusException
 
 type DummyExecutorPayload = str
 type DummyExecutorOutput = int
+type DummyExecutorPublicOutput = str
 
 
 def test_task_input_output_creator_transforms_batch_into_task_result_id_input_and_output(
     transform_actor_test_setup_factory: TransformActorTestSetupFactory,
 ) -> None:
-    creator = TaskInputOutputCreator[DummyExecutorPayload, DummyExecutorOutput]("task-input-output-creator")
+    creator = TaskInputOutputCreator[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        DummyExecutorPublicOutput,
+    ]("task-input-output-creator")
     setup = transform_actor_test_setup_factory(creator)
     task_name = NexusTaskName("task-input-output-creator")
 
-    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        DummyExecutorPublicOutput,
+    ]()
     task_result_store = task_result_store_provider.get_task_result_store()
 
     single_task_result_1 = store_nexus_task_result(
@@ -33,6 +42,7 @@ def test_task_input_output_creator_transforms_batch_into_task_result_id_input_an
             block_number=123,
             target_hotkey="task-input-output-creator-neuron-1",
         ),
+        executor_public_output="public-output-1",
     )
     single_task_result_2 = store_nexus_task_result(
         context_store=setup.runtime.context_store,
@@ -44,6 +54,7 @@ def test_task_input_output_creator_transforms_batch_into_task_result_id_input_an
             block_number=123,
             target_hotkey="task-input-output-creator-neuron-2",
         ),
+        executor_public_output="public-output-2",
     )
     sampled_batch = (single_task_result_1, single_task_result_2)
 
@@ -54,27 +65,39 @@ def test_task_input_output_creator_transforms_batch_into_task_result_id_input_an
     assert len(setup.error_collector.received_events) == 0
     result_event = setup.processed_collector.received_events[0]
     assert result_event.ctx_id == ctx_id
-    assert result_event.payload == (
-        TaskInputOutput(
-            task_result_id=single_task_result_1.id,
-            task_input="task-input-1",
-            task_output=7,
-        ),
-        TaskInputOutput(
-            task_result_id=single_task_result_2.id,
-            task_input="task-input-2",
-            task_output=9,
-        ),
+    assert result_event.payload == BatchedTaskInputOutput(
+        task_input_outputs=(
+            TaskInputOutput(
+                task_result_id=single_task_result_1.id,
+                task_input="task-input-1",
+                task_output=7,
+                task_public_output="public-output-1",
+            ),
+            TaskInputOutput(
+                task_result_id=single_task_result_2.id,
+                task_input="task-input-2",
+                task_output=9,
+                task_public_output="public-output-2",
+            ),
+        )
     )
 
 
 def test_task_input_output_creator_emits_error_for_failed_task_result(
     transform_actor_test_setup_factory: TransformActorTestSetupFactory,
 ) -> None:
-    creator = TaskInputOutputCreator[DummyExecutorPayload, DummyExecutorOutput]("task-input-output-creator")
+    creator = TaskInputOutputCreator[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        DummyExecutorPublicOutput,
+    ]("task-input-output-creator")
     setup = transform_actor_test_setup_factory(creator)
     task_name = NexusTaskName("task-input-output-creator")
-    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        DummyExecutorPublicOutput,
+    ]()
     task_result_store = task_result_store_provider.get_task_result_store()
     failed_output = cast(
         DummyExecutorOutput | NexusException,
@@ -101,3 +124,42 @@ def test_task_input_output_creator_emits_error_for_failed_task_result(
     assert error_event.ctx_id == ctx_id
     assert isinstance(error_event.payload, InternalFrameworkException)
     assert "failed task results should have been filtered out" in str(error_event.payload)
+
+
+def test_task_input_output_creator_emits_error_for_missing_public_output(
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    creator = TaskInputOutputCreator[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        DummyExecutorPublicOutput,
+    ]("task-input-output-creator")
+    setup = transform_actor_test_setup_factory(creator)
+    task_name = NexusTaskName("task-input-output-creator")
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        DummyExecutorPublicOutput,
+    ]()
+    task_result_store = task_result_store_provider.get_task_result_store()
+    task_result_without_public_output = store_nexus_task_result(
+        context_store=setup.runtime.context_store,
+        task_result_store=task_result_store,
+        task_name=task_name,
+        result=build_nexus_task_result(
+            executor_payload="task-input",
+            output=7,
+            block_number=123,
+            target_hotkey="task-input-output-creator-neuron",
+        ),
+    )
+
+    with setup.running():
+        ctx_id = setup.send(input_payload=(task_result_without_public_output,))
+        wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+
+    assert len(setup.processed_collector.received_events) == 0
+    error_event = setup.error_collector.received_events[0]
+    assert error_event.ctx_id == ctx_id
+    assert isinstance(error_event.payload, InternalFrameworkException)
+    assert "executor_public_output" in str(error_event.payload)

@@ -243,9 +243,9 @@ class NexusTaskTestSetup:
     task: NexusTask[DummyTaskInput, DummyExecutorPayload, DummyExecutorOutput]
     payload_creator: DummyPayloadCreator
     executor_communicator: DummyExecutorCommunicator
-    task_result_store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput]
+    task_result_store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]
     runtime: SubnetRuntime
-    task_result_collector: CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]]
+    task_result_collector: CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]]
     executor_output_collector: CollectorActor[DummyExecutorOutput | NexusException]
     error_collector: CollectorActor[NexusException]
     input_source: Source[DummyTaskInput]
@@ -319,7 +319,11 @@ def build_nexus_task_test_setup(
 ) -> NexusTaskTestSetup:
     """Construct a full NexusTask runtime using local, deterministic test actors."""
 
-    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[
+        DummyExecutorPayload,
+        DummyExecutorOutput,
+        DummyExecutorOutput,
+    ]()
     resolved_retry = retry or RetryStrategy[DummyTaskInput](
         "nexus-task-test-retry",
         max_attempts=3,
@@ -343,7 +347,9 @@ def build_nexus_task_test_setup(
     )
 
     builder = SubnetBuilder(nodes=task.internal_nodes())
-    task_result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]](
+    task_result_collector = CollectorActor[
+        SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]
+    ](
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
         name="nexus-task-task-result-collector",

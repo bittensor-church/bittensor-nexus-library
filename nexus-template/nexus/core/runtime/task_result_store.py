@@ -22,9 +22,16 @@ type StoredTaskExecution[ExecutorPayload, Output] = Timestamped[ProcessedInput[R
 
 
 @dataclass(frozen=True)
-class SingleTaskResult[ExecutorPayload, Output]:
+class TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+    result: StoredTaskExecution[ExecutorPayload, ExecutorOutput]
+    executor_public_output: ExecutorPublicOutput | None
+
+
+@dataclass(frozen=True)
+class SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
     id: TaskResultId
-    result: StoredTaskExecution[ExecutorPayload, Output]
+    result: StoredTaskExecution[ExecutorPayload, ExecutorOutput]
+    executor_public_output: ExecutorPublicOutput | None
 
     @property
     def processing_started(self) -> datetime:
@@ -43,7 +50,7 @@ class SingleTaskResult[ExecutorPayload, Output]:
         return self.result.executor_output.input.input
 
     @property
-    def executor_output(self) -> Output | NexusException:
+    def executor_output(self) -> ExecutorOutput | NexusException:
         return self.result.executor_output.output
 
     @property
@@ -55,7 +62,7 @@ class SingleTaskResult[ExecutorPayload, Output]:
         return self.result.executor_output.input.target
 
 
-class TaskResultStore[ExecutorPayload, Output](ABC):
+class TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](ABC):
     """Interface for storing and querying NexusTask results.
 
     Implementations must be thread-safe.
@@ -66,8 +73,8 @@ class TaskResultStore[ExecutorPayload, Output](ABC):
         self,
         ctx: Context,
         task_name: NexusTaskName,
-        result: StoredTaskExecution[ExecutorPayload, Output],
-    ) -> SingleTaskResult[ExecutorPayload, Output]:
+        result: TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    ) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
         """
         Appends a new task result to the store, makes a relevant log entry in the Context,
         and returns the stored result.
@@ -79,7 +86,7 @@ class TaskResultStore[ExecutorPayload, Output](ABC):
         self,
         task_name: NexusTaskName,
         task_result_id: TaskResultId,
-    ) -> SingleTaskResult[ExecutorPayload, Output]:
+    ) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
         """Retrieves one task result for a given task name and task-result id.
 
         Raises:
@@ -92,7 +99,7 @@ class TaskResultStore[ExecutorPayload, Output](ABC):
         self,
         task_name: NexusTaskName,
         epoch: Epoch,
-    ) -> tuple[SingleTaskResult[ExecutorPayload, Output], ...]:
+    ) -> tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
         """
         Retrieves all task results for a given task name and epoch.
          - The results should be returned in chronological order by block number (oldest first).
@@ -123,9 +130,14 @@ class TaskResultStore[ExecutorPayload, Output](ABC):
             )
 
 
-class InMemoryTaskResultStore[ExecutorPayload, Output](TaskResultStore[ExecutorPayload, Output]):
-    store: dict[NexusTaskName, list[SingleTaskResult[ExecutorPayload, Output]]]
-    by_id: dict[NexusTaskName, dict[TaskResultId, SingleTaskResult[ExecutorPayload, Output]]]
+class InMemoryTaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+    TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
+):
+    store: dict[NexusTaskName, list[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]]
+    by_id: dict[
+        NexusTaskName,
+        dict[TaskResultId, SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]],
+    ]
     lock: threading.Lock
 
     def __init__(self) -> None:
@@ -138,16 +150,22 @@ class InMemoryTaskResultStore[ExecutorPayload, Output](TaskResultStore[ExecutorP
         self,
         ctx: Context,
         task_name: NexusTaskName,
-        result: StoredTaskExecution[ExecutorPayload, Output],
-    ) -> SingleTaskResult[ExecutorPayload, Output]:
-        entry = SingleTaskResult[ExecutorPayload, Output](id=TaskResultId(uuid.uuid7()), result=result)
+        result: TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    ) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+        entry = SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+            id=TaskResultId(uuid.uuid7()),
+            result=result.result,
+            executor_public_output=result.executor_public_output,
+        )
         with self.lock:
             if task_name not in self.store:
                 self.store[task_name] = []
                 self.by_id[task_name] = {}
             self.store[task_name].append(entry)
             self.by_id[task_name][entry.id] = entry
-            ctx.append_user_note(f"Added task result for {task_name} at block {result.block_at_finish.block_number}")
+            ctx.append_user_note(
+                f"Added task result for {task_name} at block {result.result.block_at_finish.block_number}"
+            )
             return entry
 
     @override
@@ -155,7 +173,7 @@ class InMemoryTaskResultStore[ExecutorPayload, Output](TaskResultStore[ExecutorP
         self,
         task_name: NexusTaskName,
         task_result_id: TaskResultId,
-    ) -> SingleTaskResult[ExecutorPayload, Output]:
+    ) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
         with self.lock:
             task_results = self.by_id.get(task_name)
             if task_results is None or task_result_id not in task_results:
@@ -167,7 +185,7 @@ class InMemoryTaskResultStore[ExecutorPayload, Output](TaskResultStore[ExecutorP
         self,
         task_name: NexusTaskName,
         epoch: Epoch,
-    ) -> tuple[SingleTaskResult[ExecutorPayload, Output], ...]:
+    ) -> tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
         with self.lock:
             if task_name not in self.store:
                 return ()
