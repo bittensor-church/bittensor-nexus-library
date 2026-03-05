@@ -384,7 +384,7 @@ def test_event_bus_logs_when_no_connections(caplog: Any):
     source = Source("orphan")
     ctx = _create_context(context_store)
 
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         pipe_to_bus.put(SendEvent(ctx_id=ctx.id, source=source, payload="payload"))
         event_loop = event_bus.run_loop()
 
