@@ -1,4 +1,5 @@
 from nexus.actors import ExecutorCommunicator, NeuronRouter, Routed, TimestamperNode
+from nexus.actors.mux import Mux2
 from nexus.actors.chain_beat.block_beat import BlockBeat
 from nexus.actors.executor_communicator import ProcessedInput
 from nexus.actors.payload_creator import PayloadCreator
@@ -13,27 +14,29 @@ from nexus.core.runtime.task_result_store import SingleTaskResult
 from nexus.utils.exceptions import NexusException
 
 
-class NexusTask[Input, Output, ExecutorPayload]:
+class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput=ExecutorOutput]:
     """Reusable task pipeline with split outputs for persisted task results and raw executor outputs."""
 
     name: NexusTaskName
     input: Sink[Input]
     block_beat: Sink[BlockBeat]
-    task_result: Source[SingleTaskResult[ExecutorPayload, Output]]
-    executor_output: Source[Output | NexusException]
-    error: Source[RetriesExhaustedException]
+    task_result: Source[SingleTaskResult[ExecutorPayload, ExecutorOutput]]
+    executor_output: Source[ExecutorPublicOutput | NexusException]
+    error: Source[NexusException]
     internal_flow: Flow
 
     timestamper: TimestamperNode[
         Routed[ExecutorPayload],
-        ProcessedInput[Routed[ExecutorPayload], Output],
+        ProcessedInput[Routed[ExecutorPayload], ExecutorOutput],
     ]
     retry: RetryStrategy[Input]
     payload_creator: PayloadCreator[Input, ExecutorPayload]
     router: NeuronRouter[ExecutorPayload]
-    executor_communicator: ExecutorCommunicator[ExecutorPayload, Output]
-    task_result_storer: TaskResultStorer[ExecutorPayload, Output]
-    task_result_splitter: TaskResultSplitter[ExecutorPayload, Output]
+    executor_communicator: ExecutorCommunicator[ExecutorPayload, ExecutorOutput]
+    task_result_storer: TaskResultStorer[ExecutorPayload, ExecutorOutput]
+    task_result_splitter: TaskResultSplitter[ExecutorPayload, ExecutorOutput]
+    executor_result_converter: PayloadCreator[ExecutorOutput, ExecutorPublicOutput]
+    error_mux: Mux2[NexusException, RetriesExhaustedException, NexusException]
 
     def __init__(
         self,
@@ -42,34 +45,39 @@ class NexusTask[Input, Output, ExecutorPayload]:
         retry: RetryStrategy[Input],
         payload_creator: PayloadCreator[Input, ExecutorPayload],
         router: NeuronRouter[ExecutorPayload],
-        executor_communicator: ExecutorCommunicator[ExecutorPayload, Output],
-        task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, Output] | None = None,
+        executor_communicator: ExecutorCommunicator[ExecutorPayload, ExecutorOutput],
+        executor_result_converter: PayloadCreator[ExecutorOutput, ExecutorPublicOutput],
+        task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, ExecutorOutput] | None = None,
     ) -> None:
         self.name = name
         self.timestamper = TimestamperNode[
             Routed[ExecutorPayload],
-            ProcessedInput[Routed[ExecutorPayload], Output],
+            ProcessedInput[Routed[ExecutorPayload], ExecutorOutput],
         ](f"{name}-timestamper")
         self.retry = retry
         self.payload_creator = payload_creator
         self.router = router
         self.executor_communicator = executor_communicator
+        self.executor_result_converter = executor_result_converter
         if task_result_store_provider is None:
-            task_result_store_provider = DefaultTaskResultStoreProvider[ExecutorPayload, Output]()
-        self.task_result_storer = TaskResultStorer[ExecutorPayload, Output](
+            task_result_store_provider = DefaultTaskResultStoreProvider[ExecutorPayload, ExecutorOutput]()
+        self.task_result_storer = TaskResultStorer[ExecutorPayload, ExecutorOutput](
             _id=NodeId(f"{name}-task-result-storer"),
             name=name,
             task_result_store_provider=task_result_store_provider,
         )
-        self.task_result_splitter = TaskResultSplitter[ExecutorPayload, Output](
+        self.task_result_splitter = TaskResultSplitter[ExecutorPayload, ExecutorOutput](
             _id=NodeId(f"{name}-task-result-splitter")
+        )
+        self.error_mux = Mux2[NexusException, RetriesExhaustedException, NexusException](
+            _id=NodeId(f"{name}-error-mux")
         )
 
         self.block_beat = self.timestamper.block_beat
         self.input = self.retry.input
         self.task_result = self.task_result_splitter.task_result
-        self.executor_output = self.task_result_splitter.executor_output
-        self.error = self.retry.error
+        self.executor_output = self.executor_result_converter.created_payload
+        self.error = self.error_mux.out
 
         self.internal_flow = Flow(
             entry_sinks=NodeSinks(
@@ -98,10 +106,13 @@ class NexusTask[Input, Output, ExecutorPayload]:
         connect(self.executor_communicator.processed, self.timestamper.executor_output)
         connect(self.timestamper.timestamped_output, self.task_result_storer.sink)
         connect(self.task_result_storer.task_result, self.task_result_splitter.task_result_input)
+        connect(self.task_result_splitter.executor_output, self.executor_result_converter.input)
         connect(self.executor_communicator.error, self.retry.failed_attempt)
         connect(self.task_result_storer.error, self.retry.failed_attempt)
         connect(self.payload_creator.error, self.retry.failed_attempt)
         connect(self.router.error, self.retry.failed_attempt)
+        connect(self.retry.error, self.error_mux.left)
+        connect(self.executor_result_converter.error, self.error_mux.right)
 
     def internal_nodes(self) -> tuple[Node, ...]:
         """Return all internal nodes in build order for `SubnetBuilder(nodes=...)`."""
@@ -113,4 +124,6 @@ class NexusTask[Input, Output, ExecutorPayload]:
             self.executor_communicator,
             self.task_result_storer,
             self.task_result_splitter,
+            self.executor_result_converter,
+            self.error_mux,
         )

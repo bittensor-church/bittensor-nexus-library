@@ -1,9 +1,11 @@
 # pyright: basic
 
 from datetime import UTC, datetime, timedelta
+from typing import override
 
 import pytest
 from nexus_task_test_setup import (
+    DummyBlockBeatSource,
     DummyExecutorCommunicator,
     DummyExecutorOutput,
     DummyExecutorPayload,
@@ -13,13 +15,61 @@ from nexus_task_test_setup import (
     NexusTaskTestSetupFactory,
     NoopRouter,
 )
-from utils import build_neuron, get_stored_results_for_block, wait_until
+from utils import (
+    CollectorActor,
+    InMemoryTestTaskResultStoreProvider,
+    build_neuron,
+    get_stored_results_for_block,
+    wait_until,
+)
 
+from nexus.actors.payload_creator import PayloadCreator
 from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
+from nexus.core.dsl.flow import Flow
+from nexus.core.dsl.nodes import Source
+from nexus.core.runtime.actor import Actor, ActorBuilder
+from nexus.core.runtime.actor_patterns import TransformActor
+from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.context_store_types import ContextId
+from nexus.core.runtime.events import PipeToBus, SendEvent
+from nexus.core.runtime.nexus_task import NexusTask
+from nexus.core.runtime.nexus_task_types import NexusTaskName
+from nexus.core.runtime.subnet_runtime import SubnetBuilder
 from nexus.core.runtime.task_result_store import SingleTaskResult
-from nexus.utils.exceptions import ExecutorFailureException
+from nexus.utils.exceptions import ExecutorFailureException, NexusException
 from nexus.utils.types import BlockNumber
+
+
+class PrefixingExecutorResultConverter(PayloadCreator[DummyExecutorOutput, str], ActorBuilder):
+    @override
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
+        return PrefixingExecutorResultConverterActor(
+            spec=self,
+            pipe_to_bus=pipe_to_bus,
+            context_store=context_store,
+        )
+
+
+class PrefixingExecutorResultConverterActor(TransformActor[DummyExecutorOutput, str]):
+    @override
+    def _transform(self, ctx: Context, payload: DummyExecutorOutput) -> str:
+        return f"public::{payload.result_text}"
+
+
+class FailingExecutorResultConverter(PayloadCreator[DummyExecutorOutput, str], ActorBuilder):
+    @override
+    def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
+        return FailingExecutorResultConverterActor(
+            spec=self,
+            pipe_to_bus=pipe_to_bus,
+            context_store=context_store,
+        )
+
+
+class FailingExecutorResultConverterActor(TransformActor[DummyExecutorOutput, str]):
+    @override
+    def _transform(self, ctx: Context, payload: DummyExecutorOutput) -> str:
+        raise NexusException("forced converter failure")
 
 
 def assert_stored_task_result(
@@ -134,6 +184,210 @@ def test_nexus_task_happy_path_routes_input_to_task_result(
         input_payload=input_payload,
         block_number=block_number,
     )
+
+
+def test_nexus_task_applies_non_trivial_executor_result_converter() -> None:
+    retry = RetryStrategy[DummyTaskInput](
+        "nexus-task-test-retry",
+        max_attempts=3,
+        delay=timedelta(milliseconds=5),
+    )
+    payload_creator = DummyPayloadCreator("nexus-task-test-payload-creator")
+    router = NoopRouter(
+        "nexus-task-test-router",
+        target=build_neuron(uid=1, hotkey="nexus-task-test-neuron", validator_permit=False),
+    )
+    executor_communicator = DummyExecutorCommunicator("nexus-task-test-communicator")
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    executor_result_converter = PrefixingExecutorResultConverter("nexus-task-test-executor-result-converter")
+
+    task = NexusTask[DummyTaskInput, DummyExecutorPayload, DummyExecutorOutput, str](
+        name=NexusTaskName("test-nexus-task-with-converter"),
+        retry=retry,
+        payload_creator=payload_creator,
+        router=router,
+        executor_communicator=executor_communicator,
+        task_result_store_provider=task_result_store_provider,
+        executor_result_converter=executor_result_converter,
+    )
+
+    builder = SubnetBuilder(nodes=task.internal_nodes())
+    task_result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="nexus-task-task-result-collector",
+    )
+    executor_output_collector = CollectorActor[str | NexusException](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="nexus-task-executor-output-collector",
+    )
+    error_collector = CollectorActor[RetriesExhaustedException](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="nexus-task-error-collector",
+    )
+    input_source = Source[DummyTaskInput]("nexus-task-test-input-source")
+    block_beat_source = DummyBlockBeatSource("nexus-task-test-block-beat-source")
+
+    runtime = (
+        builder.add_flows(
+            task.internal_flow,
+            Flow.from_connectable(input_source).then(task.input),
+            Flow.from_connectable(block_beat_source.source).then(task.block_beat),
+            Flow.from_connectable(task.task_result).then(task_result_collector.sink),
+            Flow.from_connectable(task.executor_output).then(executor_output_collector.sink),
+            Flow.from_connectable(task.error).then(error_collector.sink),
+        )
+        .add_actors(task_result_collector, executor_output_collector, error_collector)
+        .build()
+    )
+
+    input_payload = DummyTaskInput(request_id="req-converted-output", payload_text="hello")
+    block_number = 123
+
+    with runtime.running():
+        with runtime.context_store.create_context() as context:
+            input_ctx_id = context.id
+        runtime.pipe_to_bus.put(
+            SendEvent(
+                ctx_id=input_ctx_id,
+                source=block_beat_source.source,
+                payload=block_beat_source.beat(block_number),
+            )
+        )
+        runtime.pipe_to_bus.put(
+            SendEvent(
+                ctx_id=input_ctx_id,
+                source=input_source,
+                payload=input_payload,
+            )
+        )
+        wait_until(
+            lambda: len(task_result_collector.received_events) == 1 and len(executor_output_collector.received_events) == 1,
+            timeout=2.0,
+        )
+
+    assert len(error_collector.received_events) == 0
+    task_result_event = task_result_collector.received_events[0]
+    executor_output_event = executor_output_collector.received_events[0]
+
+    assert task_result_event.ctx_id != input_ctx_id
+    assert executor_output_event.ctx_id == input_ctx_id
+
+    emitted_result = task_result_event.payload
+    expected_payload = payload_creator.to_executor_payload(input_payload)
+    expected_output = executor_communicator.to_executor_output(expected_payload)
+
+    assert emitted_result.executor_output == expected_output
+    assert executor_output_event.payload == f"public::{expected_output.result_text}"
+
+    stored_results = get_stored_results_for_block(
+        store=task_result_store_provider.get_task_result_store(),
+        task_name=task.name,
+        block_number=block_number,
+    )
+    assert len(stored_results) == 1
+    assert stored_results[0] == emitted_result
+
+
+def test_nexus_task_emits_error_when_executor_result_converter_fails_without_retrying() -> None:
+    retry = RetryStrategy[DummyTaskInput](
+        "nexus-task-test-retry",
+        max_attempts=3,
+        delay=timedelta(milliseconds=5),
+    )
+    payload_creator = DummyPayloadCreator("nexus-task-test-payload-creator")
+    router = NoopRouter(
+        "nexus-task-test-router",
+        target=build_neuron(uid=1, hotkey="nexus-task-test-neuron", validator_permit=False),
+    )
+    executor_communicator = DummyExecutorCommunicator("nexus-task-test-communicator")
+    task_result_store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    executor_result_converter = FailingExecutorResultConverter("nexus-task-test-failing-executor-result-converter")
+
+    task = NexusTask[DummyTaskInput, DummyExecutorPayload, DummyExecutorOutput, str](
+        name=NexusTaskName("test-nexus-task-with-failing-converter"),
+        retry=retry,
+        payload_creator=payload_creator,
+        router=router,
+        executor_communicator=executor_communicator,
+        task_result_store_provider=task_result_store_provider,
+        executor_result_converter=executor_result_converter,
+    )
+
+    builder = SubnetBuilder(nodes=task.internal_nodes())
+    task_result_collector = CollectorActor[SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput]](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="nexus-task-task-result-collector",
+    )
+    executor_output_collector = CollectorActor[str | NexusException](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="nexus-task-executor-output-collector",
+    )
+    error_collector = CollectorActor[NexusException](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="nexus-task-error-collector",
+    )
+    input_source = Source[DummyTaskInput]("nexus-task-test-input-source")
+    block_beat_source = DummyBlockBeatSource("nexus-task-test-block-beat-source")
+
+    runtime = (
+        builder.add_flows(
+            task.internal_flow,
+            Flow.from_connectable(input_source).then(task.input),
+            Flow.from_connectable(block_beat_source.source).then(task.block_beat),
+            Flow.from_connectable(task.task_result).then(task_result_collector.sink),
+            Flow.from_connectable(task.executor_output).then(executor_output_collector.sink),
+            Flow.from_connectable(task.error).then(error_collector.sink),
+        )
+        .add_actors(task_result_collector, executor_output_collector, error_collector)
+        .build()
+    )
+
+    input_payload = DummyTaskInput(request_id="req-failing-converter", payload_text="hello")
+    block_number = 123
+
+    with runtime.running():
+        with runtime.context_store.create_context() as context:
+            input_ctx_id = context.id
+        runtime.pipe_to_bus.put(
+            SendEvent(
+                ctx_id=input_ctx_id,
+                source=block_beat_source.source,
+                payload=block_beat_source.beat(block_number),
+            )
+        )
+        runtime.pipe_to_bus.put(
+            SendEvent(
+                ctx_id=input_ctx_id,
+                source=input_source,
+                payload=input_payload,
+            )
+        )
+        wait_until(
+            lambda: len(task_result_collector.received_events) == 1 and len(error_collector.received_events) == 1,
+            timeout=2.0,
+        )
+
+    assert len(executor_output_collector.received_events) == 0
+    assert payload_creator.attempts_by_ctx[input_ctx_id] == 1
+    assert executor_communicator.attempts_by_ctx[input_ctx_id] == 1
+
+    converter_error = error_collector.received_events[0]
+    assert converter_error.ctx_id == input_ctx_id
+    assert "forced converter failure" in str(converter_error.payload)
+    assert not isinstance(converter_error.payload, RetriesExhaustedException)
+
+    stored_results = get_stored_results_for_block(
+        store=task_result_store_provider.get_task_result_store(),
+        task_name=task.name,
+        block_number=block_number,
+    )
+    assert len(stored_results) == 1
 
 
 def test_nexus_task_waits_for_block_beat_before_emitting_result(
