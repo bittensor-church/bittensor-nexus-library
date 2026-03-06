@@ -72,6 +72,45 @@ def test_block_beat(blocks: list[BlockNumber], beats: list[BlockNumber], nth: Bl
     assert [event.payload for event in collector.received_events] == expected_beats
 
 
+def test_block_beat_retries_after_transient_pylon_failure(caplog: pytest.LogCaptureFixture):
+    block_infos = [_dummy_block_info_response(block_number) for block_number in [10, 11]]
+    expected_beats = [dummy_block_beat(10), dummy_block_beat(11)]
+
+    provider = MockPylonClientProvider()
+    with provider.prepare_mock_client() as client:
+        client.open_access.get_latest_block_info.side_effect = chain(
+            [
+                artanis.PylonRequestException("temporarily unavailable"),
+                *block_infos,
+            ],
+            repeat(block_infos[-1]),
+        )
+
+    beat = BlockBeatNode(
+        "test",
+        pylon_client_provider=provider,
+        polling_interval=timedelta(seconds=0.01),
+    )
+    builder = SubnetBuilder(nodes=[beat])
+    collector = CollectorActor[BlockBeat](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+    )
+    runtime = builder.add_flows(Flow.from_connectable(beat.source).then(collector.sink)).add_actors(collector).build()
+
+    with caplog.at_level("WARNING", logger="nexus.actors.chain_beat.block_beat"):
+        with runtime.running(shutdown_timeout_seconds=1.0):
+            wait_until(lambda: len(collector.received_events) >= len(expected_beats))
+            wait_until(
+                lambda: any(
+                    "Transient Pylon poll failure; will retry." in record.message for record in caplog.records
+                )
+            )
+
+    assert [event.payload for event in collector.received_events] == expected_beats
+    assert any("error_type=PylonRequestException" in record.message for record in caplog.records)
+
+
 def _dummy_block_info_response(block_number: BlockNumber) -> artanis_v1.GetLatestBlockInfoResponse:
     return artanis_v1.GetLatestBlockInfoResponse(
         number=artanis.BlockNumber(block_number),

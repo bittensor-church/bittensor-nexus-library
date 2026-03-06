@@ -8,7 +8,7 @@ from datetime import timedelta
 from threading import Event
 from typing import override
 
-from pylon_client.artanis import PylonResponseException
+from pylon_client.artanis import BasePylonException
 
 from nexus.actors.pylon_client_provider import PylonClientProvider
 from nexus.core.dsl.nodes import Producer
@@ -94,13 +94,17 @@ class BlockBeatActor(ProducerActor[BlockBeat]):
             poll_start = time.monotonic()
 
             try:
-                # 1. Retry on PylonResponseException - these may be transient
-                # 2. Bubble up all other exceptions - ProducerActor will handle that
+                # 1. Retry on BasePylonException - request/timeout/response failures may be transient.
+                # 2. Bubble up all non-Pylon exceptions - ProducerActor will handle those as unexpected failures.
                 with pylon:
                     response = pylon.open_access.get_latest_block_info()
 
-            except PylonResponseException as exc:
-                logger.error("Failed to poll for latest block info", exc_info=exc)
+            except BasePylonException as exc:
+                logger.warning(
+                    "Transient Pylon poll failure; will retry. error_type=%s error=%s",
+                    type(exc).__name__,
+                    exc,
+                )
 
             else:
                 block_number = BlockNumber(response.number)
