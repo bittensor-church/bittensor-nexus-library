@@ -1,4 +1,5 @@
-from cat_images.validator.validator import main
+from .validator import Validator
+from .validator_settings import CatValidatorSettings
 
 if __name__ == "__main__":
-    main()
+    Validator.run(settings_class=CatValidatorSettings)
