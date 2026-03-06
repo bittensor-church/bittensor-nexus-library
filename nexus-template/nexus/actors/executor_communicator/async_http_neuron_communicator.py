@@ -97,7 +97,7 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
         send_timeout: datetime.timedelta,
         total_processing_timeout: datetime.timedelta,
         max_in_flight: int = 16,
-        callback_bind_ip: IPv4Address,
+        callback_bind_ip: IPv4Address | None = None,
         callback_port: Port,
         callback_path: str,
         callback_base_url: AnyHttpUrl | str,
@@ -154,7 +154,7 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
         self.send_timeout = send_timeout
         self.total_processing_timeout = total_processing_timeout
         self.max_in_flight = max_in_flight
-        self.callback_bind_ip = callback_bind_ip
+        self.callback_bind_ip = callback_bind_ip or IPv4Address("0.0.0.0")
         self.callback_port = callback_port
         self.response_path = normalize_http_path(callback_path)
         self.callback_base_url = parsed_callback_base_url
