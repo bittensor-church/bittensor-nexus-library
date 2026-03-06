@@ -5,7 +5,7 @@ import logging
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from cat_images.facilitator.models import RegisteredValidator, StatusUpdate
 from cat_images.facilitator.stores import JobStore
@@ -37,7 +37,7 @@ _WAITING_MESSAGES = [
 def _append(
     job_store: JobStore, job_id: JobId, status: str, liveness: JobLiveness, result: ValidatorResult | None = None
 ) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     job_store.append_status(
         job_id,
         StatusUpdate(

@@ -8,7 +8,7 @@ from typing import cast
 
 from nexus.actors.task_input_output_creator import BatchedTaskInputOutput
 from nexus.actors.weight_setter import WeightsCalculationBundle
-from nexus.utils.exceptions import NexusTaskName
+from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.utils.types import Hotkey, Weight
 
 from cat_images.subnet_models import MinerPayload, ValidationResult

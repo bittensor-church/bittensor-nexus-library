@@ -7,6 +7,7 @@ from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskI
 from pydantic import BaseModel, Field, field_validator
 
 from cat_images.subnet_models import MinerPayload, MinerPublicResult, MinerResult, ValidationResult
+
 from .validator_settings import CatValidatorSettings
 
 log = logging.getLogger("validation-algorithm")

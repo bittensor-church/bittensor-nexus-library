@@ -1,6 +1,5 @@
 import logging
 import sys
-from functools import lru_cache
 from typing import Self
 
 from nexus.utils.types import NetUid, Port
@@ -54,18 +53,9 @@ class CatValidatorSettings(BaseSettings):
         return self
 
 
-@lru_cache(maxsize=1)
-def get_validator_settings() -> CatValidatorSettings:
-    return CatValidatorSettings()  # type: ignore[call-arg]
-
-
-def clear_validator_settings_cache() -> None:
-    get_validator_settings.cache_clear()
-
-
 def load_validator_settings() -> CatValidatorSettings:
     try:
-        return get_validator_settings()
+        return CatValidatorSettings()  # type: ignore[call-arg]
     except ValidationError as e:
         fields = ", ".join(str(err["loc"][-1]) for err in e.errors() if err.get("loc"))
         log.error(f"Configuration error: missing or invalid fields: {fields}")

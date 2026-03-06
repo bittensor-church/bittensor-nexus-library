@@ -15,15 +15,14 @@ class SingleCatImageInput(BaseModel):
     image_s3_url: S3Url
 
 
-type MinerPayload = WithPresignedUrl[SingleCatImageInput]
-MinerPayloadModel = MinerPayload.__value__
+MinerPayload = WithPresignedUrl[SingleCatImageInput]
 
 
 class MinerResult(BaseModel):
     image_hash: ImageHash
 
 
-type MinerPublicResult = WithPresignedUrl[MinerResult]
+MinerPublicResult = WithPresignedUrl[MinerResult]
 
 
 class ValidationResult(BaseModel):

@@ -10,12 +10,12 @@ from litestar.exceptions import NotFoundException
 from litestar.response import Response, ServerSentEvent, Template
 
 from cat_images.facilitator.models import CatificationRequest, Job
-from cat_images.subnet_models import S3Url, SingleCatImageInput
-from cat_images.facilitator.types import JobId, JobLiveness, ValidatorHotkey
 from cat_images.facilitator.routing import ValidatorRouter
 from cat_images.facilitator.s3 import S3Client
 from cat_images.facilitator.stores import JobStore, ValidatorStore
+from cat_images.facilitator.types import JobId, JobLiveness, ValidatorHotkey
 from cat_images.facilitator.worker import JobWorker
+from cat_images.subnet_models import S3Url, SingleCatImageInput
 
 log = logging.getLogger("facilitator.ui")
 
@@ -41,7 +41,7 @@ async def _generate_events(
     job_id: str,
     job_store: JobStore,
     request: Request,
-) -> AsyncGenerator[dict[str, str], None]:
+) -> AsyncGenerator[dict[str, str]]:
     jinja_env = request.app.template_engine.engine  # type: ignore[union-attr]
     seen = 0
 
@@ -137,7 +137,11 @@ class UiController(Controller):
 
     @get("/images/{job_id:str}/{kind:str}")
     async def proxy_image(self, job_store: JobStore, s3_client: S3Client, job_id: str, kind: str) -> Response:
-        """Proxy S3 images to avoid CORS/ORB issues."""
+        """Proxy S3 images to avoid CORS/ORB issues.
+
+        Raises:
+            NotFoundException: If the job does not exist, result image is unavailable, or kind is unknown.
+        """
         job = job_store.get(job_id)  # type: ignore[arg-type]
         if job is None:
             raise NotFoundException(detail=f"Job {job_id} not found")

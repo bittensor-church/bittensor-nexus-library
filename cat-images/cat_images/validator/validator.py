@@ -18,22 +18,21 @@ from nexus.actors.neuron_router import NoopRouter
 from nexus.actors.payload_creator import NoopPayloadCreator, PresignedUrlCreator
 from nexus.actors.retry_strategy import RetryStrategy
 from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskInputOutputCreator
-from nexus.actors.task_result_sampler import EveryTaskResultSampler, TaskResultSampler
+from nexus.actors.task_result_sampler import EveryTaskResultSampler
 from nexus.actors.weight_setter import WeightSetterNode
-from nexus.core.runtime.nexus_task import NexusTask, SingleTaskResult
+from nexus.core.runtime.nexus_task import NexusTask
 from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.subnet_runtime import SubnetRuntime
 from nexus.nexus_validator import NexusValidator
 from nexus.utils.types import BlockCount
 
 from cat_images.subnet_models import (
     MinerPayload,
-    MinerPayloadModel,
     MinerPublicResult,
     MinerResult,
     SingleCatImageInput,
     ValidationResult,
 )
+
 from . import validation_algorithm, weighing_algorithm
 from .validator_settings import CatValidatorSettings, load_validator_settings
 
@@ -47,23 +46,6 @@ log = logging.getLogger("validator")
 
 
 class Validator(NexusValidator):
-    # these annotations are optional but help with readability and IDE support
-    # they are also a perfect source of knowledge for an LLM
-    entry: RestEntryPoint[SingleCatImageInput]
-
-    mining_task: NexusTask[SingleCatImageInput, MinerPayload, MinerResult, MinerPublicResult]
-    miner_result_sampler: TaskResultSampler[MinerPayload, MinerResult, MinerPublicResult]
-    validation_task: NexusTask[
-        tuple[SingleTaskResult[MinerPayload, MinerResult, MinerPublicResult], ...],
-        BatchedTaskInputOutput[MinerPayload, MinerResult, MinerPublicResult],
-        BatchedTaskInputOutput[MinerPayload, ValidationResult, ValidationResult],
-    ]
-
-    epoch_beat: EpochBeatNode
-    weight_setter: WeightSetterNode
-
-    runtime: SubnetRuntime
-
     def __init__(self, settings: CatValidatorSettings) -> None:
         super().__init__(settings)
 
@@ -93,7 +75,7 @@ class Validator(NexusValidator):
                 callback_base_url=f"http://{settings.external_ip}:{settings.miner_callback_port}",
                 send_timeout=timedelta(seconds=1),
                 total_processing_timeout=timedelta(seconds=60),
-                input_model=MinerPayloadModel,
+                input_model=MinerPayload,
                 output_model=MinerResult,
             ),
             executor_result_converter=PresignedUrlCreator(
