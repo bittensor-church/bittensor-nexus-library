@@ -26,7 +26,8 @@ DEFAULT_OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_OPENROUTER_MODEL = "google/gemini-2.5-flash-image"
 DEFAULT_PROMPT = (
     "Edit this image to add a cat fitting naturally into the scene. Consider what the input image represents"
-    " and how a cat could be naturally placed there. Keep the original image intact."
+    " and how a cat could be naturally placed there. Keep the original image intact. If there are already"
+    "cats in the image - add another one. A new cat MUST be added no matter what."
 )
 DEFAULT_PORT = Port(9090)
 DEFAULT_PATH = "/process"

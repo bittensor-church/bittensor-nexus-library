@@ -16,9 +16,10 @@ DEFAULT_VALIDATION_OPENROUTER_TIMEOUT_SECONDS = 120.0
 DEFAULT_VALIDATION_OPENROUTER_TEMPERATURE = 0.0
 DEFAULT_VALIDATION_PROMPT = (
     "You have a list of image pairs. For each pair determine if the second image looks like the first image, "
-    "but with a cat added in a natural, scene-fitting way. "
+    "but with a cat added in a natural, scene-fitting way. Remembed that the cat must be added. If there "
+    "are already cats in the original image the processed image should have one more cat added. "
     "Score each pair from 1 to 100, where 1 means the second image does not look like the first with a naturally "
-    "added cat, and 100 means it is an excellent natural cat addition. "
+    "added cat, and 100 means it is an excellent natural cat addition. If not cat was added the score should be 1"
     "Return only valid JSON in this exact format: "
     "{\"scores_by_task_result_id\": {\"<task_result_id>\": <integer_score_1_to_100>}}. "
     "Do not include markdown, comments, code fences, or any extra keys."
