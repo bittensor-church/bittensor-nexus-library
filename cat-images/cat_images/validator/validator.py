@@ -3,7 +3,6 @@
 import logging
 from datetime import timedelta
 from functools import partial
-from ipaddress import IPv4Address
 
 from nexus.actors import (
     AsyncHttpNeuronCommunicator,
@@ -67,7 +66,6 @@ class Validator(NexusValidator):
             executor_communicator=AsyncHttpNeuronCommunicator(
                 "miner-communicator",
                 target_path="/process",
-                callback_bind_ip=IPv4Address("0.0.0.0"),
                 callback_port=settings.miner_callback_port,
                 callback_path="/mined-image",
                 callback_base_url=f"http://{settings.external_ip}:{settings.miner_callback_port}",
