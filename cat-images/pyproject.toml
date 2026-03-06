@@ -79,6 +79,11 @@ stubPath = ".pyright-stubs"
 venvPath = "."
 venv = ".venv"
 extraPaths = [".venv/lib/python3.14/site-packages"]
+exclude = [
+  "cat_images/facilitator",
+  "cat_images/miner",
+]
+
 
 [build-system]
 requires = ["hatchling"]

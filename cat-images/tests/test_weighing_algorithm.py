@@ -9,8 +9,8 @@ from nexus.actors.weight_setter import WeightsCalculationBundle
 from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
 from nexus.utils.types import BlockNumber, Epoch, Hotkey
 
-from cat_images.validator import weighing_algorithm
 from cat_images.subnet_models import ValidationResult
+from cat_images.validator import weighing_algorithm
 
 MINING_TASK_NAME = NexusTaskName("mining-task")
 VALIDATION_TASK_NAME = NexusTaskName("validation-task")

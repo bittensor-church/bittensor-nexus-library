@@ -1,10 +1,10 @@
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from cat_images.facilitator.models import Job, RegisteredValidator, StatusUpdate
-from cat_images.subnet_models import SingleCatImageInput
 from cat_images.facilitator.types import JobId, ValidatorHotkey
+from cat_images.subnet_models import SingleCatImageInput
 
 
 class ValidatorStore:
@@ -63,7 +63,7 @@ class JobStore:
             image_key=image_key,
             job_spec=job_spec,
             validator_hotkey=validator_hotkey,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         with self._lock:
             self._jobs[job.id] = job

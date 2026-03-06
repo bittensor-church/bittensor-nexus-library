@@ -20,7 +20,11 @@ class JobSubmitter:
         self._timeout = timeout
 
     def submit(self, validator: RegisteredValidator, job_spec: SingleCatImageInput) -> ValidatorResult:
-        """Blocking call — POST job_spec to validator, return parsed result."""
+        """Blocking call — POST job_spec to validator, return parsed result.
+
+        Raises:
+            SubmissionError: If all retry attempts fail.
+        """
         last_error: Exception | None = None
         for attempt in range(1, self._max_retries + 1):
             try:

@@ -14,8 +14,8 @@ from nexus.utils.types import NetUid, Port
 from pydantic import ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .axon_updater import AxonUpdaterConfig, AxonUpdaterService
 from ..subnet_models import ImageHash, MinerResult, SingleCatImageInput
+from .axon_updater import AxonUpdaterConfig, AxonUpdaterService
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-7s %(message)s", datefmt="%H:%M:%S", level=logging.INFO
