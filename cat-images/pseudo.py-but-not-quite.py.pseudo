@@ -29,7 +29,7 @@ ImageHash = NewType("ImageHash", str)
 # Validator identifier type
 ValidatorId = NewType("ValidatorId", str)
 
-class SingleCatImageInput(BaseModel):
+class UserImageInput(BaseModel):
     """
     User request model for generating a cat‑augmented image.
 
@@ -80,12 +80,12 @@ class CatImagesValidator:
     components with domain‑specific data models and helper functions.
     """
 
-    rest_endpoint: EntryPoint = RestEntryPoint(path="/cat", user_data_model=SingleCatImageInput)
+    rest_endpoint: EntryPoint = RestEntryPoint(path="/cat", user_data_model=UserImageInput)
 
     # Buffer user requests until we have 8 items; flush logic for time
     # windows should be implemented by a scheduler calling `flush()` on the
     # buffer.
-    user_requests_buffer: BatchBuffer[SingleCatImageInput] = BatchBuffer(name="", max_elements=8, max_age_seconds=123)
+    user_requests_buffer: BatchBuffer[UserImageInput] = BatchBuffer(name="", max_elements=8, max_age_seconds=123)
 
     validation_executor: HttpExecutor = HttpExecutor(name="cat-validator", port=5678, execution=CatImagesValidator)
 
@@ -96,7 +96,7 @@ class CatImagesValidator:
     # each task result is stored, and can be retrieved
     # each task result is stamped with block number from... well... exactly which point?
     mining_task: NexusTask[
-        List[SingleCatImageInput],
+        List[UserImageInput],
         List[MinerResult]
     ] = NexusTask(
 		name="cat-mining",

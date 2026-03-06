@@ -62,7 +62,7 @@ def _post_json(url: str, payload: dict[str, str]) -> tuple[int, str]:
 #         odd_payload = {"image_s3_url": "a", "image_name": "b"}
 #         odd_status, odd_body = _post_json(url, odd_payload)
 #         assert odd_status == 200
-#         expected_odd_result = str(SingleCatImageInput.model_validate(odd_payload)).upper()
+#         expected_odd_result = str(UserImageInput.model_validate(odd_payload)).upper()
 #         assert odd_body == expected_odd_result
 #
 #     _wait_for_port_state(port=validator.entry.port, should_be_open=False)

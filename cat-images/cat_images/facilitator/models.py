@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from cat_images.facilitator.types import JobId, JobLiveness, ValidatorHotkey
-from cat_images.subnet_models import SingleCatImageInput, ValidatorResult
+from cat_images.subnet_models import UserImageInput, ValidatorResult
 
 
 class RegisteredValidator(BaseModel):
@@ -19,7 +19,7 @@ class CatificationRequest(BaseModel):
     """Inbound request before routing. Carries the spec and future metadata
     like validator preference."""
 
-    job_spec: SingleCatImageInput
+    job_spec: UserImageInput
 
 
 class StatusUpdate(BaseModel):
@@ -35,7 +35,7 @@ class StatusUpdate(BaseModel):
 class Job(BaseModel):
     id: JobId
     image_key: str  # S3 object key for direct download by proxy
-    job_spec: SingleCatImageInput
+    job_spec: UserImageInput
     validator_hotkey: ValidatorHotkey
     status_updates: list[StatusUpdate] = []
     created_at: datetime

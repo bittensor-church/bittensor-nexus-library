@@ -4,9 +4,9 @@ import httpx
 import pytest
 
 from cat_images.facilitator.models import RegisteredValidator
-from cat_images.facilitator.submitter import JobSubmitter
+from cat_images.facilitator.submitter import JobSubmitter, SubmissionError
 from cat_images.facilitator.types import ValidatorHotkey
-from cat_images.subnet_models import ImageHash, S3Url, SingleCatImageInput
+from cat_images.subnet_models import ImageHash, S3Url, UserImageInput
 
 
 class _FakeResponse:
@@ -49,8 +49,8 @@ def _validator() -> RegisteredValidator:
     )
 
 
-def _job_spec() -> SingleCatImageInput:
-    return SingleCatImageInput(image_s3_url=S3Url("https://example.com/source.png"))
+def _job_spec() -> UserImageInput:
+    return UserImageInput(image_s3_url=S3Url("https://example.com/source.png"))
 
 
 def test_submitter_parses_real_validator_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -76,7 +76,7 @@ def test_submitter_parses_real_validator_payload_shape(monkeypatch: pytest.Monke
     assert result.image_hash == ImageHash("deadbeef")
 
 
-def test_submitter_parses_legacy_validator_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_submitter_rejects_payload_without_image_hash(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_client_factory(*_: Any, **__: Any) -> _FakeClient:
         return _FakeClient(
             record={},
@@ -88,7 +88,5 @@ def test_submitter_parses_legacy_validator_payload_shape(monkeypatch: pytest.Mon
     monkeypatch.setattr("cat_images.facilitator.submitter.httpx.Client", fake_client_factory)
 
     submitter = JobSubmitter(max_retries=1, timeout=1.0)
-    result = submitter.submit(_validator(), _job_spec())
-
-    assert result.result_image_url == S3Url("https://example.com/legacy-result.png")
-    assert result.image_hash is None
+    with pytest.raises(SubmissionError):
+        submitter.submit(_validator(), _job_spec())

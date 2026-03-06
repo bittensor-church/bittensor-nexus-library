@@ -7,15 +7,14 @@ S3Url = NewType("S3Url", str)
 ImageHash = NewType("ImageHash", str)
 
 
-class SingleCatImageInput(BaseModel):
+class UserImageInput(BaseModel):
     """User request model for the cat-images subnet.
 
     `image_s3_url` refers to the original image stored on S3."""
-
     image_s3_url: S3Url
 
 
-MinerPayload = WithPresignedUrl[SingleCatImageInput]
+MinerPayload = WithPresignedUrl[UserImageInput]
 
 
 class MinerResult(BaseModel):
@@ -32,7 +31,4 @@ class ValidationResult(BaseModel):
 class ValidatorResult(BaseModel):
     """User-facing result delivered by the validator to the facilitator."""
     result_image_url: S3Url = Field(validation_alias=AliasChoices("result_image_url", "presigned_url"))
-    image_hash: ImageHash | None = Field(
-        default=None,
-        validation_alias=AliasChoices(AliasPath("input", "image_hash"), "image_hash"),
-    )
+    image_hash: ImageHash = Field(validation_alias=AliasChoices(AliasPath("input", "image_hash"), "image_hash"))

@@ -28,7 +28,7 @@ from cat_images.subnet_models import (
     MinerPayload,
     MinerPublicResult,
     MinerResult,
-    SingleCatImageInput,
+    UserImageInput,
     ValidationResult,
 )
 
@@ -52,7 +52,7 @@ class Validator(NexusValidator):
             _id="cat-images-user-requests",
             path="/cat-images",
             port=settings.rest_entry_point_port,
-            user_data_model=SingleCatImageInput,
+            user_data_model=UserImageInput,
         )
 
         self.mining_task = NexusTask(

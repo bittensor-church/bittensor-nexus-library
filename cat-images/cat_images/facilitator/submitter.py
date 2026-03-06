@@ -3,7 +3,7 @@ import logging
 import httpx
 
 from cat_images.facilitator.models import RegisteredValidator
-from cat_images.subnet_models import SingleCatImageInput, ValidatorResult
+from cat_images.subnet_models import UserImageInput, ValidatorResult
 
 log = logging.getLogger("facilitator.submitter")
 
@@ -13,13 +13,13 @@ class SubmissionError(Exception):
 
 
 class JobSubmitter:
-    """Sends raw SingleCatImageInput to a validator and waits for the synchronous response."""
+    """Sends raw UserImageInput to a validator and waits for the synchronous response."""
 
     def __init__(self, max_retries: int = 3, timeout: float = 30.0) -> None:
         self._max_retries = max_retries
         self._timeout = timeout
 
-    def submit(self, validator: RegisteredValidator, job_spec: SingleCatImageInput) -> ValidatorResult:
+    def submit(self, validator: RegisteredValidator, job_spec: UserImageInput) -> ValidatorResult:
         """Blocking call — POST job_spec to validator, return parsed result.
 
         Raises:
