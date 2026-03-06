@@ -4,13 +4,11 @@ import sys
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any
 
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
-from nexus.actors import BlockBeatNode, PylonClientProvider, StaticConfigPylonClientProvider
-from nexus.actors.task_result_store_provider import DefaultTaskResultStoreProvider, TaskResultStoreProvider
+from nexus.actors import BlockBeatNode
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, Source, SourceName
 from nexus.core.runtime.nexus_task import NexusTask
@@ -20,8 +18,6 @@ log = logging.getLogger("validator")
 
 
 class NexusValidator:
-    pylon_client_provider: PylonClientProvider
-    task_result_store_provider: TaskResultStoreProvider[Any, Any, Any]
     subnet_clock: BlockBeatNode
 
     nodes: list[Node]
@@ -30,15 +26,7 @@ class NexusValidator:
     runtime: SubnetRuntime | None = None
 
     def __init__(self, settings: BaseSettings) -> None:
-        map = settings.model_dump()
-        self.pylon_client_provider = StaticConfigPylonClientProvider(
-            pylon_service_address=map["pylon_service_address"],
-            open_access_token=map["pylon_open_access_token"],
-        )
-
-        self.task_result_store_provider = DefaultTaskResultStoreProvider()
-
-        self.subnet_clock = BlockBeatNode("internal-subnet-clock", pylon_client_provider=self.pylon_client_provider)
+        self.subnet_clock = BlockBeatNode("internal-subnet-clock")
         self.nodes = [self.subnet_clock]
         self.tasks = []
 

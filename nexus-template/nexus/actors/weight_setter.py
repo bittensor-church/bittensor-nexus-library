@@ -18,8 +18,8 @@ from ..core.runtime.task_result_store import TaskResultStore
 from ..utils.exceptions import WeightSettingException
 from ..utils.types import Epoch, Hotkey, Weight
 from .chain_beat.epoch_beat import EpochBeat
-from .pylon_client_provider import PylonClientProvider
-from .task_result_store_provider import TaskResultStoreProvider
+from .pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
+from .task_result_store_provider import DEFAULT_TASK_RESULT_STORE_PROVIDER, TaskResultStoreProvider
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -64,13 +64,13 @@ class WeightSetterNode(Transform[EpochBeat, WeightSettingSuccess], ActorBuilder)
         _id: str,
         *,
         weighing_func: WeighingFunc,
-        pylon_client_provider: PylonClientProvider,
-        task_result_store_provider: TaskResultStoreProvider[Any, Any, Any],
+        pylon_client_provider: PylonClientProvider | None = None,
+        task_result_store_provider: TaskResultStoreProvider[Any, Any, Any] | None = None,
     ) -> None:
         super().__init__(_id)
         self.weighing_func = weighing_func
-        self.pylon_client_provider = pylon_client_provider
-        self.task_result_store_provider = task_result_store_provider
+        self.pylon_client_provider = pylon_client_provider or DEFAULT_PYLON_CLIENT_PROVIDER
+        self.task_result_store_provider = task_result_store_provider or DEFAULT_TASK_RESULT_STORE_PROVIDER
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> WeightSetterActor:

@@ -10,7 +10,7 @@ from typing import override
 
 from pylon_client.artanis import BasePylonException
 
-from nexus.actors.pylon_client_provider import PylonClientProvider
+from nexus.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
 from nexus.core.dsl.nodes import Producer
 from nexus.core.runtime.actor import ActorBuilder
 from nexus.core.runtime.actor_patterns import ProducerActor
@@ -51,7 +51,7 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
         netuid: NetUid,
         delay: BlockCount = BlockCount(0),  # noqa: B008
         polling_interval: timedelta = timedelta(seconds=1),
-        pylon_client_provider: PylonClientProvider,
+        pylon_client_provider: PylonClientProvider | None = None,
     ) -> None:
         """
         Args:
@@ -65,7 +65,7 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
         self.netuid = netuid
         self.delay_blocks = delay
         self.polling_interval = polling_interval
-        self.pylon_client_provider = pylon_client_provider
+        self.pylon_client_provider = pylon_client_provider or DEFAULT_PYLON_CLIENT_PROVIDER
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> EpochBeatActor:

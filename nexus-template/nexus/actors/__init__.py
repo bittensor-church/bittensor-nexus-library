@@ -3,7 +3,6 @@ from nexus.actors.chain_beat.epoch_beat import EpochBeatNode, EpochBeatActor
 from nexus.actors.timestamper import TimestamperNode, TimestamperActor, Timestamped
 from nexus.actors.pylon_client_provider import (
     PylonClientProvider,
-    StaticConfigPylonClientProvider,
 )
 from nexus.actors.executor_communicator import (
     AsyncHttpNeuronCommunicator,
@@ -75,7 +74,6 @@ __all__ = [
     "NeuronRouter",
     "NeuronRouterActor",
     "Neuron",
-    "StaticConfigPylonClientProvider",
     "UnsupportedAxonProtocolException",
     "TaskResultSplitter",
     "TaskResultSplitterActor",
