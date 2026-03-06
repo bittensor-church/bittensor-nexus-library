@@ -14,7 +14,7 @@ from nexus.utils.types import NetUid, Port
 from pydantic import ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from ..subnet_models import ImageHash, MinerResult, SingleCatImageInput
+from ..subnet_models import ImageHash, MinerResult, UserImageInput
 from .axon_updater import AxonUpdaterConfig, AxonUpdaterService
 
 logging.basicConfig(
@@ -62,7 +62,7 @@ class CatMinerSettings(BaseSettings):
         return self
 
 
-MinerInput = WithPresignedUrl[SingleCatImageInput]
+MinerInput = WithPresignedUrl[UserImageInput]
 
 
 def _download_image(url: str) -> bytes:

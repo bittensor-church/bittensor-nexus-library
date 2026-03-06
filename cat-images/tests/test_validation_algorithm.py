@@ -12,12 +12,12 @@ from nexus.core.runtime.nexus_task_types import TaskResultId
 from nexus.utils.types import NetUid
 from pydantic import ValidationError
 
-from cat_images.subnet_models import ImageHash, MinerResult, S3Url, SingleCatImageInput, ValidationResult
+from cat_images.subnet_models import ImageHash, MinerResult, S3Url, UserImageInput, ValidationResult
 from cat_images.validator import CatValidatorSettings, Validator, validation_algorithm
 
 
 def _build_test_batch() -> BatchedTaskInputOutput[
-    WithPresignedUrl[SingleCatImageInput],
+    WithPresignedUrl[UserImageInput],
     MinerResult,
     WithPresignedUrl[MinerResult],
 ]:
@@ -26,7 +26,7 @@ def _build_test_batch() -> BatchedTaskInputOutput[
     task_1 = TaskInputOutput(
         task_result_id=task_1_id,
         task_input=WithPresignedUrl(
-            input=SingleCatImageInput(
+            input=UserImageInput(
                 image_s3_url=S3Url("https://example.com/source-1.png"),
             ),
             presigned_url=S3PresignedUrl("https://example.com/upload-1.png"),
@@ -40,7 +40,7 @@ def _build_test_batch() -> BatchedTaskInputOutput[
     task_2 = TaskInputOutput(
         task_result_id=task_2_id,
         task_input=WithPresignedUrl(
-            input=SingleCatImageInput(
+            input=UserImageInput(
                 image_s3_url=S3Url("https://example.com/source-2.png"),
             ),
             presigned_url=S3PresignedUrl("https://example.com/upload-2.png"),
@@ -120,9 +120,9 @@ def _make_test_settings() -> CatValidatorSettings:
 
 
 def _validate_batch(
-    batch: BatchedTaskInputOutput[WithPresignedUrl[SingleCatImageInput], MinerResult, WithPresignedUrl[MinerResult]],
+    batch: BatchedTaskInputOutput[WithPresignedUrl[UserImageInput], MinerResult, WithPresignedUrl[MinerResult]],
     settings: CatValidatorSettings,
-) -> BatchedTaskInputOutput[WithPresignedUrl[SingleCatImageInput], ValidationResult, ValidationResult]:
+) -> BatchedTaskInputOutput[WithPresignedUrl[UserImageInput], ValidationResult, ValidationResult]:
     return validation_algorithm.validate(
         batch,
         settings=settings,
@@ -178,7 +178,7 @@ def test_validate_successfully_scores_each_task(monkeypatch: pytest.MonkeyPatch)
 def test_validate_empty_batch_skips_openrouter_call(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = _make_test_settings()
     empty_batch: BatchedTaskInputOutput[
-        WithPresignedUrl[SingleCatImageInput], MinerResult, WithPresignedUrl[MinerResult]
+        WithPresignedUrl[UserImageInput], MinerResult, WithPresignedUrl[MinerResult]
     ]
     empty_batch = BatchedTaskInputOutput(task_input_outputs=())
     record = _patch_openrouter_client(monkeypatch, response_payload={})

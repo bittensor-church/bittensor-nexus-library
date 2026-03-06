@@ -15,7 +15,7 @@ from cat_images.facilitator.s3 import S3Client
 from cat_images.facilitator.stores import JobStore, ValidatorStore
 from cat_images.facilitator.types import JobId, JobLiveness, ValidatorHotkey
 from cat_images.facilitator.worker import JobWorker
-from cat_images.subnet_models import S3Url, SingleCatImageInput
+from cat_images.subnet_models import S3Url, UserImageInput
 
 log = logging.getLogger("facilitator.ui")
 
@@ -94,7 +94,7 @@ class UiController(Controller):
         # Upload to S3
         image_key = s3_client.upload_image(file_bytes, content_type)
         image_url = s3_client.presign(image_key)
-        job_spec = SingleCatImageInput(image_s3_url=S3Url(image_url))
+        job_spec = UserImageInput(image_s3_url=S3Url(image_url))
 
         # Route: pick a validator for this request
         cat_request = CatificationRequest(job_spec=job_spec)

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from cat_images.facilitator.models import Job, RegisteredValidator, StatusUpdate
 from cat_images.facilitator.types import JobId, ValidatorHotkey
-from cat_images.subnet_models import SingleCatImageInput
+from cat_images.subnet_models import UserImageInput
 
 
 class ValidatorStore:
@@ -57,7 +57,7 @@ class JobStore:
         self._lock = threading.Lock()
         self._jobs: dict[JobId, Job] = {}
 
-    def create(self, job_spec: SingleCatImageInput, validator_hotkey: ValidatorHotkey, image_key: str) -> Job:
+    def create(self, job_spec: UserImageInput, validator_hotkey: ValidatorHotkey, image_key: str) -> Job:
         job = Job(
             id=JobId(uuid.uuid4().hex[:12]),
             image_key=image_key,

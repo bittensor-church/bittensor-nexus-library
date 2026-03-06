@@ -11,7 +11,7 @@ from cat_images.facilitator.models import RegisteredValidator, StatusUpdate
 from cat_images.facilitator.stores import JobStore
 from cat_images.facilitator.submitter import JobSubmitter, SubmissionError
 from cat_images.facilitator.types import JobId, JobLiveness
-from cat_images.subnet_models import SingleCatImageInput, ValidatorResult
+from cat_images.subnet_models import UserImageInput, ValidatorResult
 
 log = logging.getLogger("facilitator.worker")
 
@@ -56,10 +56,10 @@ class JobWorker:
         self._submitter = submitter
         self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="job-worker")
 
-    def dispatch(self, job_id: JobId, job_spec: SingleCatImageInput, validator: RegisteredValidator) -> None:
+    def dispatch(self, job_id: JobId, job_spec: UserImageInput, validator: RegisteredValidator) -> None:
         self._pool.submit(self._run, job_id, job_spec, validator)
 
-    def _run(self, job_id: JobId, job_spec: SingleCatImageInput, validator: RegisteredValidator) -> None:
+    def _run(self, job_id: JobId, job_spec: UserImageInput, validator: RegisteredValidator) -> None:
         _append(self._job_store, job_id, "Sent to validator, waiting...", JobLiveness.IN_PROGRESS)
 
         # Silly ticker that posts a random cat message every second

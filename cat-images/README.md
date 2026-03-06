@@ -53,7 +53,7 @@ Validators push status updates to `POST /api/jobs/{job_id}/status`. The payload 
 
 ```json
 {"liveness": "in_progress", "status": "Processing...", "timestamp": "2026-03-04T12:00:00Z"}
-{"liveness": "success", "status": "Catified!", "timestamp": "...", "result": {"result_image_url": "https://..."}}
+{"liveness": "success", "status": "Catified!", "timestamp": "...", "result": {"result_image_url": "https://...", "image_hash": "<sha256-like-hash>"}}
 {"liveness": "failed", "status": "Out of cats", "timestamp": "..."}
 ```
 
@@ -81,7 +81,7 @@ Returns JSON:
 ```
 
 For facilitator UI testing with `test_scripts/fake_validator.py`, the fake endpoint still listens on `/submit` and
-returns `{"result_image_url":"..."}`.
+returns `{"result_image_url":"...", "image_hash":"fake-hash"}`.
 
 ## Miner
 

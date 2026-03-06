@@ -12,12 +12,12 @@ SourcePath = NewType("SourcePath", str)
 
 """Example flow use:
 
-    entry: RestEntryPoint[SingleCatImageInput] = RestEntryPoint(
+    entry: RestEntryPoint[UserImageInput] = RestEntryPoint(
         path="/cat",
         port=8080,
-        user_data_model=SingleCatImageInput)
+        user_data_model=UserImageInput)
 
-    stringify: Stringify[SingleCatImageInput] = Stringify()
+    stringify: Stringify[UserImageInput] = Stringify()
 
     upppercase_if_even: UppercaseIfEven = UppercaseIfEven()
 
