@@ -6,7 +6,7 @@ from typing import Protocol, override
 from pylon_client.artanis import Config, Hotkey, NetUid, PylonAuthToken, PylonClient, Weight
 from pylon_client.artanis.v1 import GetLatestBlockInfoResponse, GetNeuronsResponse, SetWeightsResponse
 
-from nexus.utils.exceptions import InternalFrameworkException
+from nexus.utils.env import get_required_env_var
 
 
 class OpenAccessPylonApiLike(Protocol):
@@ -50,23 +50,17 @@ class PylonClientProvider(ABC):
     def get_client(self) -> SyncPylonClientLike: ...
 
 
-class StaticConfigPylonClientProvider(PylonClientProvider):
-    address: str
-    open_access_token: str
-
-    def __init__(self, *, pylon_service_address: str, open_access_token: str) -> None:
-        if not pylon_service_address:
-            raise InternalFrameworkException("pylon service address cannot be empty")
-        if not open_access_token:
-            raise InternalFrameworkException("open_access_token cannot be empty")
-        self.address = pylon_service_address
-        self.open_access_token = open_access_token
-
+class EnvPylonClientProvider(PylonClientProvider):
     @override
     def get_client(self) -> SyncPylonClientLike:
+        address = get_required_env_var("PYLON_SERVICE_ADDRESS", "VALIDATOR_PYLON_SERVICE_ADDRESS")
+        open_access_token = get_required_env_var("PYLON_OPEN_ACCESS_TOKEN", "VALIDATOR_PYLON_OPEN_ACCESS_TOKEN")
         return PylonClient(
             Config(
-                address=self.address,
-                open_access_token=PylonAuthToken(self.open_access_token),
+                address=address,
+                open_access_token=PylonAuthToken(open_access_token),
             )
         )
+
+
+DEFAULT_PYLON_CLIENT_PROVIDER: PylonClientProvider = EnvPylonClientProvider()

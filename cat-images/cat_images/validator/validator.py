@@ -63,7 +63,6 @@ class Validator(NexusValidator):
                 "mining-router",
                 netuid=settings.netuid,
                 neuron_filter=miners_only,
-                pylon_client_provider=self.pylon_client_provider,  # this should go once we set up dependency injection
             ),
             executor_communicator=AsyncHttpNeuronCommunicator(
                 "miner-communicator",
@@ -83,8 +82,6 @@ class Validator(NexusValidator):
                 load_s3_key="miner-upload-url",
                 bucket=settings.s3_bucket,
             ),
-            # this should go once we set up dependency injection
-            task_result_store_provider=self.task_result_store_provider,
         )
 
         self.miner_result_sampler = EveryTaskResultSampler("miner-result-sampler")
@@ -104,22 +101,16 @@ class Validator(NexusValidator):
                 ),
             ),
             executor_result_converter=NoopPayloadCreator("validation-result-converter"),
-            # this should go once we set up dependency injection
-            task_result_store_provider=self.task_result_store_provider,
         )
 
         self.epoch_beat = EpochBeatNode(
             "weight-setting-trigger",
             netuid=settings.netuid,
             delay=BlockCount(20),
-            pylon_client_provider=self.pylon_client_provider,  # this should go once we set up dependency injection
         )
 
         self.weight_setter = WeightSetterNode(
             "cat-images-weight-setter",
-            pylon_client_provider=self.pylon_client_provider,  # this should go once we set up dependency injection
-            # this should go once we set up dependency injection
-            task_result_store_provider=self.task_result_store_provider,
             weighing_func=lambda task_results_bundle: weighing_algorithm.weighing_func(
                 MINING_TASK_NAME, VALIDATION_TASK_NAME, task_results_bundle
             ),

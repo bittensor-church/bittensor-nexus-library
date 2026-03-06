@@ -1,6 +1,6 @@
 from typing import override
 
-from nexus.actors.task_result_store_provider import TaskResultStoreProvider
+from nexus.actors.task_result_store_provider import DEFAULT_TASK_RESULT_STORE_PROVIDER, TaskResultStoreProvider
 from nexus.core.dsl.nodes import NodeId, NodeSinks, NodeSources, SinkName, Source, SourceName, Transform
 from nexus.core.runtime.actor import Actor, ActorBuilder
 from nexus.core.runtime.actor_patterns import TransformActor
@@ -30,11 +30,12 @@ class TaskResultStorer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
         self,
         _id: NodeId,
         name: NexusTaskName,
-        task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+        task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
+        | None = None,
     ) -> None:
         super().__init__(_id)
         self.task_name = name
-        self.task_result_store_provider = task_result_store_provider
+        self.task_result_store_provider = task_result_store_provider or DEFAULT_TASK_RESULT_STORE_PROVIDER
 
         # aliases for convenience
         self.task_result = self.ok

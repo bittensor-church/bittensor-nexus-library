@@ -17,3 +17,6 @@ class DefaultTaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPu
     @override
     def get_task_result_store(self) -> TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
         return cast(TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], DEFAULT_TASK_RESULT_STORE)
+
+
+DEFAULT_TASK_RESULT_STORE_PROVIDER: TaskResultStoreProvider[Any, Any, Any] = DefaultTaskResultStoreProvider()

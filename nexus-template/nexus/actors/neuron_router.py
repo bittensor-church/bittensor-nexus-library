@@ -12,7 +12,7 @@ from pylon_client.artanis import NetUid, PylonClient
 from pylon_client.artanis.v1 import GetNeuronsResponse, Neuron
 
 from nexus import get_logger
-from nexus.actors.pylon_client_provider import PylonClientProvider
+from nexus.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
 from nexus.core.dsl.nodes import (
     NodeSinks,
     NodeSources,
@@ -69,7 +69,7 @@ class NeuronRouter[Input](Transform[Input, Routed[Input]]):
         _id: str,
         *,
         netuid: int,
-        pylon_client_provider: PylonClientProvider,
+        pylon_client_provider: PylonClientProvider | None = None,
         neuron_filter: NeuronFilter = keep_all_neurons,
     ) -> None:
         super().__init__(_id)
@@ -77,7 +77,7 @@ class NeuronRouter[Input](Transform[Input, Routed[Input]]):
             raise ActorMisconfiguredException("netuid must be >= 0")
         self.netuid = netuid
         self.neuron_filter = neuron_filter
-        self.pylon_client_provider = pylon_client_provider
+        self.pylon_client_provider = pylon_client_provider or DEFAULT_PYLON_CLIENT_PROVIDER
 
         # alias for convenience
         self.input = self.sink

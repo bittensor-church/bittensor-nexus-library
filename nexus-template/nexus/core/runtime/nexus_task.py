@@ -6,7 +6,7 @@ from nexus.actors.payload_creator import PayloadCreator
 from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
 from nexus.actors.task_result_preparer import TaskResultPreparer
 from nexus.actors.task_result_splitter import TaskResultSplitter
-from nexus.actors.task_result_store_provider import DefaultTaskResultStoreProvider, TaskResultStoreProvider
+from nexus.actors.task_result_store_provider import DEFAULT_TASK_RESULT_STORE_PROVIDER, TaskResultStoreProvider
 from nexus.actors.task_result_storer import TaskResultStorer
 from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Node, NodeId, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
@@ -70,11 +70,7 @@ class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput = E
             _id=NodeId(f"{name}-task-result-preparer")
         )
         if task_result_store_provider is None:
-            task_result_store_provider = DefaultTaskResultStoreProvider[
-                ExecutorPayload,
-                ExecutorOutput,
-                ExecutorPublicOutput,
-            ]()
+            task_result_store_provider = DEFAULT_TASK_RESULT_STORE_PROVIDER
         self.task_result_storer = TaskResultStorer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
             _id=NodeId(f"{name}-task-result-storer"),
             name=name,
