@@ -1,9 +1,7 @@
-import logging
-import sys
 from typing import Self
 
 from nexus.utils.types import NetUid, Port
-from pydantic import ValidationError, model_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -23,8 +21,6 @@ DEFAULT_VALIDATION_PROMPT = (
     "{\"scores_by_task_result_id\": {\"<task_result_id>\": <integer_score_1_to_100>}}. "
     "Do not include markdown, comments, code fences, or any extra keys."
 )
-
-log = logging.getLogger("validator")
 
 
 class CatValidatorSettings(BaseSettings):
@@ -51,13 +47,3 @@ class CatValidatorSettings(BaseSettings):
         if len(self.validation_prompt.strip()) == 0:
             self.validation_prompt = DEFAULT_VALIDATION_PROMPT
         return self
-
-
-def load_validator_settings() -> CatValidatorSettings:
-    try:
-        return CatValidatorSettings()  # type: ignore[call-arg]
-    except ValidationError as e:
-        fields = ", ".join(str(err["loc"][-1]) for err in e.errors() if err.get("loc"))
-        log.error(f"Configuration error: missing or invalid fields: {fields}")
-        log.error("Check your .env file or environment variables.")
-        sys.exit(1)

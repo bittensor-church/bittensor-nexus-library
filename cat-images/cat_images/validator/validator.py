@@ -1,7 +1,6 @@
 # pyright: basic
 
 import logging
-import time
 from datetime import timedelta
 from functools import partial
 from ipaddress import IPv4Address
@@ -34,7 +33,7 @@ from cat_images.subnet_models import (
 )
 
 from . import validation_algorithm, weighing_algorithm
-from .validator_settings import CatValidatorSettings, load_validator_settings
+from .validator_settings import CatValidatorSettings
 
 MINING_TASK_NAME = NexusTaskName("add-cat-to-image")
 VALIDATION_TASK_NAME = NexusTaskName("validation-task")
@@ -146,22 +145,3 @@ class Validator(NexusValidator):
 
         # weight setting
         self.connect(self.epoch_beat.source, self.weight_setter.sink)
-
-
-def main() -> None:
-    logging.getLogger("httpx").setLevel(logging.WARN)
-    settings = load_validator_settings()
-    # log.info("Validator config:\n%s", settings.model_dump_json(indent=2))
-
-    validator = Validator(settings)
-    with validator.start_runtime():
-        print("Validator running. Press Ctrl+C to stop.")
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            pass
-
-
-if __name__ == "__main__":
-    main()
