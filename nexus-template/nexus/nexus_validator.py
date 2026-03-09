@@ -4,6 +4,7 @@ import sys
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Any
 
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
@@ -18,17 +19,23 @@ log = logging.getLogger("validator")
 
 
 class NexusValidator:
+    """Base class for validator graphs built from explicit `connect(...)` wiring.
+
+    Runtime components are discovered only from endpoints used in `connect(...)`.
+    There is no separate node/task registration API.
+    """
+
     subnet_clock: BlockBeatNode
 
-    nodes: list[Node]
-    tasks: list[NexusTask]
+    _connected_nodes: dict[int, Node]
+    _connected_tasks: dict[int, NexusTask[Any, Any, Any, Any]]
     subnet_flow: Flow
     runtime: SubnetRuntime | None = None
 
     def __init__(self, settings: BaseSettings) -> None:
         self.subnet_clock = BlockBeatNode("internal-subnet-clock")
-        self.nodes = [self.subnet_clock]
-        self.tasks = []
+        self._connected_nodes = {}
+        self._connected_tasks = {}
 
         self.subnet_flow = Flow(
             entry_sinks=NodeSinks(sinks={}),
@@ -59,25 +66,36 @@ class NexusValidator:
                 pass
 
     def connect[T](self, source: Source[T], sink: Sink[T]) -> None:
+        """Connect two endpoints and register the owners of connected components."""
         self.subnet_flow.sources.add(source)
         self.subnet_flow.sinks.add(sink)
         self.subnet_flow.pipes[source].add(sink)
+        self._register_endpoint_owner(source)
+        self._register_endpoint_owner(sink)
 
-    def add_nodes(self, *nodes: Node | NexusTask) -> None:
-        for node in nodes:
-            if isinstance(node, NexusTask):
-                self.tasks.append(node)
-            else:
-                self.nodes.append(node)
+    def _register_endpoint_owner(self, endpoint: Source[Any] | Sink[Any]) -> None:
+        owner_node = endpoint.owner_node
+        if owner_node is not None:
+            self._connected_nodes[id(owner_node)] = owner_node
+
+        owner_task = endpoint.owner_task
+        if owner_task is not None:
+            self._connected_tasks[id(owner_task)] = owner_task
 
     def _build_runtime(self) -> SubnetRuntime:
-        all_nodes = self.nodes[:]
-        task_flows = []
-        for task in self.tasks:
+        connected_tasks = tuple(self._connected_tasks.values())
+        for task in connected_tasks:
             self.connect(self.subnet_clock.source, task.block_beat)
-            all_nodes.extend(task.internal_nodes())
-            task_flows.append(task.internal_flow)
-        return SubnetBuilder(nodes=all_nodes).add_flows(self.subnet_flow).add_flows(*task_flows).build()
+
+        task_flows = [task.internal_flow for task in connected_tasks]
+
+        all_nodes = [
+            *self._connected_nodes.values(),
+            *(node for task in connected_tasks for node in task.internal_nodes()),
+        ]
+        deduped_nodes = tuple({id(node): node for node in all_nodes}.values())
+
+        return SubnetBuilder(nodes=deduped_nodes).add_flows(self.subnet_flow).add_flows(*task_flows).build()
 
     @contextmanager
     def start_runtime(self, shutdown_timeout_seconds: float = 30.0) -> Generator[SubnetRuntime]:

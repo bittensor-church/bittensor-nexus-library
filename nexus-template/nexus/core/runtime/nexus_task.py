@@ -88,6 +88,8 @@ class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput = E
         self.task_result = self.task_result_splitter.task_result
         self.executor_output = self.task_result_splitter.executor_output
         self.error = self.error_mux.out
+        for endpoint in (self.block_beat, self.input, self.task_result, self.executor_output, self.error):
+            endpoint.owner_task = self
 
         self.internal_flow = Flow(
             entry_sinks=NodeSinks(

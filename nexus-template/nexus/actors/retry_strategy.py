@@ -52,10 +52,10 @@ class RetryStrategy[T](Node, ActorBuilder):
         super().__init__(_id)
         self.max_attempts = max_attempts
         self.delay = delay
-        self.input = Sink(f"{self.id}-input")
-        self.next_attempt = Source(f"{self.id}-next-attempt")
-        self.error = Source(f"{self.id}-error")
-        self.failed_attempt = Sink(f"{self.id}-failed-attempt")
+        self.input = Sink(f"{self.id}-input", owner_node=self)
+        self.next_attempt = Source(f"{self.id}-next-attempt", owner_node=self)
+        self.error = Source(f"{self.id}-error", owner_node=self)
+        self.failed_attempt = Sink(f"{self.id}-failed-attempt", owner_node=self)
 
     @override
     def sinks(self) -> NodeSinks:

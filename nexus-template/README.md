@@ -30,6 +30,10 @@ uv run basedpyright
 uv run pytest
 ```
 
+## Validator wiring
+
+`NexusValidator` discovers runtime components from `connect(source, sink)` calls.
+
 ## Project structure
 
 ```

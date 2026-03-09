@@ -3,9 +3,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, NewType, TypeVar, override
+from typing import TYPE_CHECKING, Any, NewType, TypeVar, override
 
 from nexus.utils.exceptions import InternalFrameworkException, NexusException
+
+if TYPE_CHECKING:
+    from nexus.core.runtime.nexus_task import NexusTask
 
 T = TypeVar("T")
 
@@ -78,9 +81,19 @@ class Source[T]:
     """
 
     id: SourceId
+    owner_node: Node | None
+    owner_task: NexusTask[Any, Any, Any, Any] | None
 
-    def __init__(self, _id: str):
+    def __init__(
+        self,
+        _id: str,
+        *,
+        owner_node: Node | None = None,
+        owner_task: NexusTask[Any, Any, Any, Any] | None = None,
+    ):
         self.id = SourceId(_id)
+        self.owner_node = owner_node
+        self.owner_task = owner_task
 
 
 class SourceNode[T](Node):
@@ -109,9 +122,19 @@ class Sink[T]:
     """
 
     id: SinkId
+    owner_node: Node | None
+    owner_task: NexusTask[Any, Any, Any, Any] | None
 
-    def __init__(self, _id: str):
+    def __init__(
+        self,
+        _id: str,
+        *,
+        owner_node: Node | None = None,
+        owner_task: NexusTask[Any, Any, Any, Any] | None = None,
+    ):
         self.id = SinkId(_id)
+        self.owner_node = owner_node
+        self.owner_task = owner_task
 
 
 class SinkNode[T](Node):
@@ -142,8 +165,8 @@ class Producer[T](Node):
 
     def __init__(self, _id: str):
         super().__init__(_id)
-        self.source = Source[T](_id)
-        self.sink = Sink(f"{_id}-sink")
+        self.source = Source[T](_id, owner_node=self)
+        self.sink = Sink(f"{_id}-sink", owner_node=self)
 
     @override
     def sinks(self) -> NodeSinks:
@@ -165,9 +188,9 @@ class Fork[From, ToLeft, ToRight](Node):
 
     def __init__(self, _id: str):
         super().__init__(_id)
-        self.sink = Sink[From](f"{_id}-sink")
-        self.left = Source[ToLeft](f"{_id}-left-source")
-        self.right = Source[ToRight](f"{_id}-right-source")
+        self.sink = Sink[From](f"{_id}-sink", owner_node=self)
+        self.left = Source[ToLeft](f"{_id}-left-source", owner_node=self)
+        self.right = Source[ToRight](f"{_id}-right-source", owner_node=self)
 
     @override
     def sinks(self) -> NodeSinks:
