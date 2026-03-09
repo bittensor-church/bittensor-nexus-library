@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from unittest.mock import create_autospec, seal
 
 import pytest
-from pylon_client.artanis import PylonResponseException
+from pylon_client.artanis import PylonMisconfigured, PylonResponseException
 from utils import (
     CollectorActor,
     InMemoryTestTaskResultStoreProvider,
@@ -189,6 +189,25 @@ def test_pylon_failure_emits_error(mock_pylon_client):
     _seed_results_across_epochs(store_provider, entries)
 
     mock_pylon_client.identity.put_weights.side_effect = PylonResponseException("pylon is not cooperating")
+    ok, errors = _build_and_run(
+        weighing_func=_weigh_by_task_result_count(TASK_NAME),
+        pylon_client=mock_pylon_client,
+        task_result_store_provider=store_provider,
+    )
+    assert [type(e) for e in errors] == [WeightSettingException]
+    assert ok == []
+
+
+def test_pylon_identity_misconfigured_emits_error(mock_pylon_client):
+    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    _seed_results_across_epochs(
+        store_provider,
+        entries=((400, "hk1"),),
+    )
+
+    mock_pylon_client.identity.put_weights.side_effect = PylonMisconfigured(
+        "Can not use identity api - no identity name or token provided in config."
+    )
     ok, errors = _build_and_run(
         weighing_func=_weigh_by_task_result_count(TASK_NAME),
         pylon_client=mock_pylon_client,
