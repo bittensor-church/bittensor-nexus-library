@@ -3,10 +3,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Protocol, override
 
-from pylon_client.artanis import Config, Hotkey, NetUid, PylonAuthToken, PylonClient, Weight
+from pylon_client.artanis import Config, Hotkey, IdentityName, NetUid, PylonAuthToken, PylonClient, Weight
 from pylon_client.artanis.v1 import GetLatestBlockInfoResponse, GetNeuronsResponse, SetWeightsResponse
 
-from nexus.utils.env import get_required_env_var
+from nexus.utils.env import get_optional_env_var, get_required_env_var
+from nexus.utils.exceptions import ActorMisconfiguredException
 
 
 class OpenAccessPylonApiLike(Protocol):
@@ -53,12 +54,23 @@ class PylonClientProvider(ABC):
 class EnvPylonClientProvider(PylonClientProvider):
     @override
     def get_client(self) -> SyncPylonClientLike:
-        address = get_required_env_var("PYLON_SERVICE_ADDRESS", "VALIDATOR_PYLON_SERVICE_ADDRESS")
-        open_access_token = get_required_env_var("PYLON_OPEN_ACCESS_TOKEN", "VALIDATOR_PYLON_OPEN_ACCESS_TOKEN")
+        address = get_required_env_var("VALIDATOR_PYLON_SERVICE_ADDRESS")
+        open_access_token = get_required_env_var("VALIDATOR_PYLON_OPEN_ACCESS_TOKEN")
+        identity_name = get_optional_env_var("VALIDATOR_PYLON_IDENTITY_NAME")
+        identity_token = get_optional_env_var("VALIDATOR_PYLON_IDENTITY_TOKEN")
+
+        if (identity_name is None) != (identity_token is None):
+            raise ActorMisconfiguredException(
+                "Pylon identity configuration must provide both name and token. "
+                "Expected VALIDATOR_PYLON_IDENTITY_NAME together with VALIDATOR_PYLON_IDENTITY_TOKEN."
+            )
+
         return PylonClient(
             Config(
                 address=address,
                 open_access_token=PylonAuthToken(open_access_token),
+                identity_name=IdentityName(identity_name) if identity_name is not None else None,
+                identity_token=PylonAuthToken(identity_token) if identity_token is not None else None,
             )
         )
 

@@ -76,12 +76,18 @@ Compose environment variables (typically defined in ${DOCKER_DIR}/.env.validator
                                    (default: my-cat-images-bucket)
     VALIDATOR_PYLON_SERVICE_ADDRESS Pylon service URL (default: http://pylon:8000)
     VALIDATOR_PYLON_OPEN_ACCESS_TOKEN Pylon access token used by validator client
+    VALIDATOR_PYLON_IDENTITY_NAME  Pylon identity name for write operations (default: validator)
 
   Optional pylon runtime:
-    PYLON_BITTENSOR_NETWORK        Bittensor network (default: finney)
+    PYLON_BITTENSOR_NETWORK        Bittensor network (default: test)
     PYLON_RECENT_OBJECTS_NETUIDS   JSON list of cached netuids for open-access routing
-                                   (example: [278])
+                                   (default: [1])
     PYLON_OPEN_ACCESS_TOKEN        Pylon open-access token
+    PYLON_IDENTITIES               JSON list of configured identity names (default: ["validator"])
+    PYLON_ID_VALIDATOR_WALLET_NAME Wallet coldkey name used to set weights (default: some-wallet-name)
+    PYLON_ID_VALIDATOR_HOTKEY_NAME Wallet hotkey name used to set weights (default: default)
+    PYLON_ID_VALIDATOR_NETUID      Subnet bound to identity (default: 1)
+    PYLON_ID_VALIDATOR_TOKEN       Shared secret token for identity auth (required)
 
   Optional AWS:
     AWS_SESSION_TOKEN              Temporary session token, if applicable

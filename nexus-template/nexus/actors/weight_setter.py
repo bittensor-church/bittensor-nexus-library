@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, override
 
-from pylon_client.artanis import PylonResponseException
+from pylon_client.artanis import PylonMisconfigured, PylonResponseException
 
 from nexus.core.dsl.nodes import Transform
 from nexus.core.runtime.actor import ActorBuilder
@@ -98,7 +98,7 @@ class WeightSetterActor(TransformActor[EpochBeat, WeightSettingSuccess]):
 
         try:
             pylon.identity.put_weights({**weights})
-        except PylonResponseException as exc:
+        except (PylonResponseException, PylonMisconfigured) as exc:
             raise WeightSettingException(f"Failed to set weights for epoch {payload.epoch}") from exc
 
         return WeightSettingSuccess()
