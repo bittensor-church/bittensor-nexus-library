@@ -114,15 +114,6 @@ class Validator(NexusValidator):
             ),
         )
 
-        self.add_nodes(
-            self.entry,
-            self.mining_task,
-            self.miner_result_sampler,
-            self.validation_task,
-            self.epoch_beat,
-            self.weight_setter,
-        )
-
         # mining
         self.connect(self.entry.source, self.mining_task.input)
         self.connect(self.mining_task.executor_output, self.entry.sink)

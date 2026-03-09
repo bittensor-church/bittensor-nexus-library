@@ -21,15 +21,20 @@ class TaskResultPreparer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     def __init__(self, _id: str) -> None:
         super().__init__(_id)
         self.timestamped_result = Sink[StoredTaskExecution[ExecutorPayload, ExecutorOutput]](
-            f"{self.id}-timestamped-result"
+            f"{self.id}-timestamped-result",
+            owner_node=self,
         )
-        self.converted_public_output = Sink[ExecutorPublicOutput](f"{self.id}-converted-public-output")
-        self.conversion_failed = Sink[NexusException](f"{self.id}-conversion-failed")
-        self.executor_output_for_conversion = Source[ExecutorOutput](f"{self.id}-executor-output-for-conversion")
+        self.converted_public_output = Sink[ExecutorPublicOutput](f"{self.id}-converted-public-output", owner_node=self)
+        self.conversion_failed = Sink[NexusException](f"{self.id}-conversion-failed", owner_node=self)
+        self.executor_output_for_conversion = Source[ExecutorOutput](
+            f"{self.id}-executor-output-for-conversion",
+            owner_node=self,
+        )
         self.prepared_task_result = Source[TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]](
-            f"{self.id}-prepared-task-result"
+            f"{self.id}-prepared-task-result",
+            owner_node=self,
         )
-        self.error = Source[NexusException](f"{self.id}-error")
+        self.error = Source[NexusException](f"{self.id}-error", owner_node=self)
 
     @override
     def sinks(self) -> NodeSinks:

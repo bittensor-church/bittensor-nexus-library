@@ -14,9 +14,9 @@ class Mux2[Common, Left, Right](Node, ActorBuilder):
 
     def __init__(self, _id: str) -> None:
         super().__init__(_id)
-        self.left = Sink[Left](f"{self.id}-left")
-        self.right = Sink[Right](f"{self.id}-right")
-        self.out = Source[Common](f"{self.id}-out")
+        self.left = Sink[Left](f"{self.id}-left", owner_node=self)
+        self.right = Sink[Right](f"{self.id}-right", owner_node=self)
+        self.out = Source[Common](f"{self.id}-out", owner_node=self)
 
     @override
     def sinks(self) -> NodeSinks:

@@ -18,12 +18,17 @@ class TaskResultSplitter[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     def __init__(self, _id: str) -> None:
         super().__init__(_id)
         self.task_result_input = Sink[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]](
-            f"{self.id}-task-result-input"
+            f"{self.id}-task-result-input",
+            owner_node=self,
         )
         self.task_result = Source[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]](
-            f"{self.id}-task-result"
+            f"{self.id}-task-result",
+            owner_node=self,
         )
-        self.executor_output = Source[ExecutorPublicOutput | NexusException](f"{self.id}-executor-output")
+        self.executor_output = Source[ExecutorPublicOutput | NexusException](
+            f"{self.id}-executor-output",
+            owner_node=self,
+        )
 
     @override
     def sinks(self) -> NodeSinks:

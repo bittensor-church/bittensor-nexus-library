@@ -56,8 +56,8 @@ class RestEntryPoint[Model: BaseModel](Node, ActorBuilder):
         self.bind_ip = bind_ip
         self.port = Port(int(port))
         self.user_data_model = user_data_model
-        self.source = Source(f"{self.id}-source")
-        self.sink = Sink(f"{self.id}-sink")
+        self.source = Source(f"{self.id}-source", owner_node=self)
+        self.sink = Sink(f"{self.id}-sink", owner_node=self)
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:

@@ -71,12 +71,12 @@ class TimestamperNode[Input, Output](Node, ActorBuilder):
     def __init__(self, _id: str) -> None:
         super().__init__(_id)
 
-        self.input = Sink[Input](f"{self.id}-input-sink")
-        self.executor_output = Sink[Output](f"{self.id}-executor-output-sink")
-        self.block_beat = Sink[BlockBeat](f"{self.id}-block-beat-sink")
+        self.input = Sink[Input](f"{self.id}-input-sink", owner_node=self)
+        self.executor_output = Sink[Output](f"{self.id}-executor-output-sink", owner_node=self)
+        self.block_beat = Sink[BlockBeat](f"{self.id}-block-beat-sink", owner_node=self)
 
-        self.forwarded_input = Source[Input](f"{self.id}-input-source")
-        self.timestamped_output = Source[Timestamped[Output]](f"{self.id}-output-source")
+        self.forwarded_input = Source[Input](f"{self.id}-input-source", owner_node=self)
+        self.timestamped_output = Source[Timestamped[Output]](f"{self.id}-output-source", owner_node=self)
 
         self.processing_started_at_user_data_key = f"{self.id}-processing-started-at-utc"
 
