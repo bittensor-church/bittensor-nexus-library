@@ -14,6 +14,7 @@ from nexus.actors.executor_communicator import (
     PendingAsyncHttpRequest,
     PendingAsyncHttpRequestStore,
 )
+from nexus.actors.metagraph_source import MetagraphSource, NeuronMap, TriggeredMetagraph
 from nexus.actors.rest_entry_point import RestEntryPoint, RestEntryPointActor
 from nexus.actors.neuron_router import (
     NoRoutableNeuronsException,
@@ -55,6 +56,8 @@ __all__ = [
     "ExecutorCommunicator",
     "HttpBindEndpoint",
     "InMemoryPendingAsyncHttpRequestStore",
+    "MetagraphSource",
+    "NeuronMap",
     "NeuronAddressInvalidException",
     "NeuronFilter",
     "RemoteRequestFailedException",
@@ -74,6 +77,7 @@ __all__ = [
     "NeuronRouter",
     "NeuronRouterActor",
     "Neuron",
+    "TriggeredMetagraph",
     "UnsupportedAxonProtocolException",
     "TaskResultSplitter",
     "TaskResultSplitterActor",
