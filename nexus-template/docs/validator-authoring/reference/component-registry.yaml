@@ -1,0 +1,16 @@
+- component_id: MetagraphSource
+  kind: node
+  module_path: nexus/actors/metagraph_source.py
+  constructor: MetagraphSource(_id, netuid=None, pylon_client_provider=None)
+  required_knobs:
+    - _id
+  optional_knobs:
+    - netuid
+    - pylon_client_provider
+  sinks:
+    - trigger
+  sources:
+    - metagraph
+    - error
+  emitted_errors:
+    - NexusException
