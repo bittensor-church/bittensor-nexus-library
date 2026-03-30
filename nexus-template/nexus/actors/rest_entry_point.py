@@ -35,6 +35,14 @@ DEFAULT_BIND_IP = "0.0.0.0"
 
 
 class RestEntryPoint[Model: BaseModel](Node, ActorBuilder):
+    """Exposes an HTTP endpoint that accepts incoming requests and returns pipeline results as HTTP responses.
+    Incoming requests are emitted into the pipeline via `source`. Connect the pipeline's final output
+    back to `sink` to complete the request-response cycle.
+
+    sink sink: pipeline result to return as the HTTP response
+    source source: parsed request body emitted into the pipeline
+    """
+
     source: Source[Model]
     sink: Sink[Any]
     path: NormalizedHttpPath

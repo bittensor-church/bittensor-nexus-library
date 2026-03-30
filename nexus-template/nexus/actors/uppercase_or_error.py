@@ -13,6 +13,13 @@ class EvenSucks(NexusException):
 
 
 class UppercaseOrError(Transform[str, str], ActorBuilder):
+    """Example transform. Uppercases strings with an odd character count, errors on even.
+
+    sink input: string to transform
+    source ok: uppercased string (odd-length inputs only)
+    source error: EvenSucks for even-length inputs
+    """
+
     def __init__(self, _id: str) -> None:
         super().__init__(_id)
 

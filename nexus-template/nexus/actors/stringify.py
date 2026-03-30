@@ -8,6 +8,13 @@ from nexus.core.runtime.events import PipeToBus
 
 
 class Stringify[T](Transform[T, str], ActorBuilder):
+    """Example transform. Converts any input to its string representation.
+
+    sink input: value to stringify
+    source ok: stringified value
+    source error: transform failures
+    """
+
     def __init__(self, _id: str) -> None:
         super().__init__(_id)
 

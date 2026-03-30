@@ -8,8 +8,9 @@ from nexus.core.runtime.events import PipeToBus
 
 
 class StringPrinter(Sink[str], ActorBuilder):
-    """
-    An actor that prints incoming strings to the console.
+    """Example consumer. Prints incoming strings to the console.
+
+    sink self: string to print
     """
 
     def __init__(self, _id: str) -> None:

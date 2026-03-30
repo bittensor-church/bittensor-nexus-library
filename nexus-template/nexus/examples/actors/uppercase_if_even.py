@@ -8,6 +8,13 @@ from nexus.core.runtime.events import PipeToBus
 
 
 class UppercaseIfEven(Fork[str, str, str], ActorBuilder):
+    """Example fork. Uppercases strings with even length to `left`, passes odd-length strings unchanged to `right`.
+
+    sink sink: string to process
+    source left: uppercased string (even-length inputs)
+    source right: original string (odd-length inputs)
+    """
+
     def __init__(self, _id: str) -> None:
         super().__init__(_id)
 

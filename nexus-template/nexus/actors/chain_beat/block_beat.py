@@ -30,15 +30,14 @@ class BlockBeat:
 
 
 class BlockBeatNode(Producer[BlockBeat], ActorBuilder):
-    """
-    Uses pylon, polling it in a loop to retrieve the latest block info.
-    Emits a message - the current block info - whenever it changes.
-    Guarantees:
-     - Emitted block number is real as received from the chain (so, not time-predicted)
-    Keep in mind:
-     - There may be gaps. If we lose connection to pylon and regain it after a while, there's no backfilling.
-     - The beat will not happen at a stable 12-second pace, there will be some seconds of jitter and delay. The beat
-       object contains the block timestamp if you need to know it.
+    """Emits a beat whenever the current block number changes.
+    Emitted block numbers are real as received from the chain, not time-predicted.
+    There may be gaps — if connection is lost and regained, there is no backfilling.
+    The beat will not happen at a stable 12-second pace; expect jitter and delay.
+    The beat object contains the block timestamp if you need to know the exact time.
+
+    sink sink: unused (lifecycle/control)
+    source source: BlockBeat on each new block
     """
 
     every_nth: BlockCount

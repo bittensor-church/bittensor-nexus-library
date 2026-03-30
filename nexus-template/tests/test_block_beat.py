@@ -102,9 +102,7 @@ def test_block_beat_retries_after_transient_pylon_failure(caplog: pytest.LogCapt
         with runtime.running(shutdown_timeout_seconds=1.0):
             wait_until(lambda: len(collector.received_events) >= len(expected_beats))
             wait_until(
-                lambda: any(
-                    "Transient Pylon poll failure; will retry." in record.message for record in caplog.records
-                )
+                lambda: any("Transient Pylon poll failure; will retry." in record.message for record in caplog.records)
             )
 
     assert [event.payload for event in collector.received_events] == expected_beats

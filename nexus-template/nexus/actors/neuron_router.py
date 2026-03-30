@@ -57,6 +57,14 @@ class Routed[Input]:
 
 
 class NeuronRouter[Input](Transform[Input, Routed[Input]]):
+    """Assigns a target neuron to each input message by querying the metagraph via pylon.
+    Subclasses must define the routing strategy by implementing neuron selection.
+
+    sink input: payload to route
+    source routed: payload wrapped in Routed with the selected neuron
+    source error: routing failures (e.g. no routable neurons)
+    """
+
     input: Sink[Input]
     routed: Source[Routed[Input]]
 
@@ -103,6 +111,14 @@ class RoundRobinRoutingState(BaseModel):
 
 
 class RoundRobinNeuronRouter[Input](NeuronRouter[Input], ActorBuilder):
+    """NeuronRouter that distributes inputs across neurons in round-robin order.
+    Neuron ordering is randomized per context but stable for a given neuron set.
+
+    sink input: payload to route
+    source routed: payload wrapped in Routed with the selected neuron
+    source error: routing failures
+    """
+
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
         return RoundRobinNeuronRouterActor[Input](spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
@@ -208,10 +224,12 @@ class NoopPylonClientProvider(PylonClientProvider):
 
 
 class NoopRouter[Input](NeuronRouter[Input], ActorBuilder):
-    """
-    a noop router which doesn't attach any neuron information to the input
-    useful if you want to use an embedded executor which just runs the provided
-    code locally.
+    """NeuronRouter that attaches a synthetic neuron, skipping pylon entirely.
+    Useful for embedded executors that run locally.
+
+    sink input: payload to route
+    source routed: payload wrapped in Routed with a fake neuron
+    source error: routing failures
     """
 
     def __init__(self, _id: str) -> None:

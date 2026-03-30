@@ -9,7 +9,14 @@ from nexus.utils.exceptions import NexusException
 
 
 class TaskResultSplitter[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](Node, ActorBuilder):
-    """Splits one stored task result into two branches with different context semantics."""
+    """Branches a stored task result into two independent downstream paths.
+    The executor's public output continues on the original context (e.g. back to the caller),
+    while the full task result is emitted on a new child context (e.g. into a validation pipeline).
+
+    sink task_result_input: stored task result to split
+    source executor_output: public output (or error) on the original context
+    source task_result: full task result on a new child context
+    """
 
     task_result_input: Sink[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
     task_result: Source[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
