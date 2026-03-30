@@ -10,6 +10,20 @@ from nexus.utils.exceptions import InternalFrameworkException, NexusException
 
 
 class TaskResultPreparer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](Node, ActorBuilder):
+    """Assembles a persistable task result from a timestamped executor result and its public output.
+    The public output is produced asynchronously: the raw executor output is sent out for external
+    conversion via `executor_output_for_conversion`. Connect a conversion pipeline from that source
+    back to `converted_public_output` (or `conversion_failed` on error).
+    Failed results skip conversion and are emitted directly.
+
+    sink timestamped_result: timestamped executor result from the pipeline
+    sink converted_public_output: public output returned from the conversion pipeline
+    sink conversion_failed: failure from the conversion pipeline, clears pending state
+    source executor_output_for_conversion: raw output to send into the conversion pipeline
+    source prepared_task_result: final TaskResultToPersist ready for storage
+    source error: internal failures (e.g. duplicate or missing results)
+    """
+
     timestamped_result: Sink[StoredTaskExecution[ExecutorPayload, ExecutorOutput]]
     converted_public_output: Sink[ExecutorPublicOutput]
     conversion_failed: Sink[NexusException]

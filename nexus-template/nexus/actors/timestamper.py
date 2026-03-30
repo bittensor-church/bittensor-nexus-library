@@ -53,10 +53,16 @@ class QueuedOutput[Output]:
 
 
 class TimestamperNode[Input, Output](Node, ActorBuilder):
-    """Timestamping node.
+    """Wraps a processing step with timing metadata. Records a start timestamp on input,
+    then enriches the output with start/end times and the latest observed block beat.
+    Connect the processing step from `forwarded_input` back to `executor_output`.
+    Outputs are queued until at least one BlockBeat has been received.
 
-    Forwards input and output unchanged, but attaches processing start and end times and
-    the latest observed block beat to output events
+    sink input: payload to forward and start timing
+    sink executor_output: result from the wrapped processing step
+    sink block_beat: chain block beats for timestamp finalization
+    source forwarded_input: input forwarded unchanged to the wrapped step
+    source timestamped_output: Timestamped output with processing times and block beat
     """
 
     input: Sink[Input]

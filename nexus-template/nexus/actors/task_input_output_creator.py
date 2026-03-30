@@ -36,7 +36,14 @@ class TaskInputOutputCreator[ExecutorPayload, ExecutorOutput, ExecutorPublicOutp
     ],
     ActorBuilder,
 ):
-    """Converts batches of stored task results into task id/input/output tuples."""
+    """PayloadCreator for validation pipelines. Repackages a batch of stored mining task results
+    into a structured format for the validation executor, extracting each result's input, output,
+    and public output. Expects only successful results — failed ones should be filtered upstream.
+
+    sink input: batch of SingleTaskResult from the sampler
+    source created_payload: BatchedTaskInputOutput with aligned input/output pairs per task
+    source error: creation failures
+    """
 
     def __init__(self, _id: str) -> None:
         super().__init__(_id)

@@ -22,6 +22,14 @@ class TaskResultStorer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     ],
     ActorBuilder,
 ):
+    """Persists a prepared task result to the task result store and emits the stored result.
+    If the result contains an executor failure, it is stored but also raises a retry signal.
+
+    sink sink: TaskResultToPersist to store
+    source task_result: persisted SingleTaskResult
+    source error: storage failures or RetryTaskAfterExecutorFailureException
+    """
+
     task_result: Source[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
     task_name: NexusTaskName
     task_result_store_provider: TaskResultStoreProvider[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]

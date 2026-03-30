@@ -30,20 +30,14 @@ type InputValidator[Input] = Callable[[ContextId, Input], None]
 
 
 class ExecutorCommunicator[Input, Output](Transform[Routed[Input], ProcessedInput[Routed[Input], Output]]):
-    """
-    Transport-agnostic contract for executor-facing communicators.
-
-    An executor communicator bridges routed execution requests and executor results
-    in the processing graph:
-    - consumes request payloads on `input`
-    - emits `ProcessedInput` on `processed` for both success and executor-side failure
-    - emits internal/framework failures on `error`
-
+    """Transport-agnostic contract for executor-facing communicators.
+    Bridges routed execution requests and executor results in the processing graph.
     This class defines only the logical node interface and naming conventions.
-    Concrete implementations provide transport/protocol details. The current codebase
-    includes an async HTTP implementation (`AsyncHttpNeuronCommunicator`), but the
-    same contract can be implemented for other transports such as sync HTTP,
-    WebSocket, or RPC-based protocols.
+    Concrete implementations provide transport/protocol details (e.g. async HTTP, embedded).
+
+    sink input: routed request payloads
+    source processed: ProcessedInput for both success and executor-side failure
+    source error: internal/framework failures
     """
 
     input: Sink[Routed[Input]]

@@ -60,23 +60,16 @@ class HttpBindEndpoint:
 class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel](
     ExecutorCommunicator[InputModel, OutputModel], ActorBuilder
 ):
-    """
-    Executor communicator that forwards routed input payloads to a target neuron's HTTP axon
+    """ExecutorCommunicator that forwards routed input payloads to a target neuron's HTTP axon
     and asynchronously resolves responses via a local callback endpoint.
+    For each input, it serializes the payload as JSON, sends it to the neuron's address on
+    `target_path`, and stores a pending request keyed by request id. The communicator binds
+    a callback HTTP server on `callback_bind_ip:callback_port` and advertises callbacks
+    using `callback_base_url + callback_path`.
 
-    For each `Routed[InputModel]` event, it serializes input as human-readable JSON, sends
-    it to the neuron's `ip:port` on `target_path`, and stores a pending request record keyed
-    by request id. The communicator listens on `response_bind` and advertises callbacks using
-    `callback_base_url + response_path`.
-
-    Emission semantics:
-    - successful callbacks are emitted on `processed` as
-      `ProcessedInput[Routed[InputModel], OutputModel]`
-    - executor-side failures (remote execution error, timeout, invalid callback payload,
-      send/rejection failures) are emitted on `processed` as `ExecutorFailureException`
-      wrapped in `ProcessedInput.output`
-    - internal/framework failures (for example local misconfiguration or invalid target
-      protocol/address before dispatch) are emitted on `error`
+    sink input: routed request payloads
+    source processed: successful results, executor-side failures (timeout, invalid payload, rejection)
+    source error: internal/framework failures (e.g. misconfiguration, invalid target address)
     """
 
     target_path: NormalizedHttpPath

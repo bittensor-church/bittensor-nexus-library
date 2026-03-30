@@ -8,6 +8,16 @@ from nexus.core.runtime.events import PipeToBus
 
 
 class CaseModifier[T](DoubleTransform[str, str, str, str], ActorBuilder):
+    """Example double transform. Lowercases strings on the input path, uppercases on the output path.
+
+    sink input_sink: string to lowercase
+    sink output_sink: string to uppercase
+    source input_ok: lowercased string
+    source input_error: input transform failures
+    source output_ok: uppercased string
+    source output_error: output transform failures
+    """
+
     def __init__(self, _id: str) -> None:
         super().__init__(_id)
 

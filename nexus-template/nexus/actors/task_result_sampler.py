@@ -14,6 +14,14 @@ class TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
         tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
     ]
 ):
+    """Base transform that batches individual task results for downstream processing (e.g. validation).
+    Subclasses define the sampling strategy and when batches are emitted.
+
+    sink task_results: individual task results
+    source sampled_batch: batch of sampled task results
+    source error: sampling failures
+    """
+
     task_results: Sink[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
     sampled_batch: Source[tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]]
 
@@ -45,6 +53,13 @@ class TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
 class EveryTaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ActorBuilder
 ):
+    """TaskResultSampler that emits immediately for every result as a single-element batch.
+
+    sink task_results: individual task results
+    source sampled_batch: single-element batch containing the input result
+    source error: sampling failures
+    """
+
     def __init__(
         self,
         _id: str,

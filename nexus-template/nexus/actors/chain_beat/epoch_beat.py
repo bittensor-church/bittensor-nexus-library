@@ -29,14 +29,15 @@ class EpochBeat:
 
 
 class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
-    """
-    Uses pylon, polling it in a loop to determine the current epoch for a given subnet.
-    Emits a beat whenever the epoch changes.
-    Keep in mind:
-     - Epoch boundaries are derived from block numbers, so the same gaps and jitter
-       from BlockBeatNode apply here.
-     - The optional delay parameter shifts the effective block number back, useful for
-       waiting until an epoch is safely finalized.
+    """Emits a beat whenever the epoch changes for a given subnet.
+    Epoch boundaries are derived from block numbers, so the same gaps and jitter
+    from BlockBeatNode apply here.
+    The optional delay parameter delays the beat after the actual epoch change,
+    useful for waiting for finalization, staggering epoch-scheduled events, etc.
+    The delay is specified in the number of blocks.
+
+    sink sink: unused (lifecycle/control)
+    source source: EpochBeat on each new epoch
     """
 
     netuid: NetUid

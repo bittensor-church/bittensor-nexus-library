@@ -43,16 +43,13 @@ class WeightsCalculationBundle:
 
 
 class WeightSetterNode(Transform[EpochBeat, WeightSettingSuccess], ActorBuilder):
-    """
-    Listens for epoch beat events, calls the weighing function to calculate neuron weights,
-    and sets them on-chain via pylon.
+    """Calculates neuron weights using the provided weighing function and sets them on-chain via pylon.
+    Triggered by epoch beats. Weights are arbitrary non-negative floats, set for all neurons in one go.
+    No normalization needed. Note that subnet hyperparams may further influence the effective weights.
 
-    A weight is an arbitrary, non-negative float. Missing neurons will have a default weight of 0. There is no need to
-    normalize the weights. The subnet may still have hyperparams that affect neuron weights in fun and exciting ways:
-    - min_allowed_weights
-    - max_weight_limit
-
-    Weights for all neurons must be set in one go.
+    sink sink: EpochBeat triggering weight calculation
+    source ok: WeightSettingSuccess on successful commit
+    source error: WeightSettingException on failure
     """
 
     weighing_func: WeighingFunc

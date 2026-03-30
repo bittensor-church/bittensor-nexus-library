@@ -14,6 +14,14 @@ from nexus.utils.exceptions import EmbeddedExecutorFailureException
 class EmbeddedExecutorCommunicator[InputModel: BaseModel, OutputModel: BaseModel](
     ExecutorCommunicator[InputModel, OutputModel], ActorBuilder
 ):
+    """ExecutorCommunicator that runs the executor function in-process instead of calling a remote neuron.
+    Takes a callable at construction time and invokes it directly for each input.
+
+    sink input: routed request payload
+    source processed: executor result or EmbeddedExecutorFailureException
+    source error: internal/framework failures
+    """
+
     type ExecutorFunc = Callable[[InputModel], OutputModel]
 
     executor_func: ExecutorFunc

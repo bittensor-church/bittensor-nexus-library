@@ -39,6 +39,15 @@ class RetriesExhaustedException(NexusException):
 
 
 class RetryStrategy[T](Node, ActorBuilder):
+    """Re-emits the original input on each signal to `failed_attempt`, up to a configured number of
+    attempts with a delay between each. Emits the first attempt immediately on receiving the input.
+
+    sink input: original payload, starts the retry cycle
+    sink failed_attempt: accepts any NexusException, issuing the next attempt when received
+    source next_attempt: original payload, emitted for every attempt including the first
+    source error: RetriesExhaustedException when all attempts are exhausted
+    """
+
     max_attempts: int
     delay: timedelta
 

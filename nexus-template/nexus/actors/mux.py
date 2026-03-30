@@ -8,6 +8,13 @@ from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, S
 
 
 class Mux2[Common, Left, Right](Node, ActorBuilder):
+    """Merges two input streams into a single output.
+
+    sink left: first input stream
+    sink right: second input stream
+    source out: merged output stream
+    """
+
     left: Sink[Left]
     right: Sink[Right]
     out: Source[Common]
