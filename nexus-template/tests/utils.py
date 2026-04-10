@@ -10,27 +10,29 @@ from polyfactory.factories.pydantic_factory import ModelFactory
 from pylon_client.artanis.v1 import Neuron
 from tenacity import RetryError, retry, stop_after_delay, wait_fixed
 
-from nexus.actors import Timestamped
 from nexus.actors.chain_beat.block_beat import BlockBeat
 from nexus.actors.chain_beat.epoch_beat import EpochBeat
-from nexus.actors.executor_communicator import ProcessedInput
+from nexus.actors.executor_communicator.base_communicator import ProcessedInput
 from nexus.actors.neuron_router import Routed
 from nexus.actors.pylon_client_provider import OpenAccessPylonApiLike, PylonClientProvider, SyncPylonClientLike
 from nexus.actors.task_result_store_provider import TaskResultStoreProvider
+from nexus.actors.timestamper import Timestamped
 from nexus.core.dsl.nodes import Sink
 from nexus.core.runtime.actor import Actor, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
 from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.core.runtime.task_result_store import (
+    ExecutorFailureTaskResult,
+    ExecutorFailureTaskResultToPersist,
     InMemoryTaskResultStore,
-    SingleTaskResult,
     StoredTaskExecution,
+    SuccessfulTaskResult,
+    SuccessfulTaskResultToPersist,
     TaskResultStore,
-    TaskResultToPersist,
 )
 from nexus.utils.chain import get_epoch_containing_block
-from nexus.utils.exceptions import NexusException
+from nexus.utils.exceptions import ExecutorFailureException, NexusException
 from nexus.utils.types import BlockHash, BlockNumber, NetUid, Timestamp
 
 DEFAULT_TEST_NETUID = NetUid(1)
@@ -137,15 +139,26 @@ class InMemoryTestTaskResultStoreProvider[ExecutorPayload, ExecutorOutput, Execu
         return self._store
 
 
-def get_stored_results_for_block[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+def get_successful_results_for_block[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     *,
     store: TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
     task_name: NexusTaskName,
     block_number: int,
     netuid: NetUid = DEFAULT_TEST_NETUID,
-) -> tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
+) -> tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
     epoch = get_epoch_containing_block(BlockNumber(block_number), netuid=netuid)
-    return store.get_tasks_for_epoch(task_name, epoch)
+    return store.get_successful_tasks_for_epoch(task_name, epoch)
+
+
+def get_executor_failure_results_for_block[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+    *,
+    store: TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    task_name: NexusTaskName,
+    block_number: int,
+    netuid: NetUid = DEFAULT_TEST_NETUID,
+) -> tuple[ExecutorFailureTaskResult[ExecutorPayload], ...]:
+    epoch = get_epoch_containing_block(BlockNumber(block_number), netuid=netuid)
+    return store.get_executor_failures_for_epoch(task_name, epoch)
 
 
 def build_nexus_task_result[ExecutorPayload, Output](
@@ -182,22 +195,37 @@ def build_nexus_task_result[ExecutorPayload, Output](
     )
 
 
-def store_nexus_task_result[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+def store_successful_task_result[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     *,
     context_store: ContextStore,
     task_result_store: TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
     task_name: NexusTaskName,
     result: StoredTaskExecution[ExecutorPayload, ExecutorOutput],
-    executor_public_output: ExecutorPublicOutput | None = None,
-) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+    executor_public_output: ExecutorPublicOutput,
+) -> SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
     with context_store.create_context() as ctx:
-        return task_result_store.add_task_result(
+        return task_result_store.add_successful_task_result(
             ctx=ctx,
             task_name=task_name,
-            result=TaskResultToPersist(
+            result=SuccessfulTaskResultToPersist(
                 result=result,
                 executor_public_output=executor_public_output,
             ),
+        )
+
+
+def store_executor_failure_task_result[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+    *,
+    context_store: ContextStore,
+    task_result_store: TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    task_name: NexusTaskName,
+    result: StoredTaskExecution[ExecutorPayload, ExecutorFailureException],
+) -> ExecutorFailureTaskResult[ExecutorPayload]:
+    with context_store.create_context() as ctx:
+        return task_result_store.add_executor_failure(
+            ctx=ctx,
+            task_name=task_name,
+            result=ExecutorFailureTaskResultToPersist(result=result),
         )
 
 

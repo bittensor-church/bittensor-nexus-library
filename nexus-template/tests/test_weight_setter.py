@@ -9,7 +9,7 @@ from utils import (
     InMemoryTestTaskResultStoreProvider,
     build_nexus_task_result,
     empty_context_store,
-    store_nexus_task_result,
+    store_successful_task_result,
     wait_until,
 )
 
@@ -48,14 +48,14 @@ def _raise(exc: Exception) -> Mapping[Hotkey, Weight]:
 
 def _weigh_by_task_result_count(task_name: NexusTaskName) -> WeighingFunc:
     def _weigh(bundle: WeightsCalculationBundle) -> Mapping[Hotkey, Weight]:
-        counts = bundle.tasks_result_store.count_by_hotkey_for_epoch(task_name=task_name, epoch=bundle.epoch)
+        counts = bundle.tasks_result_store.count_successful_by_hotkey_for_epoch(task_name=task_name, epoch=bundle.epoch)
         return {hotkey: Weight(float(count)) for hotkey, count in counts.items()}
 
     return _weigh
 
 
 def _seed_results_across_epochs(
-    task_result_store_provider: InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput],
+    task_result_store_provider: InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput, str],
     entries: tuple[tuple[int, str], ...],
 ) -> None:
     task_result_store = task_result_store_provider.get_task_result_store()
@@ -68,11 +68,12 @@ def _seed_results_across_epochs(
             block_number=block_number,
             target_hotkey=hotkey,
         )
-        store_nexus_task_result(
+        store_successful_task_result(
             context_store=context_store,
             task_result_store=task_result_store,
             task_name=TASK_NAME,
             result=result,
+            executor_public_output=f"public-{block_number}",
         )
 
 
@@ -88,7 +89,7 @@ def _build_and_run(
     *,
     weighing_func: WeighingFunc,
     pylon_client: SyncPylonClientLike,
-    task_result_store_provider: InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput],
+    task_result_store_provider: InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput, str],
 ) -> tuple[list[WeightSettingSuccess], list[NexusException]]:
     provider = create_autospec(spec=PylonClientProvider, instance=True)
     provider.get_client.return_value = pylon_client
@@ -131,7 +132,7 @@ def _build_and_run(
 
 
 def test_happy_path_sets_weights_and_emits_success(mock_pylon_client):
-    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput, str]()
 
     # EPOCH for block=500 and netuid=1 is 358..718. Only these should be counted.
     entries = (
@@ -164,7 +165,7 @@ def test_happy_path_sets_weights_and_emits_success(mock_pylon_client):
 
 
 def test_weighing_failure_emits_error(mock_pylon_client):
-    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput, str]()
     ok, errors = _build_and_run(
         weighing_func=lambda bundle: _raise(Exception("calculation exploded")),
         pylon_client=mock_pylon_client,
@@ -176,7 +177,7 @@ def test_weighing_failure_emits_error(mock_pylon_client):
 
 
 def test_pylon_failure_emits_error(mock_pylon_client):
-    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput, str]()
 
     # EPOCH for block=500 and netuid=1 is 358..718. Only these should be counted.
     entries = (
@@ -199,7 +200,7 @@ def test_pylon_failure_emits_error(mock_pylon_client):
 
 
 def test_pylon_identity_misconfigured_emits_error(mock_pylon_client):
-    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput]()
+    store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput, str]()
     _seed_results_across_epochs(
         store_provider,
         entries=((400, "hk1"),),

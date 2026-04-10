@@ -1,7 +1,9 @@
 # pyright: basic
 
+from contextlib import contextmanager
+
+import pytest
 from nexus_task_test_setup import (
-    DummyExecutorOutput,
     DummyTaskInput,
     build_nexus_task_test_setup,
 )
@@ -10,20 +12,50 @@ from pydantic_settings import BaseSettings
 from nexus.actors.payload_creator import NoopPayloadCreator
 from nexus.core.dsl.nodes import Sink, Source
 from nexus.nexus_validator import NexusValidator
-from nexus.utils.current_settings import get_current_settings_as
-from nexus.utils.exceptions import NexusException
+from nexus.utils.exceptions import SubnetMisconfiguredException
+from nexus.utils.subnet_settings import get_subnet_settings_as
 
 
 class _TestSettings(BaseSettings):
     pass
 
 
-def test_validator_registers_passed_settings_as_current_settings() -> None:
+def test_validator_construction_does_not_register_passed_settings_as_subnet_settings() -> None:
     settings = _TestSettings()
 
     NexusValidator(settings)
 
-    assert get_current_settings_as(_TestSettings) is settings
+    with pytest.raises(SubnetMisconfiguredException):
+        get_subnet_settings_as(_TestSettings)
+
+
+def test_run_initializes_subnet_settings_before_validator_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_settings: list[_TestSettings | None] = []
+
+    class _RunValidator(NexusValidator):
+        def __init__(self, settings: BaseSettings) -> None:
+            try:
+                observed_settings.append(get_subnet_settings_as(_TestSettings))
+            except SubnetMisconfiguredException:
+                observed_settings.append(None)
+            super().__init__(settings)
+
+    @contextmanager
+    def _fake_runtime(self: NexusValidator, shutdown_timeout_seconds: float = 30.0):
+        yield object()
+
+    def _stop_immediately(_seconds: float) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(_RunValidator, "start_runtime", _fake_runtime)
+    monkeypatch.setattr("nexus.nexus_validator.time.sleep", _stop_immediately)
+
+    _RunValidator.run(settings_class=_TestSettings)
+
+    assert len(observed_settings) == 1
+    assert isinstance(observed_settings[0], _TestSettings)
 
 
 def test_connect_discovers_node_without_validator_field() -> None:
@@ -64,7 +96,7 @@ def test_connect_discovers_task_from_task_endpoints() -> None:
         def __init__(self) -> None:
             super().__init__(_TestSettings())
             self.connect(Source[DummyTaskInput]("task-upstream"), task.input)
-            self.connect(task.executor_output, Sink[DummyExecutorOutput | NexusException]("task-downstream"))
+            self.connect(task.successful_task_result, Sink("task-downstream"))
 
     runtime = _TaskValidator()._build_runtime()
 

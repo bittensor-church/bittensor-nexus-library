@@ -12,14 +12,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Protocol, override
+from typing import TYPE_CHECKING, Protocol, override
 
 from fake_pylon_client import FakePylonClientProvider
 from pylon_client.artanis.v1 import Neuron
 from utils import CollectorActor, InMemoryTestTaskResultStoreProvider, build_neuron, dummy_block_beat
 
 from nexus.actors.chain_beat.block_beat import BlockBeat
-from nexus.actors.executor_communicator import CommunicatorActor, ExecutorCommunicator, ProcessedInput
+from nexus.actors.executor_communicator.base_communicator import CommunicatorActor, ExecutorCommunicator, ProcessedInput
 from nexus.actors.neuron_router import NeuronRouter, Routed
 from nexus.actors.payload_creator import NoopPayloadCreator, PayloadCreator
 from nexus.actors.retry_strategy import RetryStrategy
@@ -30,11 +30,17 @@ from nexus.core.runtime.actor_patterns import TransformActor
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.context_store_types import ContextId
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.core.runtime.nexus_task import NexusTask
 from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
-from nexus.core.runtime.task_result_store import SingleTaskResult, TaskResultStore
+from nexus.core.runtime.task_result_store import (
+    ExecutorFailureTaskResult,
+    SuccessfulTaskResult,
+    TaskResultStore,
+)
 from nexus.utils.exceptions import NexusException
+
+if TYPE_CHECKING:
+    from nexus.core.runtime.nexus_task import NexusTask
 
 DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_SECONDS = 1.5
 
@@ -245,10 +251,11 @@ class NexusTaskTestSetup:
     executor_communicator: DummyExecutorCommunicator
     task_result_store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]
     runtime: SubnetRuntime
-    task_result_collector: CollectorActor[
-        SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]
+    successful_task_result_collector: CollectorActor[
+        SuccessfulTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]
     ]
-    executor_output_collector: CollectorActor[DummyExecutorOutput | NexusException]
+    executor_failure_collector: CollectorActor[ExecutorFailureTaskResult[DummyExecutorPayload]]
+    executor_output_collector: CollectorActor[DummyExecutorOutput]
     error_collector: CollectorActor[NexusException]
     input_source: Source[DummyTaskInput]
     block_beat_source: DummyBlockBeatSource
@@ -321,6 +328,8 @@ def build_nexus_task_test_setup(
 ) -> NexusTaskTestSetup:
     """Construct a full NexusTask runtime using local, deterministic test actors."""
 
+    from nexus.core.runtime.nexus_task import NexusTask
+
     task_result_store_provider = InMemoryTestTaskResultStoreProvider[
         DummyExecutorPayload,
         DummyExecutorOutput,
@@ -349,14 +358,19 @@ def build_nexus_task_test_setup(
     )
 
     builder = SubnetBuilder(nodes=task.internal_nodes())
-    task_result_collector = CollectorActor[
-        SingleTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]
+    successful_task_result_collector = CollectorActor[
+        SuccessfulTaskResult[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorOutput]
     ](
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
-        name="nexus-task-task-result-collector",
+        name="nexus-task-successful-task-result-collector",
     )
-    executor_output_collector = CollectorActor[DummyExecutorOutput | NexusException](
+    executor_failure_collector = CollectorActor[ExecutorFailureTaskResult[DummyExecutorPayload]](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="nexus-task-executor-failure-collector",
+    )
+    executor_output_collector = CollectorActor[DummyExecutorOutput](
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
         name="nexus-task-executor-output-collector",
@@ -375,11 +389,17 @@ def build_nexus_task_test_setup(
             task.internal_flow,
             Flow.from_connectable(input_source).then(task.input),
             Flow.from_connectable(block_beat_source.source).then(task.block_beat),
-            Flow.from_connectable(task.task_result).then(task_result_collector.sink),
+            Flow.from_connectable(task.successful_task_result).then(successful_task_result_collector.sink),
+            Flow.from_connectable(task.executor_failure).then(executor_failure_collector.sink),
             Flow.from_connectable(task.executor_output).then(executor_output_collector.sink),
             Flow.from_connectable(task.error).then(error_collector.sink),
         )
-        .add_actors(task_result_collector, executor_output_collector, error_collector)
+        .add_actors(
+            successful_task_result_collector,
+            executor_failure_collector,
+            executor_output_collector,
+            error_collector,
+        )
         .build()
     )
 
@@ -389,7 +409,8 @@ def build_nexus_task_test_setup(
         executor_communicator=resolved_executor_communicator,
         task_result_store=task_result_store_provider.get_task_result_store(),
         runtime=runtime,
-        task_result_collector=task_result_collector,
+        successful_task_result_collector=successful_task_result_collector,
+        executor_failure_collector=executor_failure_collector,
         executor_output_collector=executor_output_collector,
         error_collector=error_collector,
         input_source=input_source,

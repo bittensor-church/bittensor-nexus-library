@@ -1,18 +1,20 @@
-from typing import override
+from typing import cast, override
 
 from nexus.core.dsl.nodes import NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
 from nexus.core.runtime.actor import Actor, ActorBuilder
 from nexus.core.runtime.actor_patterns import TransformActor
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import PipeToBus
-from nexus.core.runtime.task_result_store import SingleTaskResult
+from nexus.core.runtime.task_result_store import SuccessfulTaskResult
+from nexus.utils.exceptions import InternalFrameworkException
 
 
 class TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     Transform[
-        SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
-        tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
-    ]
+        SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+        tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
+    ],
+    ActorBuilder,
 ):
     """Base transform that batches individual task results for downstream processing (e.g. validation).
     Subclasses define the sampling strategy and when batches are emitted.
@@ -22,16 +24,11 @@ class TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     source error: sampling failures
     """
 
-    task_results: Sink[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
-    sampled_batch: Source[tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]]
+    task_results: Sink[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
+    sampled_batch: Source[tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]]
 
-    def __init__(
-        self,
-        _id: str,
-    ) -> None:
+    def __init__(self, _id: str) -> None:
         super().__init__(_id)
-
-        # alias for convenience
         self.task_results = self.sink
         self.sampled_batch = self.ok
 
@@ -77,10 +74,12 @@ class EveryTaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutp
 
 class EveryTaskResultSamplerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     TransformActor[
-        SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
-        tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
+        SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+        tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
     ]
 ):
+    """Runtime actor that validates and forwards successful task results as singleton batches."""
+
     def __init__(
         self,
         *,
@@ -89,11 +88,14 @@ class EveryTaskResultSamplerActor[ExecutorPayload, ExecutorOutput, ExecutorPubli
         context_store: ContextStore,
     ) -> None:
         super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
-        self.embedded_executor_spec = spec
 
+    @override
     def _transform(
         self,
         ctx: Context,
-        payload: SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
-    ) -> tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
+        payload: SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    ) -> tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
         return (payload,)
+
+
+__all__ = ["EveryTaskResultSampler", "EveryTaskResultSamplerActor"]

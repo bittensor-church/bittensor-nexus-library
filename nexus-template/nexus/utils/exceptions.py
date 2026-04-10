@@ -67,6 +67,7 @@ class ExecutorFailureException(NexusException):
     def __init__(self, executor_error: NexusException) -> None:
         super().__init__("Executor failed to process input")
         self.executor_error = executor_error
+        self.__cause__ = executor_error
 
     def __reduce__(self) -> tuple[type[ExecutorFailureException], tuple[NexusException]]:
         return type(self), (self.executor_error,)
