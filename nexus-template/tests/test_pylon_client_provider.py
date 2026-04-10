@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 
 from nexus.actors import pylon_client_provider
-from nexus.utils.exceptions import ActorMisconfiguredException
+from nexus.utils.exceptions import SubnetMisconfiguredException
 
 
 class _FakePylonClient:
@@ -57,7 +57,7 @@ def test_provider_rejects_partial_identity_name_only(monkeypatch: pytest.MonkeyP
 
     provider = pylon_client_provider.EnvPylonClientProvider()
 
-    with pytest.raises(ActorMisconfiguredException, match="both name and token"):
+    with pytest.raises(SubnetMisconfiguredException, match="both name and token"):
         provider.get_client()
 
 
@@ -68,7 +68,7 @@ def test_provider_rejects_partial_identity_token_only(monkeypatch: pytest.Monkey
 
     provider = pylon_client_provider.EnvPylonClientProvider()
 
-    with pytest.raises(ActorMisconfiguredException, match="both name and token"):
+    with pytest.raises(SubnetMisconfiguredException, match="both name and token"):
         provider.get_client()
 
 
@@ -78,5 +78,5 @@ def test_provider_rejects_missing_required_validator_env(monkeypatch: pytest.Mon
 
     provider = pylon_client_provider.EnvPylonClientProvider()
 
-    with pytest.raises(ActorMisconfiguredException, match="VALIDATOR_PYLON_OPEN_ACCESS_TOKEN"):
+    with pytest.raises(SubnetMisconfiguredException, match="VALIDATOR_PYLON_OPEN_ACCESS_TOKEN"):
         provider.get_client()

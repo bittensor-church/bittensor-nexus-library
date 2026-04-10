@@ -48,6 +48,12 @@ class ActorMisconfiguredException(NexusException):
     pass
 
 
+class SubnetMisconfiguredException(NexusException):
+    """Raised when process-wide subnet configuration or bootstrap state is invalid."""
+
+    pass
+
+
 class ExecutorFailureException(NexusException):
     """Raised when executor fails while handling a specific input.
 
