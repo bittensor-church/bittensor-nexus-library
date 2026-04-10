@@ -4,17 +4,16 @@ from typing import Literal, TypedDict, cast, override
 from pydantic import BaseModel, ValidationError, field_validator
 
 from nexus.actors.openrouter_selection import (
-    FileSelection,
-    ImageUrlSelection,
-    InputAudioSelection,
+    Fields,
+    FieldValue,
+    FileField,
+    ImageUrlField,
+    InputAudioField,
     OpenRouterMessageContent,
-    ScalarSelection,
-    SelectedItem,
-    SelectionValue,
-    VideoUrlSelection,
+    ScalarField,
+    VideoUrlField,
     text_content_block,
 )
-from nexus.actors.openrouter_task_result_selection import select_single_task_result_fields
 from nexus.actors.payload_creator import PayloadCreator
 from nexus.core.runtime.actor import Actor, ActorBuilder
 from nexus.core.runtime.actor_patterns import TransformActor
@@ -76,7 +75,7 @@ def _validate_openrouter_message_content(block: OpenRouterMessageContent) -> Ope
 class OpenRouterInferenceRequest(BaseModel):
     """Persisted OpenRouter executor payload containing selections and rendered messages."""
 
-    selected_items: tuple[SelectedItem, ...]
+    fields: tuple[Fields, ...]
     messages: tuple[OpenRouterUserMessage, ...]
 
     @field_validator("messages")
@@ -87,20 +86,25 @@ class OpenRouterInferenceRequest(BaseModel):
                 _validate_openrouter_message_content(block)
         return messages
 
+
 class MultiOpenRouterPayloadCreator[Item](
     PayloadCreator[tuple[Item, ...], OpenRouterInferenceRequest],
     ActorBuilder,
 ):
-    """Build an OpenRouter request from a tuple input using typed multimodal selections."""
+    """Build an OpenRouter request from a tuple input using typed multimodal selections.
 
-    item_selector: Callable[[Item], Mapping[str, SelectionValue]]
+    ``item_selector`` may return ``None`` to skip one input item. The creator raises
+    ``ValueError`` if every input item is skipped and no selected items remain.
+    """
+
+    item_selector: Callable[[Item], Mapping[str, FieldValue] | None]
     user_prompt: str
 
     def __init__(
         self,
         _id: str,
         *,
-        item_selector: Callable[[Item], Mapping[str, SelectionValue]],
+        item_selector: Callable[[Item], Mapping[str, FieldValue] | None],
         user_prompt: str = "Selected items:",
     ) -> None:
         super().__init__(_id)
@@ -134,9 +138,13 @@ class MultiOpenRouterPayloadCreatorActor[Item](TransformActor[tuple[Item, ...], 
     @override
     def _transform(self, ctx: Context, payload: tuple[Item, ...]) -> OpenRouterInferenceRequest:
         del ctx
-        selected_items = tuple(self._build_selected_item(item) for item in payload)
+        selected_items = tuple(
+            selected_item for item in payload if (selected_item := self._build_selected_item(item)) is not None
+        )
+        if len(selected_items) == 0:
+            raise ValueError("MultiOpenRouterPayloadCreator requires at least one selected item")
         return OpenRouterInferenceRequest(
-            selected_items=selected_items,
+            fields=selected_items,
             messages=(
                 {
                     "role": "user",
@@ -145,38 +153,39 @@ class MultiOpenRouterPayloadCreatorActor[Item](TransformActor[tuple[Item, ...], 
             ),
         )
 
-    def _build_selected_item(self, item: Item) -> SelectedItem:
-        selected_fields = dict(self.creator_spec.item_selector(item))
+    def _build_selected_item(self, item: Item) -> Fields | None:
+        selected_fields = self.creator_spec.item_selector(item)
+        if selected_fields is None:
+            return None
         try:
-            return SelectedItem(selected_fields=selected_fields)
+            return Fields(fields=dict(selected_fields))
         except ValidationError as exc:
             field_name = self._invalid_field_name(exc)
             raise ValueError(f"Malformed selection for field '{field_name}': {exc}") from exc
 
-    def _render_content(self, selected_items: tuple[SelectedItem, ...]) -> list[OpenRouterMessageContent]:
+    def _render_content(self, selected_items: tuple[Fields, ...]) -> list[OpenRouterMessageContent]:
         content: list[OpenRouterMessageContent] = [text_content_block(self.creator_spec.user_prompt)]
         for index, selected_item in enumerate(selected_items):
-            for field_name, value in selected_item.selected_fields.items():
+            for field_name, value in selected_item.fields.items():
                 content.extend(value.render_openrouter_content(index=index, field_name=field_name))
         return content
 
     def _invalid_field_name(self, exc: ValidationError) -> str:
         for error in exc.errors():
             loc = error.get("loc", ())
-            if len(loc) >= 2 and loc[0] == "selected_fields":
+            if len(loc) >= 2 and loc[0] == "fields":
                 return str(loc[1])
         return "<unknown>"
 
 
 __all__ = [
-    "FileSelection",
-    "ImageUrlSelection",
-    "InputAudioSelection",
+    "FileField",
+    "ImageUrlField",
+    "InputAudioField",
     "MultiOpenRouterPayloadCreator",
     "OpenRouterInferenceRequest",
-    "ScalarSelection",
-    "SelectionValue",
-    "SelectedItem",
-    "VideoUrlSelection",
-    "select_single_task_result_fields",
+    "ScalarField",
+    "FieldValue",
+    "Fields",
+    "VideoUrlField",
 ]

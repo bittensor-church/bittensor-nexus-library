@@ -2,16 +2,15 @@
 
 import logging
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import cast
+from typing import Protocol, cast
 
-from nexus.actors.task_input_output_creator import BatchedTaskInputOutput
+from nexus.actors.openrouter_selection import Fields, ScalarField
 from nexus.actors.weight_setter import WeightsCalculationBundle
 from nexus.core.runtime.nexus_task_types import NexusTaskName
+from nexus.utils.exceptions import InternalFrameworkException
 from nexus.utils.types import Hotkey, Weight
-
-from cat_images.subnet_models import MinerPayload, ValidationResult
 
 log = logging.getLogger("weighing-algorithm")
 
@@ -22,6 +21,29 @@ class _HotkeyAccumulator:
     scored_count: int = 0
     scored_sum: float = 0.0
     unscored_success_count: int = 0
+
+
+class _ValidationExecutorPayloadLike(Protocol):
+    """Validation payload shape exposing normalized OpenRouter request fields."""
+
+    @property
+    def fields(self) -> Sequence[Fields]: ...
+
+
+def _requested_task_result_id(selected_item: Fields) -> str:
+    task_result_id = selected_item.fields.get("task_result_id")
+    if isinstance(task_result_id, ScalarField) and isinstance(task_result_id.value, str):
+        return task_result_id.value
+
+    raise InternalFrameworkException("Validation payload item must include task_result_id as ScalarField[str].")
+
+
+def _requested_task_result_ids(validation_payload: object) -> set[str]:
+    fields = cast(_ValidationExecutorPayloadLike, validation_payload).fields
+    requested_ids: set[str] = set()
+    for selected_item in fields:
+        requested_ids.add(_requested_task_result_id(selected_item))
+    return requested_ids
 
 
 def weighing_func(
@@ -40,35 +62,46 @@ def weighing_func(
         current_epoch,
     )
 
-    mining_task_results = task_results.get_tasks_for_epoch(task_name=mining_task_name, epoch=previous_epoch)
-    validation_task_results = (
-        task_results.get_tasks_for_epoch(task_name=validation_task_name, epoch=previous_epoch)
-        + task_results.get_tasks_for_epoch(task_name=validation_task_name, epoch=current_epoch)
-    )
+    mining_successes = task_results.get_successful_tasks_for_epoch(task_name=mining_task_name, epoch=previous_epoch)
+    mining_failures = task_results.get_executor_failures_for_epoch(task_name=mining_task_name, epoch=previous_epoch)
+    validation_successes = task_results.get_successful_tasks_for_epoch(
+        task_name=validation_task_name, epoch=previous_epoch
+    ) + task_results.get_successful_tasks_for_epoch(task_name=validation_task_name, epoch=current_epoch)
 
     validation_scores_by_mining_task_result_id: dict[str, int] = {}
-    for validation_result in validation_task_results:
-        if validation_result.is_failure:
-            continue
-        validation_output = cast(
-            BatchedTaskInputOutput[MinerPayload, ValidationResult, ValidationResult],
-            validation_result.executor_output,
-        )
-        for task_input_output in validation_output.task_input_outputs:
-            validation_scores_by_mining_task_result_id[str(task_input_output.task_result_id)] = (
-                task_input_output.task_output.score
+    for validation_result in validation_successes:
+        try:
+            requested_task_result_ids = _requested_task_result_ids(validation_result.executor_payload)
+        except InternalFrameworkException as exc:
+            log.warning(
+                "Ignoring validation result %s due to malformed OpenRouter request payload: %s",
+                validation_result.id,
+                exc,
             )
+            continue
+        validation_output: TaskScores = validation_result.executor_output
+        returned_scores = validation_output.scores_by_task_result_id
+
+        if len(requested_task_result_ids) == 1 and set(returned_scores.keys()) != requested_task_result_ids:
+            log.warning(
+                "Ignoring singleton validation result %s due to requested_ids=%s returned_ids=%s",
+                validation_result.id,
+                sorted(requested_task_result_ids),
+                sorted(returned_scores.keys()),
+            )
+            continue
+
+        for task_result_id in requested_task_result_ids:
+            score = returned_scores.get(task_result_id)
+            if score is not None:
+                validation_scores_by_mining_task_result_id[task_result_id] = score
 
     accumulators_by_hotkey: dict[Hotkey, _HotkeyAccumulator] = defaultdict(_HotkeyAccumulator)
 
-    for mining_task_result in mining_task_results:
+    for mining_task_result in mining_successes:
         hotkey = Hotkey(mining_task_result.target.hotkey)
         accumulator = accumulators_by_hotkey[hotkey]
         accumulator.mining_count += 1
-
-        if mining_task_result.is_failure:
-            accumulator.scored_count += 1
-            continue
 
         score = validation_scores_by_mining_task_result_id.get(str(mining_task_result.id))
         if score is None:
@@ -77,6 +110,12 @@ def weighing_func(
 
         accumulator.scored_count += 1
         accumulator.scored_sum += float(score)
+
+    for mining_failure in mining_failures:
+        hotkey = Hotkey(mining_failure.target.hotkey)
+        accumulator = accumulators_by_hotkey[hotkey]
+        accumulator.mining_count += 1
+        accumulator.scored_count += 1
 
     weights_by_hotkey: dict[Hotkey, Weight] = {}
     for hotkey in sorted(accumulators_by_hotkey.keys(), key=str):

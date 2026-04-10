@@ -1,16 +1,15 @@
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any, cast
 
-import pytest
-from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskInputOutput
+from nexus.actors.openrouter_selection import Fields, ScalarField
 from nexus.actors.weight_setter import WeightsCalculationBundle
 from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
 from nexus.utils.types import BlockNumber, Epoch, Hotkey
 
-from cat_images.subnet_models import ValidationResult
 from cat_images.validator import weighing_algorithm
+from cat_images.validator.openrouter_inference import TaskScores
 
 MINING_TASK_NAME = NexusTaskName("mining-task")
 VALIDATION_TASK_NAME = NexusTaskName("validation-task")
@@ -20,102 +19,158 @@ PREVIOUS_EPOCH = CURRENT_EPOCH.previous()
 
 @dataclass(frozen=True)
 class _FakeTarget:
+    """Minimal routing target stub that carries the miner hotkey."""
+
     hotkey: str
 
 
 @dataclass(frozen=True)
-class _FakeBlockAtFinish:
-    block_number: BlockNumber
+class _FakeSuccessfulMiningTaskResult:
+    """Successful mining task result used by weighing tests."""
 
-
-@dataclass(frozen=True)
-class _FakeMiningTaskResult:
     id: TaskResultId
     target: _FakeTarget
-    is_failure: bool
 
 
 @dataclass(frozen=True)
-class _FakeValidationTaskResult:
+class _FakeExecutorFailureTaskResult:
+    """Executor failure task result used by weighing tests."""
+
     id: TaskResultId
-    is_failure: bool
+    target: _FakeTarget
+
+
+@dataclass(frozen=True)
+class _FakeSuccessfulValidationTaskResult:
+    """Successful validation task result carrying the OpenRouter request and scores."""
+
+    id: TaskResultId
+    executor_payload: object
     executor_output: object
-    block_at_finish: _FakeBlockAtFinish
-    processing_finished: datetime
+
+
+@dataclass(frozen=True)
+class _FakeValidationExecutorPayload:
+    """Validation payload stub exposing normalized OpenRouter fields to the weighing algorithm."""
+
+    fields: tuple[Fields, ...]
 
 
 class _FakeTaskResultStore:
-    def __init__(self, by_task_and_epoch: dict[tuple[str, Epoch], tuple[Any, ...]]) -> None:
-        self._by_task_and_epoch = by_task_and_epoch
+    """Store stub exposing only the explicit success and executor-failure epoch queries."""
 
-    def get_tasks_for_epoch(self, task_name: NexusTaskName, epoch: Epoch) -> tuple[Any, ...]:
-        return self._by_task_and_epoch.get((str(task_name), epoch), ())
+    def __init__(
+        self,
+        *,
+        successful_by_task_and_epoch: dict[tuple[str, Epoch], tuple[Any, ...]],
+        executor_failures_by_task_and_epoch: dict[tuple[str, Epoch], tuple[Any, ...]],
+    ) -> None:
+        self._successful_by_task_and_epoch = successful_by_task_and_epoch
+        self._executor_failures_by_task_and_epoch = executor_failures_by_task_and_epoch
+        self.calls: list[tuple[str, str, Epoch]] = []
+
+    def get_successful_tasks_for_epoch(self, task_name: NexusTaskName, epoch: Epoch) -> tuple[Any, ...]:
+        self.calls.append(("success", str(task_name), epoch))
+        return self._successful_by_task_and_epoch.get((str(task_name), epoch), ())
+
+    def get_executor_failures_for_epoch(self, task_name: NexusTaskName, epoch: Epoch) -> tuple[Any, ...]:
+        self.calls.append(("executor_failure", str(task_name), epoch))
+        return self._executor_failures_by_task_and_epoch.get((str(task_name), epoch), ())
 
 
 def _task_result_id(raw: int) -> TaskResultId:
     return TaskResultId(uuid.UUID(int=raw))
 
 
-def _mining_result(
-    *,
-    raw_id: int,
-    hotkey: str,
-    is_failure: bool,
-) -> _FakeMiningTaskResult:
-    return _FakeMiningTaskResult(
+def _mining_success(*, raw_id: int, hotkey: str) -> _FakeSuccessfulMiningTaskResult:
+    return _FakeSuccessfulMiningTaskResult(
         id=_task_result_id(raw_id),
         target=_FakeTarget(hotkey=hotkey),
-        is_failure=is_failure,
+    )
+
+
+def _mining_executor_failure(*, raw_id: int, hotkey: str) -> _FakeExecutorFailureTaskResult:
+    return _FakeExecutorFailureTaskResult(
+        id=_task_result_id(raw_id),
+        target=_FakeTarget(hotkey=hotkey),
     )
 
 
 def _validation_batch(
     pairs: tuple[tuple[int, int], ...],
-) -> BatchedTaskInputOutput[Any, ValidationResult, ValidationResult]:
-    return BatchedTaskInputOutput(
-        task_input_outputs=tuple(
-            TaskInputOutput(
-                task_result_id=_task_result_id(task_result_id_raw),
-                task_input={"input": task_result_id_raw},
-                task_output=ValidationResult(score=score),
-                task_public_output=ValidationResult(score=score),
+) -> TaskScores:
+    return TaskScores(
+        scores_by_task_result_id={
+            str(_task_result_id(task_result_id_raw)): score for task_result_id_raw, score in pairs
+        }
+    )
+
+
+def _validation_payload(requested_task_result_ids: tuple[int, ...]) -> _FakeValidationExecutorPayload:
+    return _FakeValidationExecutorPayload(
+        fields=tuple(
+            Fields(
+                fields={
+                    "task_result_id": ScalarField(value=str(_task_result_id(task_result_id_raw))),
+                }
             )
-            for task_result_id_raw, score in pairs
+            for task_result_id_raw in requested_task_result_ids
         )
     )
 
 
-def _validation_result(
+def _validation_success(
     *,
     raw_id: int,
-    block_number: int,
+    requested_task_result_ids: tuple[int, ...],
     executor_output: object,
-    is_failure: bool = False,
-    processing_finished_seconds: int = 0,
-) -> _FakeValidationTaskResult:
-    return _FakeValidationTaskResult(
+) -> _FakeSuccessfulValidationTaskResult:
+    return _FakeSuccessfulValidationTaskResult(
         id=_task_result_id(raw_id),
-        is_failure=is_failure,
+        executor_payload=_validation_payload(requested_task_result_ids),
         executor_output=executor_output,
-        block_at_finish=_FakeBlockAtFinish(block_number=BlockNumber(block_number)),
-        processing_finished=datetime(2026, 3, 5, 0, 0, tzinfo=UTC) + timedelta(seconds=processing_finished_seconds),
+    )
+
+
+def _malformed_validation_success(
+    *,
+    raw_id: int,
+    requested_task_result_ids: tuple[int, ...],
+    executor_output: object,
+) -> _FakeSuccessfulValidationTaskResult:
+    return _FakeSuccessfulValidationTaskResult(
+        id=_task_result_id(raw_id),
+        executor_payload=SimpleNamespace(
+            fields=tuple(
+                cast(
+                    Any,
+                    SimpleNamespace(fields={"task_result_id": str(_task_result_id(task_result_id_raw))}),
+                )
+                for task_result_id_raw in requested_task_result_ids
+            )
+        ),
+        executor_output=executor_output,
     )
 
 
 def _run_weighing(
     *,
-    mining_previous: tuple[_FakeMiningTaskResult, ...],
-    mining_current: tuple[_FakeMiningTaskResult, ...] = (),
-    validation_previous: tuple[_FakeValidationTaskResult, ...] = (),
-    validation_current: tuple[_FakeValidationTaskResult, ...] = (),
-) -> dict[Hotkey, float]:
+    mining_successes_previous: tuple[_FakeSuccessfulMiningTaskResult, ...],
+    mining_executor_failures_previous: tuple[_FakeExecutorFailureTaskResult, ...] = (),
+    mining_successes_current: tuple[_FakeSuccessfulMiningTaskResult, ...] = (),
+    validation_successes_previous: tuple[_FakeSuccessfulValidationTaskResult, ...] = (),
+    validation_successes_current: tuple[_FakeSuccessfulValidationTaskResult, ...] = (),
+) -> tuple[dict[Hotkey, float], _FakeTaskResultStore]:
     store = _FakeTaskResultStore(
-        by_task_and_epoch={
-            (str(MINING_TASK_NAME), PREVIOUS_EPOCH): mining_previous,
-            (str(MINING_TASK_NAME), CURRENT_EPOCH): mining_current,
-            (str(VALIDATION_TASK_NAME), PREVIOUS_EPOCH): validation_previous,
-            (str(VALIDATION_TASK_NAME), CURRENT_EPOCH): validation_current,
-        }
+        successful_by_task_and_epoch={
+            (str(MINING_TASK_NAME), PREVIOUS_EPOCH): mining_successes_previous,
+            (str(MINING_TASK_NAME), CURRENT_EPOCH): mining_successes_current,
+            (str(VALIDATION_TASK_NAME), PREVIOUS_EPOCH): validation_successes_previous,
+            (str(VALIDATION_TASK_NAME), CURRENT_EPOCH): validation_successes_current,
+        },
+        executor_failures_by_task_and_epoch={
+            (str(MINING_TASK_NAME), PREVIOUS_EPOCH): mining_executor_failures_previous,
+        },
     )
     bundle = WeightsCalculationBundle(
         epoch=CURRENT_EPOCH,
@@ -127,69 +182,162 @@ def _run_weighing(
         VALIDATION_TASK_NAME,
         bundle,
     )
-    return {hotkey: float(weight) for hotkey, weight in weights.items()}
+    return {hotkey: float(weight) for hotkey, weight in weights.items()}, store
 
 
-def test_weighing_uses_only_previous_epoch_mining_results() -> None:
-    weights = _run_weighing(
-        mining_previous=(
-            _mining_result(raw_id=1, hotkey="hk1", is_failure=False),
-        ),
-        mining_current=(
-            _mining_result(raw_id=2, hotkey="hk1", is_failure=False),
-        ),
-        validation_current=(
-            _validation_result(
+def test_weighing_reads_successes_and_executor_failures_from_explicit_epoch_queries() -> None:
+    _, store = _run_weighing(
+        mining_successes_previous=(_mining_success(raw_id=1, hotkey="hk1"),),
+        mining_executor_failures_previous=(_mining_executor_failure(raw_id=2, hotkey="hk1"),),
+        validation_successes_previous=(
+            _validation_success(
                 raw_id=101,
-                block_number=25,
+                requested_task_result_ids=(1,),
+                executor_output=_validation_batch(((1, 80),)),
+            ),
+        ),
+    )
+
+    assert store.calls == [
+        ("success", str(MINING_TASK_NAME), PREVIOUS_EPOCH),
+        ("executor_failure", str(MINING_TASK_NAME), PREVIOUS_EPOCH),
+        ("success", str(VALIDATION_TASK_NAME), PREVIOUS_EPOCH),
+        ("success", str(VALIDATION_TASK_NAME), CURRENT_EPOCH),
+    ]
+
+
+def test_weighing_ignores_validation_results_with_untyped_task_result_ids() -> None:
+    weights, _ = _run_weighing(
+        mining_successes_previous=(_mining_success(raw_id=1, hotkey="hk1"),),
+        validation_successes_current=(
+            _malformed_validation_success(
+                raw_id=601,
+                requested_task_result_ids=(1,),
+                executor_output=_validation_batch(((1, 100),)),
+            ),
+            _validation_success(
+                raw_id=602,
+                requested_task_result_ids=(1,),
+                executor_output=_validation_batch(((1, 80),)),
+            ),
+        ),
+    )
+
+    assert weights == {Hotkey("hk1"): 80.0}
+
+
+def test_weighing_uses_only_previous_epoch_mining_successes() -> None:
+    weights, _ = _run_weighing(
+        mining_successes_previous=(_mining_success(raw_id=1, hotkey="hk1"),),
+        mining_successes_current=(_mining_success(raw_id=2, hotkey="hk1"),),
+        validation_successes_current=(
+            _validation_success(
+                raw_id=201,
+                requested_task_result_ids=(1, 2),
                 executor_output=_validation_batch(((1, 80), (2, 10))),
             ),
         ),
     )
 
-    assert weights == {Hotkey("hk1"): pytest.approx(80.0)}
+    assert weights == {Hotkey("hk1"): 80.0}
 
 
-def test_weighing_uses_validation_results_from_previous_and_current_epoch() -> None:
-    weights = _run_weighing(
-        mining_previous=(
-            _mining_result(raw_id=1, hotkey="hk1", is_failure=False),
-            _mining_result(raw_id=2, hotkey="hk1", is_failure=False),
+def test_weighing_uses_validation_successes_from_previous_and_current_epoch() -> None:
+    weights, _ = _run_weighing(
+        mining_successes_previous=(
+            _mining_success(raw_id=1, hotkey="hk1"),
+            _mining_success(raw_id=2, hotkey="hk1"),
         ),
-        validation_previous=(
-            _validation_result(raw_id=201, block_number=18, executor_output=_validation_batch(((1, 60),))),
+        validation_successes_previous=(
+            _validation_success(
+                raw_id=301,
+                requested_task_result_ids=(1,),
+                executor_output=_validation_batch(((1, 60),)),
+            ),
         ),
-        validation_current=(
-            _validation_result(raw_id=202, block_number=24, executor_output=_validation_batch(((2, 90),))),
-        ),
-    )
-
-    assert weights == {Hotkey("hk1"): pytest.approx(150.0)}
-
-
-def test_weighing_counts_failed_mining_task_as_zero_score() -> None:
-    weights = _run_weighing(
-        mining_previous=(
-            _mining_result(raw_id=1, hotkey="hk1", is_failure=True),
-            _mining_result(raw_id=2, hotkey="hk1", is_failure=False),
-        ),
-        validation_current=(
-            _validation_result(raw_id=301, block_number=23, executor_output=_validation_batch(((2, 100),))),
+        validation_successes_current=(
+            _validation_success(
+                raw_id=302,
+                requested_task_result_ids=(2,),
+                executor_output=_validation_batch(((2, 90),)),
+            ),
         ),
     )
 
-    assert weights == {Hotkey("hk1"): pytest.approx(100.0)}
+    assert weights == {Hotkey("hk1"): 150.0}
+
+
+def test_weighing_counts_mining_executor_failures_as_zero_scores() -> None:
+    weights, _ = _run_weighing(
+        mining_successes_previous=(_mining_success(raw_id=1, hotkey="hk1"),),
+        mining_executor_failures_previous=(_mining_executor_failure(raw_id=2, hotkey="hk1"),),
+        validation_successes_current=(
+            _validation_success(
+                raw_id=401,
+                requested_task_result_ids=(1,),
+                executor_output=_validation_batch(((1, 100),)),
+            ),
+        ),
+    )
+
+    assert weights == {Hotkey("hk1"): 100.0}
 
 
 def test_weighing_excludes_success_without_validation_from_average() -> None:
-    weights = _run_weighing(
-        mining_previous=(
-            _mining_result(raw_id=1, hotkey="hk1", is_failure=False),
-            _mining_result(raw_id=2, hotkey="hk1", is_failure=False),
+    weights, _ = _run_weighing(
+        mining_successes_previous=(
+            _mining_success(raw_id=1, hotkey="hk1"),
+            _mining_success(raw_id=2, hotkey="hk1"),
         ),
-        validation_current=(
-            _validation_result(raw_id=401, block_number=22, executor_output=_validation_batch(((1, 80),))),
+        validation_successes_current=(
+            _validation_success(
+                raw_id=501,
+                requested_task_result_ids=(1,),
+                executor_output=_validation_batch(((1, 80),)),
+            ),
         ),
     )
 
-    assert weights == {Hotkey("hk1"): pytest.approx(160.0)}
+    assert weights == {Hotkey("hk1"): 160.0}
+
+
+def test_weighing_ignores_singleton_validation_result_with_extra_unrelated_id() -> None:
+    weights, _ = _run_weighing(
+        mining_successes_previous=(
+            _mining_success(raw_id=1, hotkey="hk1"),
+            _mining_success(raw_id=2, hotkey="hk2"),
+        ),
+        validation_successes_current=(
+            _validation_success(
+                raw_id=601,
+                requested_task_result_ids=(1,),
+                executor_output=_validation_batch(((1, 80), (2, 100))),
+            ),
+        ),
+    )
+
+    assert weights == {
+        Hotkey("hk1"): 0.0,
+        Hotkey("hk2"): 0.0,
+    }
+
+
+def test_weighing_ignores_singleton_validation_result_missing_requested_id() -> None:
+    weights, _ = _run_weighing(
+        mining_successes_previous=(
+            _mining_success(raw_id=1, hotkey="hk1"),
+            _mining_success(raw_id=2, hotkey="hk2"),
+        ),
+        validation_successes_current=(
+            _validation_success(
+                raw_id=701,
+                requested_task_result_ids=(1,),
+                executor_output=_validation_batch(((2, 100),)),
+            ),
+        ),
+    )
+
+    assert weights == {
+        Hotkey("hk1"): 0.0,
+        Hotkey("hk2"): 0.0,
+    }

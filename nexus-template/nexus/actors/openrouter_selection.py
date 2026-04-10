@@ -19,7 +19,7 @@ def _label_block(*, index: int, field_name: str) -> OpenRouterMessageContent:
     return text_content_block(f"item[{index}].{field_name}:")
 
 
-class SelectionBase(BaseModel, ABC):
+class FieldBase(BaseModel, ABC):
     """Base class for persisted OpenRouter selection values."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -34,7 +34,7 @@ class SelectionBase(BaseModel, ABC):
         """Render the stored selection into OpenRouter message content blocks."""
 
 
-class ScalarSelection(SelectionBase):
+class ScalarField(FieldBase):
     """Scalar selection rendered as plain text."""
 
     kind: Literal["scalar"] = "scalar"
@@ -52,7 +52,7 @@ class ScalarSelection(SelectionBase):
         return str(self.value)
 
 
-class ImageUrlSelection(SelectionBase):
+class ImageUrlField(FieldBase):
     """Typed selector value for an OpenRouter ``image_url`` content block."""
 
     kind: Literal["image_url"] = "image_url"
@@ -67,7 +67,7 @@ class ImageUrlSelection(SelectionBase):
         return [_label_block(index=index, field_name=field_name), {"type": "image_url", "image_url": {"url": self.url}}]
 
 
-class FileSelection(SelectionBase):
+class FileField(FieldBase):
     """Typed selector value for an OpenRouter ``file`` content block."""
 
     kind: Literal["file"] = "file"
@@ -92,7 +92,7 @@ class FileSelection(SelectionBase):
         ]
 
 
-class InputAudioSelection(SelectionBase):
+class InputAudioField(FieldBase):
     """Typed selector value for an OpenRouter ``input_audio`` content block."""
 
     kind: Literal["input_audio"] = "input_audio"
@@ -117,7 +117,7 @@ class InputAudioSelection(SelectionBase):
         ]
 
 
-class VideoUrlSelection(SelectionBase):
+class VideoUrlField(FieldBase):
     """Typed selector value for an OpenRouter ``video_url`` content block."""
 
     kind: Literal["video_url"] = "video_url"
@@ -132,29 +132,29 @@ class VideoUrlSelection(SelectionBase):
         return [_label_block(index=index, field_name=field_name), {"type": "video_url", "video_url": {"url": self.url}}]
 
 
-type MultimodalSelection = ImageUrlSelection | FileSelection | InputAudioSelection | VideoUrlSelection
-type SelectionValue = Annotated[
-    ScalarSelection | ImageUrlSelection | FileSelection | InputAudioSelection | VideoUrlSelection,
+type MultimodalField = ImageUrlField | FileField | InputAudioField | VideoUrlField
+type FieldValue = Annotated[
+    ScalarField | ImageUrlField | FileField | InputAudioField | VideoUrlField,
     Field(discriminator="kind"),
 ]
 
 
-class SelectedItem(BaseModel):
+class Fields(BaseModel):
     """Normalized per-item selection payload stored inside an OpenRouter request."""
 
-    selected_fields: dict[str, SelectionValue]
+    fields: dict[str, FieldValue]
 
 
 __all__ = [
-    "FileSelection",
-    "ImageUrlSelection",
-    "InputAudioSelection",
-    "MultimodalSelection",
+    "FileField",
+    "ImageUrlField",
+    "InputAudioField",
+    "MultimodalField",
     "OpenRouterMessageContent",
-    "ScalarSelection",
+    "ScalarField",
     "ScalarValue",
-    "SelectedItem",
-    "SelectionValue",
-    "VideoUrlSelection",
+    "Fields",
+    "FieldValue",
+    "VideoUrlField",
     "text_content_block",
 ]
