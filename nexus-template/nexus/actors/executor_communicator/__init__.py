@@ -1,3 +1,6 @@
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
+
 from nexus.utils.exceptions import (
     AsyncHttpNeuronCommunicatorException,
     NeuronAddressInvalidException,
@@ -36,6 +39,33 @@ from .pending_requests import (
     PendingAsyncHttpRequestStore,
 )
 
+if TYPE_CHECKING:
+    from .openrouter_inference_communicator import (
+        OpenRouterInferenceCommunicator,
+        OpenRouterInferenceCommunicatorActor,
+    )
+
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "OpenRouterInferenceCommunicator": (
+        "nexus.actors.executor_communicator.openrouter_inference_communicator",
+        "OpenRouterInferenceCommunicator",
+    ),
+    "OpenRouterInferenceCommunicatorActor": (
+        "nexus.actors.executor_communicator.openrouter_inference_communicator",
+        "OpenRouterInferenceCommunicatorActor",
+    ),
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LAZY_EXPORTS:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+        value = getattr(import_module(module_name), attr_name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "AsyncHttpNeuronCommunicator",
     "AsyncHttpNeuronCommunicatorActor",
@@ -47,6 +77,8 @@ __all__ = [
     "ExecutorCommunicator",
     "ProcessedInput",
     "NormalizedHttpPath",
+    "OpenRouterInferenceCommunicator",
+    "OpenRouterInferenceCommunicatorActor",
     "UrlHost",
     "format_host_for_url",
     "HttpBindEndpoint",
