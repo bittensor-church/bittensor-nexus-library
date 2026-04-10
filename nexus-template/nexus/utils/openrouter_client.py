@@ -1,43 +1,13 @@
-"""Helpers for calling OpenRouter chat completions that return JSON content."""
+"""OpenRouter client for chat completions that return structured JSON content."""
 
-from collections.abc import Mapping
 from typing import Any, cast
 
 import httpx
 from pydantic import BaseModel
-from pydantic_settings import BaseSettings
+
+from nexus.utils.openrouter_config import OpenRouterSettingsMixin
 
 _RETRY_TRANSPORT = httpx.HTTPTransport(retries=3)
-
-
-class OpenRouterConfigurationError(ValueError):
-    """Raised when a BaseSettings object does not expose valid OpenRouter configuration."""
-
-
-def _find_setting(settings_data: Mapping[str, object], *field_names: str) -> tuple[str, object]:
-    for field_name in field_names:
-        if field_name in settings_data:
-            return field_name, settings_data[field_name]
-    joined_names = ", ".join(field_names)
-    raise OpenRouterConfigurationError(f"OpenRouter settings missing required field(s): {joined_names}")
-
-
-def _require_str_setting(settings_data: Mapping[str, object], *field_names: str) -> str:
-    field_name, value = _find_setting(settings_data, *field_names)
-    if not isinstance(value, str) or len(value.strip()) == 0:
-        raise OpenRouterConfigurationError(
-            f"OpenRouter setting {field_name} must be a non-empty string, got {type(value).__name__}"
-        )
-    return value
-
-
-def _require_float_setting(settings_data: Mapping[str, object], *field_names: str) -> float:
-    field_name, value = _find_setting(settings_data, *field_names)
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise OpenRouterConfigurationError(
-            f"OpenRouter setting {field_name} must be numeric, got {type(value).__name__}"
-        )
-    return float(value)
 
 
 def _invalid_response_error(reason: str, raw_response: object) -> ValueError:
@@ -70,50 +40,70 @@ def _extract_textual_message_content(raw_response: dict[str, object]) -> str:
     return message_content
 
 
-def query[ResponseModelT: BaseModel](
-    *,
-    messages: list[dict[str, Any]],
-    settings: BaseSettings,
-    response_model: type[ResponseModelT],
-) -> ResponseModelT:
-    """Send a chat completion request to OpenRouter and validate the JSON reply.
+class OpenRouterClient:
+    """Synchronous OpenRouter client bound to a concrete validator configuration."""
 
-    Raises:
-        OpenRouterConfigurationError: The provided settings object is missing a required OpenRouter field.
-        ValueError: The OpenRouter response envelope is malformed.
-        ValidationError: The OpenRouter message content is invalid JSON or does not match ``response_model``.
-    """
-    settings_data = cast(dict[str, object], settings.model_dump())
+    def __init__(
+        self,
+        *,
+        url: str,
+        api_key: str,
+        model: str,
+        timeout_seconds: float,
+        temperature: float,
+    ) -> None:
+        self._url = url
+        self._api_key = api_key
+        self._model = model
+        self._timeout_seconds = timeout_seconds
+        self._temperature = temperature
 
-    payload = {
-        "model": _require_str_setting(settings_data, "openrouter_model"),
-        "temperature": _require_float_setting(
-            settings_data,
-            "validation_openrouter_temperature",
-            "openrouter_temperature",
-        ),
-        "messages": messages,
-    }
-
-    with httpx.Client(
-        transport=_RETRY_TRANSPORT,
-        timeout=_require_float_setting(
-            settings_data,
-            "validation_openrouter_timeout_seconds",
-            "openrouter_timeout_seconds",
-        ),
-    ) as client:
-        response = client.post(
-            _require_str_setting(settings_data, "openrouter_url"),
-            json=payload,
-            headers={"Authorization": f"Bearer {_require_str_setting(settings_data, 'openrouter_api_key')}"},
+    @classmethod
+    def from_settings(cls, settings: OpenRouterSettingsMixin) -> OpenRouterClient:
+        return cls(
+            url=settings.openrouter_url,
+            api_key=settings.openrouter_api_key,
+            model=settings.openrouter_model,
+            timeout_seconds=settings.validation_openrouter_timeout_seconds,
+            temperature=settings.validation_openrouter_temperature,
         )
-        response.raise_for_status()
 
-    raw_response_obj = response.json()
-    if not isinstance(raw_response_obj, dict):
-        raise ValueError("OpenRouter response must be a JSON object")
-    raw_response = cast(dict[str, object], raw_response_obj)
+    def query[ResponseModelT: BaseModel](
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        response_model: type[ResponseModelT],
+    ) -> ResponseModelT:
+        """Send a chat completion request to OpenRouter and validate the JSON reply.
 
-    message_content = _extract_textual_message_content(raw_response).strip()
-    return response_model.model_validate_json(message_content)
+        Raises:
+            ValueError: The OpenRouter response envelope is malformed.
+            ValidationError: The OpenRouter message content is invalid JSON or does not match ``response_model``.
+        """
+        payload = {
+            "model": self._model,
+            "temperature": self._temperature,
+            "messages": messages,
+        }
+
+        with httpx.Client(
+            transport=_RETRY_TRANSPORT,
+            timeout=self._timeout_seconds,
+        ) as client:
+            response = client.post(
+                self._url,
+                json=payload,
+                headers={"Authorization": f"Bearer {self._api_key}"},
+            )
+            response.raise_for_status()
+
+        raw_response_obj = response.json()
+        if not isinstance(raw_response_obj, dict):
+            raise ValueError("OpenRouter response must be a JSON object")
+        raw_response = cast(dict[str, object], raw_response_obj)
+
+        message_content = _extract_textual_message_content(raw_response).strip()
+        return response_model.model_validate_json(message_content)
+
+
+__all__ = ["OpenRouterClient"]
