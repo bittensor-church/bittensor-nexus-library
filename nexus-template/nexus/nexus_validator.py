@@ -14,7 +14,7 @@ from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, Source, SourceName
 from nexus.core.runtime.nexus_task import NexusTask
 from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
-from nexus.utils.current_settings import set_current_settings
+from nexus.utils.subnet_settings import initialize_subnet_settings
 
 log = logging.getLogger("validator")
 
@@ -30,11 +30,12 @@ class NexusValidator:
 
     _connected_nodes: dict[int, Node]
     _connected_tasks: dict[int, NexusTask[Any, Any, Any, Any]]
+    settings: BaseSettings
     subnet_flow: Flow
     runtime: SubnetRuntime | None = None
 
     def __init__(self, settings: BaseSettings) -> None:
-        set_current_settings(settings)
+        self.settings = settings
         self.subnet_clock = BlockBeatNode("internal-subnet-clock")
         self._connected_nodes = {}
         self._connected_tasks = {}
@@ -57,6 +58,7 @@ class NexusValidator:
         logging.getLogger("httpx").setLevel(logging.WARN)
 
         settings = cls._load_settings_or_exit(settings_class)
+        initialize_subnet_settings(settings)
         validator = cls(settings)
 
         with validator.start_runtime(shutdown_timeout_seconds=shutdown_timeout_seconds):

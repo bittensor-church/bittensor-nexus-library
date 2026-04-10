@@ -1,25 +1,25 @@
 # pyright: basic
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import UUID
 
 import pytest
 from pydantic import BaseModel, ValidationError
 from transform_test_utils import TransformActorTestSetupFactory
-from utils import build_nexus_task_result, wait_until
+from utils import build_neuron, dummy_block_beat, wait_until
 
 from nexus.actors.openrouter_payload_creator import MultiOpenRouterPayloadCreator, OpenRouterInferenceRequest
 from nexus.actors.openrouter_selection import (
-    FileSelection,
-    ImageUrlSelection,
-    InputAudioSelection,
-    ScalarSelection,
-    VideoUrlSelection,
+    FileField,
+    ImageUrlField,
+    InputAudioField,
+    ScalarField,
+    VideoUrlField,
 )
-from nexus.actors.openrouter_task_result_selection import select_single_task_result_fields
 from nexus.core.runtime.nexus_task_types import TaskResultId
-from nexus.core.runtime.task_result_store import SingleTaskResult
+from nexus.core.runtime.task_result_store import SuccessfulTaskResult
 from nexus.utils.exceptions import SafeInvokeWrappedException
 
 
@@ -38,24 +38,25 @@ def _sample_prompt_item() -> PromptItem:
     return PromptItem(item_id="a", title="Alpha", image_url="https://example.com/a.png")
 
 
-def _image_selection(url: str) -> ImageUrlSelection:
-    return ImageUrlSelection(url=url)
-
-
-def _file_selection(*, filename: str, file_data: str) -> FileSelection:
-    return FileSelection(filename=filename, file_data=file_data)
-
-
-def _input_audio_selection(*, data: str, format: str) -> InputAudioSelection:
-    return InputAudioSelection(data=data, format=format)
-
-
-def _video_url_selection(url: str) -> VideoUrlSelection:
-    return VideoUrlSelection(url=url)
-
-
-def _scalar_selection(value: str | int | float | bool | None) -> ScalarSelection:
-    return ScalarSelection(value=value)
+def _build_successful_task_result(
+    *,
+    task_result_id: UUID,
+    executor_payload: dict[str, str],
+    executor_output: dict[str, str],
+    executor_public_output: dict[str, str],
+    target_hotkey: str,
+) -> SuccessfulTaskResult[dict[str, str], dict[str, str], dict[str, str]]:
+    processing_started = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+    return SuccessfulTaskResult(
+        id=TaskResultId(task_result_id),
+        processing_started=processing_started,
+        processing_finished=processing_started + timedelta(seconds=1),
+        block_at_finish=dummy_block_beat(123),
+        executor_payload=executor_payload,
+        target=build_neuron(uid=1, hotkey=target_hotkey, validator_permit=False),
+        executor_output=executor_output,
+        executor_public_output=executor_public_output,
+    )
 
 
 def _run_payload_creator(
@@ -84,9 +85,9 @@ def test_multi_openrouter_payload_creator_renders_stable_multimodal_content(
     creator = MultiOpenRouterPayloadCreator[PromptItem](
         "openrouter-payload-creator",
         item_selector=lambda item: {
-            "task_result_id": _scalar_selection(item.item_id),
-            "title": _scalar_selection(item.title),
-            "image": _image_selection(item.image_url),
+            "task_result_id": ScalarField(value=item.item_id),
+            "title": ScalarField(value=item.title),
+            "image": ImageUrlField(url=item.image_url),
         },
     )
     setup = transform_actor_test_setup_factory(creator)
@@ -102,8 +103,8 @@ def test_multi_openrouter_payload_creator_renders_stable_multimodal_content(
     request = event.payload
 
     assert event.ctx_id == ctx_id
-    assert request.selected_items[0].selected_fields["task_result_id"] == ScalarSelection(value="a")
-    assert request.selected_items[0].selected_fields["task_result_id"].model_dump(mode="json") == {
+    assert request.fields[0].fields["task_result_id"] == ScalarField(value="a")
+    assert request.fields[0].fields["task_result_id"].model_dump(mode="json") == {
         "kind": "scalar",
         "value": "a",
     }
@@ -123,9 +124,9 @@ def test_multi_openrouter_payload_creator_preserves_image_field_insertion_order(
     creator = MultiOpenRouterPayloadCreator[PromptItem](
         "openrouter-payload-creator",
         item_selector=lambda item: {
-            "task_result_id": _scalar_selection(item.item_id),
-            "original_image_url": _image_selection(item.image_url),
-            "generated_image_url": _image_selection(f"{item.image_url}?generated=1"),
+            "task_result_id": ScalarField(value=item.item_id),
+            "original_image_url": ImageUrlField(url=item.image_url),
+            "generated_image_url": ImageUrlField(url=f"{item.image_url}?generated=1"),
         },
     )
     setup = transform_actor_test_setup_factory(creator)
@@ -150,7 +151,7 @@ def test_multi_openrouter_payload_creator_renders_image_url_selection(
     ctx_id, setup = _run_payload_creator(
         transform_actor_test_setup_factory,
         item_selector=lambda item: {
-            "image": _image_selection(item.image_url),
+            "image": ImageUrlField(url=item.image_url),
         },
     )
 
@@ -172,7 +173,7 @@ def test_multi_openrouter_payload_creator_renders_file_selection(
     ctx_id, setup = _run_payload_creator(
         transform_actor_test_setup_factory,
         item_selector=lambda _item: {
-            "attachment": _file_selection(
+            "attachment": FileField(
                 filename="notes.txt",
                 file_data="data:text/plain;base64,SGVsbG8=",
             ),
@@ -203,7 +204,7 @@ def test_multi_openrouter_payload_creator_renders_input_audio_selection(
     ctx_id, setup = _run_payload_creator(
         transform_actor_test_setup_factory,
         item_selector=lambda _item: {
-            "audio": _input_audio_selection(data="UklGRg==", format="wav"),
+            "audio": InputAudioField(data="UklGRg==", format="wav"),
         },
     )
 
@@ -231,7 +232,7 @@ def test_multi_openrouter_payload_creator_renders_video_url_selection(
     ctx_id, setup = _run_payload_creator(
         transform_actor_test_setup_factory,
         item_selector=lambda _item: {
-            "video": _video_url_selection("https://example.com/demo.mp4"),
+            "video": VideoUrlField(url="https://example.com/demo.mp4"),
         },
     )
 
@@ -253,9 +254,9 @@ def test_multi_openrouter_payload_creator_renders_scalar_only_item_as_text(
     ctx_id, setup = _run_payload_creator(
         transform_actor_test_setup_factory,
         item_selector=lambda item: {
-            "task_result_id": _scalar_selection(item.item_id),
-            "title": _scalar_selection(item.title),
-            "is_featured": _scalar_selection(False),
+            "task_result_id": ScalarField(value=item.item_id),
+            "title": ScalarField(value=item.title),
+            "is_featured": ScalarField(value=False),
         },
     )
 
@@ -279,15 +280,15 @@ def test_multi_openrouter_payload_creator_preserves_insertion_order_across_mixed
     ctx_id, setup = _run_payload_creator(
         transform_actor_test_setup_factory,
         item_selector=lambda item: {
-            "title": _scalar_selection(item.title),
-            "image": _image_selection(item.image_url),
-            "attachment": _file_selection(
+            "title": ScalarField(value=item.title),
+            "image": ImageUrlField(url=item.image_url),
+            "attachment": FileField(
                 filename="notes.txt",
                 file_data="data:text/plain;base64,SGVsbG8=",
             ),
-            "audio": _input_audio_selection(data="UklGRg==", format="wav"),
-            "video": _video_url_selection("https://example.com/demo.mp4"),
-            "task_result_id": _scalar_selection(item.item_id),
+            "audio": InputAudioField(data="UklGRg==", format="wav"),
+            "video": VideoUrlField(url="https://example.com/demo.mp4"),
+            "task_result_id": ScalarField(value=item.item_id),
         },
     )
 
@@ -365,7 +366,7 @@ def test_multi_openrouter_payload_creator_rejects_malformed_multimodal_selection
     assert isinstance(error_payload, SafeInvokeWrappedException)
     assert error_payload.__cause__ is not None
     assert isinstance(error_payload.__cause__, ValueError)
-    assert "attachment" in str(error_payload.__cause__)
+    assert "field 'attachment'" in str(error_payload.__cause__)
     assert "malformed" in str(error_payload.__cause__).lower()
 
 
@@ -392,15 +393,71 @@ def test_multi_openrouter_payload_creator_rejects_multimodal_selection_dict_with
     assert isinstance(error_payload, SafeInvokeWrappedException)
     assert error_payload.__cause__ is not None
     assert isinstance(error_payload.__cause__, ValueError)
-    assert "attachment" in str(error_payload.__cause__)
+    assert "field 'attachment'" in str(error_payload.__cause__)
     assert "malformed" in str(error_payload.__cause__).lower()
+
+
+def test_multi_openrouter_payload_creator_skips_items_with_no_selected_fields(
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    creator = MultiOpenRouterPayloadCreator[PromptItem](
+        "openrouter-payload-creator",
+        item_selector=lambda item: None
+        if item.item_id == "skip"
+        else {
+            "task_result_id": ScalarField(value=item.item_id),
+            "title": ScalarField(value=item.title),
+        },
+    )
+    setup = transform_actor_test_setup_factory(creator)
+
+    with setup.running():
+        setup.send(
+            input_payload=(
+                PromptItem(item_id="skip", title="Skipped", image_url="https://example.com/skipped.png"),
+                PromptItem(item_id="keep", title="Kept", image_url="https://example.com/kept.png"),
+            )
+        )
+        wait_until(lambda: len(setup.processed_collector.received_events) == 1)
+
+    request = setup.processed_collector.received_events[0].payload
+
+    assert len(request.fields) == 1
+    assert request.fields[0].fields == {
+        "task_result_id": ScalarField(value="keep"),
+        "title": ScalarField(value="Kept"),
+    }
+    assert request.messages[0]["content"] == [
+        {"type": "text", "text": "Selected items:"},
+        {"type": "text", "text": "item[0].task_result_id: keep"},
+        {"type": "text", "text": "item[0].title: Kept"},
+    ]
+
+
+def test_multi_openrouter_payload_creator_rejects_empty_selected_item_batches(
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    ctx_id, setup = _run_payload_creator(
+        transform_actor_test_setup_factory,
+        item_selector=lambda _item: None,
+    )
+
+    assert len(setup.processed_collector.received_events) == 0
+    error_event = setup.error_collector.received_events[0]
+    error_payload = error_event.payload
+
+    assert error_event.ctx_id == ctx_id
+    assert isinstance(error_payload, SafeInvokeWrappedException)
+    assert error_payload.__cause__ is not None
+    assert isinstance(error_payload.__cause__, ValueError)
+    assert "selected item" in str(error_payload.__cause__).lower()
 
 
 def test_openrouter_inference_request_rejects_malformed_rendered_message_content_block() -> None:
     with pytest.raises(ValidationError, match="content"):
         OpenRouterInferenceRequest.model_validate(
             {
-                "selected_items": [],
+                "fields": [],
                 "messages": [
                     {
                         "role": "user",
@@ -411,40 +468,54 @@ def test_openrouter_inference_request_rejects_malformed_rendered_message_content
         )
 
 
-def test_select_single_task_result_fields_extracts_supported_scalar_fields() -> None:
+def test_inline_task_result_selector_extracts_supported_scalar_fields() -> None:
     task_result_id = UUID("95843dde-5f4d-4204-b3ae-d24ed6be4ffc")
-    selector = select_single_task_result_fields(
-        include_task_result_id=True,
-        include_target_hotkey=True,
-    )
+    selector = lambda task_result: {
+        "task_result_id": ScalarField(value=str(task_result.id)),
+        "target_hotkey": ScalarField(value=task_result.target.hotkey),
+    }
 
-    task_result = SingleTaskResult[dict[str, str], dict[str, str], dict[str, str]](
-        id=TaskResultId(task_result_id),
-        result=build_nexus_task_result(
-            executor_payload={"payload": "x"},
-            output={"output": "ignored"},
-            block_number=123,
-            target_hotkey="hk1",
-        ),
+    task_result = _build_successful_task_result(
+        task_result_id=task_result_id,
+        executor_payload={"payload": "x"},
+        executor_output={"output": "ignored"},
         executor_public_output={"public": "y"},
+        target_hotkey="hk1",
     )
 
     selected_fields = selector(task_result)
 
     assert selected_fields == {
-        "task_result_id": ScalarSelection(value=str(task_result_id)),
-        "target_hotkey": ScalarSelection(value="hk1"),
+        "task_result_id": ScalarField(value=str(task_result_id)),
+        "target_hotkey": ScalarField(value="hk1"),
     }
 
 
-@pytest.mark.parametrize(
-    "unsupported_flag",
-    [
-        "include_executor_payload",
-        "include_executor_output",
-        "include_executor_public_output",
-    ],
-)
-def test_select_single_task_result_fields_rejects_unsupported_executor_flags(unsupported_flag: str) -> None:
-    with pytest.raises(ValueError, match=unsupported_flag):
-        select_single_task_result_fields(**{unsupported_flag: True})
+def test_inline_task_result_selector_extracts_mixed_openrouter_fields_in_order() -> None:
+    task_result_id = UUID("95843dde-5f4d-4204-b3ae-d24ed6be4ffc")
+    selector = lambda task_result: {
+        "source_image": ImageUrlField(url=str(task_result.executor_payload["image_url"])),
+        "task_result_id": ScalarField(value=str(task_result.id)),
+        "public_caption": ScalarField(
+            value=task_result.executor_public_output["caption"]
+            if task_result.executor_public_output is not None
+            else None
+        ),
+    }
+
+    task_result = _build_successful_task_result(
+        task_result_id=task_result_id,
+        executor_payload={"image_url": "https://example.com/source.png"},
+        executor_output={"output": "ignored"},
+        executor_public_output={"caption": "Cat on a chair"},
+        target_hotkey="hk1",
+    )
+
+    selected_fields = selector(task_result)
+
+    assert list(selected_fields) == ["source_image", "task_result_id", "public_caption"]
+    assert selected_fields == {
+        "source_image": ImageUrlField(url="https://example.com/source.png"),
+        "task_result_id": ScalarField(value=str(task_result_id)),
+        "public_caption": ScalarField(value="Cat on a chair"),
+    }
