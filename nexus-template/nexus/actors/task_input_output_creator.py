@@ -9,13 +9,12 @@ from nexus.core.runtime.actor_patterns import TransformActor
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import PipeToBus
 from nexus.core.runtime.nexus_task_types import TaskResultId
-from nexus.core.runtime.task_result_store import SingleTaskResult
-from nexus.utils.exceptions import InternalFrameworkException, NexusException
+from nexus.core.runtime.task_result_store import SuccessfulTaskResult
 
 
 @dataclass(frozen=True)
 class TaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
-    """Executor-ready task result details derived from one stored task result."""
+    """Executor-ready details extracted from one successful stored task result."""
 
     task_result_id: TaskResultId
     task_input: ExecutorPayload
@@ -24,14 +23,14 @@ class TaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
 
 
 class BatchedTaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](BaseModel):
-    """A batch of task input/output tuples."""
+    """A batch of executor-ready details derived from successful task results."""
 
     task_input_outputs: tuple[TaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]
 
 
 class TaskInputOutputCreator[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     PayloadCreator[
-        tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
+        tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
         BatchedTaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
     ],
     ActorBuilder,
@@ -59,11 +58,11 @@ class TaskInputOutputCreator[ExecutorPayload, ExecutorOutput, ExecutorPublicOutp
 
 class TaskInputOutputCreatorActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     TransformActor[
-        tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
+        tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
         BatchedTaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
     ]
 ):
-    """Actor for transforming task result batches into executor input/output payloads."""
+    """Transform successful task result batches into executor input/output/public-output payloads."""
 
     def __init__(
         self,
@@ -78,27 +77,17 @@ class TaskInputOutputCreatorActor[ExecutorPayload, ExecutorOutput, ExecutorPubli
     def _transform(
         self,
         ctx: Context,
-        payload: tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
+        payload: tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...],
     ) -> BatchedTaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+        del ctx
         transformed: list[TaskInputOutput[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]] = []
         for task_result in payload:
-            task_output = task_result.executor_output
-            if isinstance(task_output, NexusException):
-                raise InternalFrameworkException(
-                    "failed task results should have been filtered out before reaching TaskInputOutputCreatorActor"
-                )
-            task_public_output = task_result.executor_public_output
-            if task_public_output is None:
-                raise InternalFrameworkException(
-                    "successful task results should include executor_public_output before reaching "
-                    "TaskInputOutputCreatorActor"
-                )
             transformed.append(
                 TaskInputOutput(
                     task_result_id=task_result.id,
                     task_input=task_result.executor_payload,
-                    task_output=task_output,
-                    task_public_output=task_public_output,
+                    task_output=task_result.executor_output,
+                    task_public_output=task_result.executor_public_output,
                 )
             )
         return BatchedTaskInputOutput(task_input_outputs=tuple(transformed))

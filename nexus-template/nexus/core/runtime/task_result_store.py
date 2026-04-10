@@ -15,69 +15,88 @@ from nexus.actors.neuron_router import Routed
 from nexus.actors.timestamper import Timestamped
 from nexus.core.runtime.context_store import Context
 from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
-from nexus.utils.exceptions import ExecutorFailureException, NexusException, TaskResultNotFoundException
+from nexus.utils.exceptions import (
+    ExecutorFailureException,
+    InternalFrameworkException,
+    NexusException,
+    TaskResultNotFoundException,
+)
 from nexus.utils.types import Epoch, Hotkey
 
 type StoredTaskExecution[ExecutorPayload, Output] = Timestamped[ProcessedInput[Routed[ExecutorPayload], Output]]
 
 
 @dataclass(frozen=True)
-class TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+class SuccessfulTaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+    """Persist payload for one successful executor attempt."""
+
     result: StoredTaskExecution[ExecutorPayload, ExecutorOutput]
-    executor_public_output: ExecutorPublicOutput | None
+    executor_public_output: ExecutorPublicOutput
 
 
 @dataclass(frozen=True)
-class SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+class ExecutorFailureTaskResultToPersist[ExecutorPayload]:
+    """Persist payload for one executor failure attempt."""
+
+    result: StoredTaskExecution[ExecutorPayload, ExecutorFailureException]
+
+
+@dataclass(frozen=True)
+class TaskResultBase[ExecutorPayload]:
+    """Flat persisted task-result metadata shared by all record kinds."""
+
     id: TaskResultId
-    result: StoredTaskExecution[ExecutorPayload, ExecutorOutput]
-    executor_public_output: ExecutorPublicOutput | None
+    processing_started: datetime
+    processing_finished: datetime
+    block_at_finish: BlockBeat
+    executor_payload: ExecutorPayload
+    target: Neuron
 
-    @property
-    def processing_started(self) -> datetime:
-        return self.result.processing_started
 
-    @property
-    def processing_finished(self) -> datetime:
-        return self.result.processing_finished
+@dataclass(frozen=True)
+class SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](TaskResultBase[ExecutorPayload]):
+    """Persisted task result for one successful executor attempt."""
 
-    @property
-    def block_at_finish(self) -> BlockBeat:
-        return self.result.block_at_finish
+    executor_output: ExecutorOutput
+    executor_public_output: ExecutorPublicOutput
 
-    @property
-    def executor_payload(self) -> ExecutorPayload:
-        return self.result.executor_output.input.input
 
-    @property
-    def executor_output(self) -> ExecutorOutput | NexusException:
-        return self.result.executor_output.output
+@dataclass(frozen=True)
+class ExecutorFailureTaskResult[ExecutorPayload](TaskResultBase[ExecutorPayload]):
+    """Persisted task result for one executor failure attempt."""
 
-    @property
-    def is_failure(self) -> bool:
-        return isinstance(self.result.executor_output.output, NexusException)
-
-    @property
-    def target(self) -> Neuron:
-        return self.result.executor_output.input.target
+    executor_failure: ExecutorFailureException
 
 
 class TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](ABC):
-    """Interface for storing and querying NexusTask results.
+    """Interface for storing and querying split Nexus task results.
 
     Implementations must be thread-safe.
     """
 
     @abstractmethod
-    def add_task_result(
+    def add_successful_task_result(
         self,
         ctx: Context,
         task_name: NexusTaskName,
-        result: TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
-    ) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+        result: SuccessfulTaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    ) -> SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
         """
-        Appends a new task result to the store, makes a relevant log entry in the Context,
-        and returns the stored result.
+        Appends a successful task result to the store, writes a context log entry,
+        and returns the stored record.
+        """
+        pass
+
+    @abstractmethod
+    def add_executor_failure(
+        self,
+        ctx: Context,
+        task_name: NexusTaskName,
+        result: ExecutorFailureTaskResultToPersist[ExecutorPayload],
+    ) -> ExecutorFailureTaskResult[ExecutorPayload]:
+        """
+        Appends an executor failure task result to the store, writes a context log entry,
+        and returns the stored record.
         """
         pass
 
@@ -86,7 +105,10 @@ class TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](ABC
         self,
         task_name: NexusTaskName,
         task_result_id: TaskResultId,
-    ) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+    ) -> (
+        SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
+        | ExecutorFailureTaskResult[ExecutorPayload]
+    ):
         """Retrieves one task result for a given task name and task-result id.
 
         Raises:
@@ -95,76 +117,153 @@ class TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](ABC
         pass
 
     @abstractmethod
-    def get_tasks_for_epoch(
+    def get_successful_tasks_for_epoch(
         self,
         task_name: NexusTaskName,
         epoch: Epoch,
-    ) -> tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
+    ) -> tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
         """
-        Retrieves all task results for a given task name and epoch.
+        Retrieves all successful task results for a given task name and epoch.
          - The results should be returned in chronological order by block number (oldest first).
-         - The task result epoch is determined based on the block in the timestamp of the task results
+         - The task result epoch is determined based on the block in the timestamp of the task results.
          - The implementation should be efficient in retrieving results for a specific epoch,
             even if the store contains a large number of results.
         """
         pass
 
-    def count_by_hotkey_for_epoch(
+    @abstractmethod
+    def get_executor_failures_for_epoch(
         self,
         task_name: NexusTaskName,
         epoch: Epoch,
-        *,
-        include_executor_failures: bool = True,
+    ) -> tuple[ExecutorFailureTaskResult[ExecutorPayload], ...]:
+        """
+        Retrieves all executor failure task results for a given task name and epoch.
+         - The results should be returned in chronological order by block number (oldest first).
+         - The task result epoch is determined based on the block in the timestamp of the task results.
+         - The implementation should be efficient in retrieving results for a specific epoch,
+            even if the store contains a large number of results.
+        """
+        pass
+
+    def count_successful_by_hotkey_for_epoch(
+        self,
+        task_name: NexusTaskName,
+        epoch: Epoch,
     ) -> Mapping[Hotkey, int]:
-        """
-        Counts task results for a given task and epoch grouped by routed neuron hotkey.
-        """
-        results = self.get_tasks_for_epoch(task_name=task_name, epoch=epoch)
-        if include_executor_failures:
-            return Counter(Hotkey(result.target.hotkey) for result in results)
-        else:
-            return Counter(
-                Hotkey(result.target.hotkey)
-                for result in results
-                if not isinstance(result.executor_output, ExecutorFailureException)
-            )
+        """Count successful task results for a given task and epoch grouped by routed neuron hotkey."""
+
+        return Counter(Hotkey(result.target.hotkey) for result in self.get_successful_tasks_for_epoch(task_name, epoch))
+
+    def count_executor_failures_by_hotkey_for_epoch(
+        self,
+        task_name: NexusTaskName,
+        epoch: Epoch,
+    ) -> Mapping[Hotkey, int]:
+        """Count executor failure task results for a given task and epoch grouped by routed neuron hotkey."""
+
+        return Counter(
+            Hotkey(result.target.hotkey) for result in self.get_executor_failures_for_epoch(task_name, epoch)
+        )
 
 
 class InMemoryTaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
 ):
-    store: dict[NexusTaskName, list[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]]
+    """Thread-safe in-memory split task-result store for tests and local use."""
+
+    successful_store: dict[
+        NexusTaskName,
+        list[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]],
+    ]
+    executor_failure_store: dict[NexusTaskName, list[ExecutorFailureTaskResult[ExecutorPayload]]]
     by_id: dict[
         NexusTaskName,
-        dict[TaskResultId, SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]],
+        dict[
+            TaskResultId,
+            SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
+            | ExecutorFailureTaskResult[ExecutorPayload],
+        ],
     ]
     lock: threading.Lock
 
     def __init__(self) -> None:
-        self.store = {}
+        self.successful_store = {}
+        self.executor_failure_store = {}
         self.by_id = {}
         self.lock = threading.Lock()
 
     @override
-    def add_task_result(
+    def add_successful_task_result(
         self,
         ctx: Context,
         task_name: NexusTaskName,
-        result: TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
-    ) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
-        entry = SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
+        result: SuccessfulTaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],
+    ) -> SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+        executor_output = result.result.executor_output.output
+        if isinstance(executor_output, NexusException):
+            raise InternalFrameworkException(
+                f"Expected successful executor output for task {task_name}, got {type(executor_output).__name__}"
+            )
+        if result.executor_public_output is None:
+            raise InternalFrameworkException(
+                f"Successful task result for task {task_name} requires executor_public_output"
+            )
+
+        entry = SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
             id=TaskResultId(uuid.uuid7()),
-            result=result.result,
+            processing_started=result.result.processing_started,
+            processing_finished=result.result.processing_finished,
+            block_at_finish=result.result.block_at_finish,
+            executor_payload=result.result.executor_output.input.input,
+            target=result.result.executor_output.input.target,
+            executor_output=executor_output,
             executor_public_output=result.executor_public_output,
         )
         with self.lock:
-            if task_name not in self.store:
-                self.store[task_name] = []
+            if task_name not in self.successful_store:
+                self.successful_store[task_name] = []
+                self.executor_failure_store[task_name] = []
                 self.by_id[task_name] = {}
-            self.store[task_name].append(entry)
+            self.successful_store[task_name].append(entry)
             self.by_id[task_name][entry.id] = entry
             ctx.append_user_note(
-                f"Added task result for {task_name} at block {result.result.block_at_finish.block_number}"
+                f"Added successful task result for {task_name} at block {result.result.block_at_finish.block_number}"
+            )
+            return entry
+
+    @override
+    def add_executor_failure(
+        self,
+        ctx: Context,
+        task_name: NexusTaskName,
+        result: ExecutorFailureTaskResultToPersist[ExecutorPayload],
+    ) -> ExecutorFailureTaskResult[ExecutorPayload]:
+        executor_failure = result.result.executor_output.output
+        if not isinstance(executor_failure, ExecutorFailureException):
+            raise InternalFrameworkException(
+                f"Expected executor failure output for task {task_name}, got {type(executor_failure).__name__}"
+            )
+
+        entry = ExecutorFailureTaskResult[ExecutorPayload](
+            id=TaskResultId(uuid.uuid7()),
+            processing_started=result.result.processing_started,
+            processing_finished=result.result.processing_finished,
+            block_at_finish=result.result.block_at_finish,
+            executor_payload=result.result.executor_output.input.input,
+            target=result.result.executor_output.input.target,
+            executor_failure=executor_failure,
+        )
+        with self.lock:
+            if task_name not in self.executor_failure_store:
+                self.successful_store[task_name] = []
+                self.executor_failure_store[task_name] = []
+                self.by_id[task_name] = {}
+            self.executor_failure_store[task_name].append(entry)
+            self.by_id[task_name][entry.id] = entry
+            ctx.append_user_note(
+                "Added executor failure task result for "
+                f"{task_name} at block {result.result.block_at_finish.block_number}"
             )
             return entry
 
@@ -173,7 +272,10 @@ class InMemoryTaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOut
         self,
         task_name: NexusTaskName,
         task_result_id: TaskResultId,
-    ) -> SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]:
+    ) -> (
+        SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
+        | ExecutorFailureTaskResult[ExecutorPayload]
+    ):
         with self.lock:
             task_results = self.by_id.get(task_name)
             if task_results is None or task_result_id not in task_results:
@@ -181,16 +283,35 @@ class InMemoryTaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOut
             return task_results[task_result_id]
 
     @override
-    def get_tasks_for_epoch(
+    def get_successful_tasks_for_epoch(
         self,
         task_name: NexusTaskName,
         epoch: Epoch,
-    ) -> tuple[SingleTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
+    ) -> tuple[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ...]:
         with self.lock:
-            if task_name not in self.store:
+            if task_name not in self.successful_store:
                 return ()
             results = [
-                result for result in self.store[task_name] if epoch.contains(result.result.block_at_finish.block_number)
+                result
+                for result in self.successful_store[task_name]
+                if epoch.contains(result.block_at_finish.block_number)
             ]
-            results.sort(key=lambda r: r.result.block_at_finish.block_number)
+            results.sort(key=lambda r: r.block_at_finish.block_number)
+            return tuple(results)
+
+    @override
+    def get_executor_failures_for_epoch(
+        self,
+        task_name: NexusTaskName,
+        epoch: Epoch,
+    ) -> tuple[ExecutorFailureTaskResult[ExecutorPayload], ...]:
+        with self.lock:
+            if task_name not in self.executor_failure_store:
+                return ()
+            results = [
+                result
+                for result in self.executor_failure_store[task_name]
+                if epoch.contains(result.block_at_finish.block_number)
+            ]
+            results.sort(key=lambda r: r.block_at_finish.block_number)
             return tuple(results)

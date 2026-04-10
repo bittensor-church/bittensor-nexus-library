@@ -1,141 +1,225 @@
 # pyright: basic
 
-from typing import cast
+from typing import cast, override
 
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import (
-    InMemoryTestTaskResultStoreProvider,
+    DEFAULT_TEST_NETUID,
     build_nexus_task_result,
-    get_stored_results_for_block,
+    empty_context_store,
+    get_epoch_containing_block,
     wait_until,
 )
 
-from nexus.actors.task_result_storer import TaskResultStorer
+from nexus.actors.task_result_store_provider import TaskResultStoreProvider
+from nexus.actors.task_result_storer import ExecutorFailureTaskResultStorer
 from nexus.core.dsl.nodes import NodeId
+from nexus.core.runtime.context_store import Context
 from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.task_result_store import SingleTaskResult, TaskResultToPersist
-from nexus.utils.exceptions import ExecutorFailureException, NexusException, RetryTaskAfterExecutorFailureException
+from nexus.core.runtime.task_result_store import (
+    ExecutorFailureTaskResult,
+    ExecutorFailureTaskResultToPersist,
+    InMemoryTaskResultStore,
+    StoredTaskExecution,
+    SuccessfulTaskResult,
+    SuccessfulTaskResultToPersist,
+    TaskResultStore,
+)
+from nexus.utils.exceptions import ExecutorFailureException, NexusException
+from nexus.utils.types import BlockNumber
 
 type DummyExecutorPayload = str
 type DummyExecutorOutput = int
 type DummyExecutorPublicOutput = str
 
 
-def test_task_result_storer_emits_task_result_and_persists_payload(
-    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
-) -> None:
-    task_name = NexusTaskName("task-result-storer-success")
-    store_provider = InMemoryTestTaskResultStoreProvider[
-        DummyExecutorPayload,
-        DummyExecutorOutput,
-        DummyExecutorPublicOutput,
-    ]()
-    storer = TaskResultStorer[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput](
-        NodeId("task-result-storer-success"),
-        name=task_name,
-        task_result_store_provider=store_provider,
-    )
-    setup = transform_actor_test_setup_factory(storer)
+class ExecutorFailureStoreWriteException(NexusException):
+    pass
+
+
+class ExplodingExecutorFailureTaskResultStore(
+    InMemoryTaskResultStore[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]
+):
+    failure: NexusException
+
+    def __init__(self, failure: NexusException) -> None:
+        super().__init__()
+        self.failure = failure
+
+    @override
+    def add_executor_failure(
+        self,
+        ctx: Context,
+        task_name: NexusTaskName,
+        result: ExecutorFailureTaskResultToPersist[DummyExecutorPayload],
+    ) -> ExecutorFailureTaskResult[DummyExecutorPayload]:
+        raise self.failure
+
+
+class TaskResultStoreProviderDouble(
+    TaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]
+):
+    _store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]
+
+    def __init__(
+        self,
+        store: TaskResultStore[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput],
+    ) -> None:
+        self._store = store
+
+    @override
+    def get_task_result_store(
+        self,
+    ) -> TaskResultStore[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]:
+        return self._store
+
+
+def test_in_memory_task_result_store_separates_successes_from_executor_failures() -> None:
+    task_name = NexusTaskName("task-result-store-split")
     block_number = 123
-    nexus_task_result = build_nexus_task_result(
+    epoch = get_epoch_containing_block(BlockNumber(block_number), netuid=DEFAULT_TEST_NETUID)
+    store = InMemoryTaskResultStore[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]()
+
+    successful_execution = build_nexus_task_result(
         executor_payload="input-1",
         output=7,
         block_number=block_number,
         target_hotkey="task-result-storer-neuron",
     )
-    public_output = "public-output-1"
-    task_result_to_persist = TaskResultToPersist[
-        DummyExecutorPayload,
-        DummyExecutorOutput,
-        DummyExecutorPublicOutput,
-    ](
-        result=nexus_task_result,
-        executor_public_output=public_output,
+    executor_failure_execution = cast(
+        StoredTaskExecution[DummyExecutorPayload, ExecutorFailureException],
+        build_nexus_task_result(
+            executor_payload="input-2",
+            output=cast(
+                DummyExecutorOutput | NexusException,
+                ExecutorFailureException(NexusException("executor boom")),
+            ),
+            block_number=block_number,
+            target_hotkey="task-result-storer-neuron",
+        ),
     )
 
-    with setup.running():
-        ctx_id = setup.send(input_payload=task_result_to_persist)
-        wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
-
-    assert len(setup.error_collector.received_events) == 0
-    result_event = setup.processed_collector.received_events[0]
-    assert result_event.ctx_id == ctx_id
-    emitted_result = result_event.payload
-    assert isinstance(emitted_result, SingleTaskResult)
-
-    stored_results = get_stored_results_for_block(
-        store=store_provider.get_task_result_store(),
-        task_name=task_name,
-        block_number=block_number,
-    )
-    assert len(stored_results) == 1
-    stored_result = stored_results[0]
-    assert emitted_result == stored_result
-    assert stored_result.result == nexus_task_result
-    assert stored_result.executor_public_output == public_output
-    assert (
-        store_provider.get_task_result_store().get_task_result(
-            task_name=task_name,
-            task_result_id=emitted_result.id,
+    with empty_context_store().create_context() as successful_ctx:
+        successful_result = store.add_successful_task_result(
+            successful_ctx,
+            task_name,
+            SuccessfulTaskResultToPersist(
+                result=successful_execution,
+                executor_public_output="public-output-1",
+            ),
         )
-        == emitted_result
+    with empty_context_store().create_context() as failure_ctx:
+        executor_failure_result = store.add_executor_failure(
+            failure_ctx,
+            task_name,
+            ExecutorFailureTaskResultToPersist(result=executor_failure_execution),
+        )
+
+    assert isinstance(successful_result, SuccessfulTaskResult)
+    assert isinstance(executor_failure_result, ExecutorFailureTaskResult)
+    assert store.get_successful_tasks_for_epoch(task_name, epoch) == (successful_result,)
+    assert store.get_executor_failures_for_epoch(task_name, epoch) == (executor_failure_result,)
+    assert store.get_successful_tasks_for_epoch(task_name, epoch) != store.get_executor_failures_for_epoch(
+        task_name, epoch
     )
 
 
-def test_task_result_storer_persists_executor_failure_and_emits_retry_error(
-    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
-) -> None:
-    task_name = NexusTaskName("task-result-storer-executor-failure")
-    store_provider = InMemoryTestTaskResultStoreProvider[
-        DummyExecutorPayload,
-        DummyExecutorOutput,
-        DummyExecutorPublicOutput,
-    ]()
-    storer = TaskResultStorer[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput](
-        NodeId("task-result-storer-executor-failure"),
-        name=task_name,
-        task_result_store_provider=store_provider,
-    )
-    setup = transform_actor_test_setup_factory(storer)
+def test_in_memory_task_result_store_get_task_result_returns_both_result_kinds() -> None:
+    task_name = NexusTaskName("task-result-store-id-lookup")
     block_number = 456
-    failed_output = cast(
-        DummyExecutorOutput | NexusException,
-        ExecutorFailureException(NexusException("executor boom")),
-    )
-    nexus_task_result = build_nexus_task_result(
-        executor_payload="input-2",
-        output=failed_output,
+    store = InMemoryTaskResultStore[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput]()
+
+    successful_execution = build_nexus_task_result(
+        executor_payload="input-3",
+        output=9,
         block_number=block_number,
         target_hotkey="task-result-storer-neuron",
     )
-    task_result_to_persist = TaskResultToPersist[
+    executor_failure_execution = cast(
+        StoredTaskExecution[DummyExecutorPayload, ExecutorFailureException],
+        build_nexus_task_result(
+            executor_payload="input-4",
+            output=cast(
+                DummyExecutorOutput | NexusException,
+                ExecutorFailureException(NexusException("executor boom")),
+            ),
+            block_number=block_number,
+            target_hotkey="task-result-storer-neuron",
+        ),
+    )
+
+    with empty_context_store().create_context() as successful_ctx:
+        successful_result = store.add_successful_task_result(
+            successful_ctx,
+            task_name,
+            SuccessfulTaskResultToPersist(
+                result=successful_execution,
+                executor_public_output="public-output-2",
+            ),
+        )
+    with empty_context_store().create_context() as failure_ctx:
+        executor_failure_result = store.add_executor_failure(
+            failure_ctx,
+            task_name,
+            ExecutorFailureTaskResultToPersist(result=executor_failure_execution),
+        )
+
+    assert store.get_task_result(task_name=task_name, task_result_id=successful_result.id) == successful_result
+    assert (
+        store.get_task_result(task_name=task_name, task_result_id=executor_failure_result.id) == executor_failure_result
+    )
+    assert store.get_task_result(task_name=task_name, task_result_id=successful_result.id) is successful_result
+    assert (
+        store.get_task_result(task_name=task_name, task_result_id=executor_failure_result.id) is executor_failure_result
+    )
+    assert isinstance(
+        store.get_task_result(task_name=task_name, task_result_id=successful_result.id),
+        SuccessfulTaskResult,
+    )
+    assert isinstance(
+        store.get_task_result(task_name=task_name, task_result_id=executor_failure_result.id), ExecutorFailureTaskResult
+    )
+    assert store.get_task_result(task_name=task_name, task_result_id=successful_result.id) != executor_failure_result
+    assert store.get_task_result(task_name=task_name, task_result_id=executor_failure_result.id) != successful_result
+
+
+def test_executor_failure_task_result_storer_emits_error_when_store_write_raises(
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    task_name = NexusTaskName("task-result-storer-store-write-failure")
+    store_write_failure = ExecutorFailureStoreWriteException("failed to persist executor failure")
+    storer = ExecutorFailureTaskResultStorer[
         DummyExecutorPayload,
         DummyExecutorOutput,
         DummyExecutorPublicOutput,
     ](
-        result=nexus_task_result,
-        executor_public_output=None,
+        NodeId("executor-failure-task-result-storer"),
+        name=task_name,
+        task_result_store_provider=TaskResultStoreProviderDouble(
+            ExplodingExecutorFailureTaskResultStore(store_write_failure)
+        ),
+    )
+    setup = transform_actor_test_setup_factory(storer)
+
+    executor_failure_execution = cast(
+        StoredTaskExecution[DummyExecutorPayload, ExecutorFailureException],
+        build_nexus_task_result(
+            executor_payload="input-5",
+            output=cast(
+                DummyExecutorOutput | NexusException,
+                ExecutorFailureException(NexusException("executor boom")),
+            ),
+            block_number=789,
+            target_hotkey="task-result-storer-neuron",
+        ),
     )
 
     with setup.running():
-        ctx_id = setup.send(input_payload=task_result_to_persist)
-        wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+        setup.send(
+            input_payload=ExecutorFailureTaskResultToPersist(result=executor_failure_execution),
+        )
+        wait_until(lambda: len(setup.error_collector.received_events) == 1)
 
     assert len(setup.processed_collector.received_events) == 0
-    error_event = setup.error_collector.received_events[0]
-    assert error_event.ctx_id == ctx_id
-    assert isinstance(error_event.payload, RetryTaskAfterExecutorFailureException)
-    assert isinstance(error_event.payload.__cause__, ExecutorFailureException)
-
-    stored_results = get_stored_results_for_block(
-        store=store_provider.get_task_result_store(),
-        task_name=task_name,
-        block_number=block_number,
-    )
-    assert len(stored_results) == 1
-    stored_result = stored_results[0]
-    assert stored_result.result == nexus_task_result
-    assert stored_result.executor_public_output is None
-    stored_output = stored_result.result.executor_output.output
-    assert isinstance(stored_output, ExecutorFailureException)
-    assert str(stored_output.executor_error) == "executor boom"
+    assert len(setup.error_collector.received_events) == 1
+    assert setup.error_collector.received_events[0].payload is store_write_failure

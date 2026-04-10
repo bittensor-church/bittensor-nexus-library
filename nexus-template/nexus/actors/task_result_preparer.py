@@ -5,8 +5,12 @@ from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, S
 from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.core.runtime.task_result_store import StoredTaskExecution, TaskResultToPersist
-from nexus.utils.exceptions import InternalFrameworkException, NexusException
+from nexus.core.runtime.task_result_store import (
+    ExecutorFailureTaskResultToPersist,
+    StoredTaskExecution,
+    SuccessfulTaskResultToPersist,
+)
+from nexus.utils.exceptions import ExecutorFailureException, InternalFrameworkException, NexusException
 
 
 class TaskResultPreparer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](Node, ActorBuilder):
@@ -29,7 +33,10 @@ class TaskResultPreparer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     conversion_failed: Sink[NexusException]
 
     executor_output_for_conversion: Source[ExecutorOutput]
-    prepared_task_result: Source[TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
+    prepared_successful_task_result: Source[
+        SuccessfulTaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
+    ]
+    prepared_executor_failure: Source[ExecutorFailureTaskResultToPersist[ExecutorPayload]]
     error: Source[NexusException]
 
     def __init__(self, _id: str) -> None:
@@ -44,8 +51,14 @@ class TaskResultPreparer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
             f"{self.id}-executor-output-for-conversion",
             owner_node=self,
         )
-        self.prepared_task_result = Source[TaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]](
-            f"{self.id}-prepared-task-result",
+        self.prepared_successful_task_result = Source[
+            SuccessfulTaskResultToPersist[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
+        ](
+            f"{self.id}-prepared-successful-task-result",
+            owner_node=self,
+        )
+        self.prepared_executor_failure = Source[ExecutorFailureTaskResultToPersist[ExecutorPayload]](
+            f"{self.id}-prepared-executor-failure",
             owner_node=self,
         )
         self.error = Source[NexusException](f"{self.id}-error", owner_node=self)
@@ -65,7 +78,8 @@ class TaskResultPreparer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
         return NodeSources(
             sources={
                 SourceName("executor-output-for-conversion"): self.executor_output_for_conversion,
-                SourceName("prepared-task-result"): self.prepared_task_result,
+                SourceName("prepared-successful-task-result"): self.prepared_successful_task_result,
+                SourceName("prepared-executor-failure"): self.prepared_executor_failure,
                 SourceName("error"): self.error,
             }
         )
@@ -80,8 +94,10 @@ class TaskResultPreparer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
 
 
 class TaskResultPreparerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](Actor):
+    """Track pending successful conversions and fan out prepared persistence payloads."""
+
     spec: TaskResultPreparer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
-    _pending_result_user_data_key: str
+    _pending_successful_result_user_data_key: str
 
     def __init__(
         self,
@@ -92,7 +108,7 @@ class TaskResultPreparerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOut
     ) -> None:
         super().__init__(name=spec.id, pipe_to_bus=pipe_to_bus, context_store=context_store)
         self.spec = spec
-        self._pending_result_user_data_key = f"{self.spec.id}-pending-successful-result"
+        self._pending_successful_result_user_data_key = f"{self.spec.id}-pending-successful-result"
 
     @override
     def handlers(self) -> dict[Sink[Any], EventHandler]:
@@ -108,26 +124,32 @@ class TaskResultPreparerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOut
         event: ReceiveEvent[StoredTaskExecution[ExecutorPayload, ExecutorOutput]],
     ) -> MessagesToSend:
         output = event.payload.executor_output.output
-        if isinstance(output, NexusException):
-            prepared_result = TaskResultToPersist[
-                ExecutorPayload,
-                ExecutorOutput,
-                ExecutorPublicOutput,
-            ](
-                result=event.payload,
-                executor_public_output=None,
-            )
+        if isinstance(output, ExecutorFailureException):
             return (
                 SendEvent(
                     ctx_id=ctx.id,
-                    source=self.spec.prepared_task_result,
-                    payload=prepared_result,
+                    source=self.spec.prepared_executor_failure,
+                    payload=ExecutorFailureTaskResultToPersist(
+                        result=cast(StoredTaskExecution[ExecutorPayload, ExecutorFailureException], event.payload)
+                    ),
+                ),
+            )
+
+        if isinstance(output, NexusException):
+            return (
+                SendEvent(
+                    ctx_id=ctx.id,
+                    source=self.spec.error,
+                    payload=InternalFrameworkException(
+                        f"Unexpected executor error type for task result preparation in context {ctx.id}: "
+                        f"{type(output)!r}."
+                    ),
                 ),
             )
 
         if (
-            self._pending_result_user_data_key in ctx.user_data
-            and ctx.user_data[self._pending_result_user_data_key] is not None
+            self._pending_successful_result_user_data_key in ctx.user_data
+            and ctx.user_data[self._pending_successful_result_user_data_key] is not None
         ):
             return (
                 SendEvent(
@@ -139,7 +161,7 @@ class TaskResultPreparerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOut
                 ),
             )
 
-        ctx.set_user_data(self._pending_result_user_data_key, event.payload)
+        ctx.set_user_data(self._pending_successful_result_user_data_key, event.payload)
         return (
             SendEvent(
                 ctx_id=ctx.id,
@@ -153,7 +175,7 @@ class TaskResultPreparerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOut
         ctx: Context,
         event: ReceiveEvent[ExecutorPublicOutput],
     ) -> MessagesToSend:
-        if self._pending_result_user_data_key not in ctx.user_data:
+        if self._pending_successful_result_user_data_key not in ctx.user_data:
             return (
                 SendEvent(
                     ctx_id=ctx.id,
@@ -163,7 +185,7 @@ class TaskResultPreparerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOut
                     ),
                 ),
             )
-        pending_result = ctx.user_data[self._pending_result_user_data_key]
+        pending_result = ctx.user_data[self._pending_successful_result_user_data_key]
         if not isinstance(pending_result, Timestamped):
             return (
                 SendEvent(
@@ -176,13 +198,13 @@ class TaskResultPreparerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOut
                 ),
             )
         typed_pending_result = cast(StoredTaskExecution[ExecutorPayload, ExecutorOutput], pending_result)
-        ctx.set_user_data(self._pending_result_user_data_key, None)
+        ctx.set_user_data(self._pending_successful_result_user_data_key, None)
 
         return (
             SendEvent(
                 ctx_id=ctx.id,
-                source=self.spec.prepared_task_result,
-                payload=TaskResultToPersist(
+                source=self.spec.prepared_successful_task_result,
+                payload=SuccessfulTaskResultToPersist(
                     result=typed_pending_result,
                     executor_public_output=event.payload,
                 ),
@@ -194,6 +216,6 @@ class TaskResultPreparerActor[ExecutorPayload, ExecutorOutput, ExecutorPublicOut
         ctx: Context,
         _: ReceiveEvent[NexusException],
     ) -> MessagesToSend:
-        if self._pending_result_user_data_key in ctx.user_data:
-            ctx.set_user_data(self._pending_result_user_data_key, None)
+        if self._pending_successful_result_user_data_key in ctx.user_data:
+            ctx.set_user_data(self._pending_successful_result_user_data_key, None)
         return ()
