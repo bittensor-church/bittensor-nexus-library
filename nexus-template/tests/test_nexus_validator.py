@@ -10,11 +10,20 @@ from pydantic_settings import BaseSettings
 from nexus.actors.payload_creator import NoopPayloadCreator
 from nexus.core.dsl.nodes import Sink, Source
 from nexus.nexus_validator import NexusValidator
+from nexus.utils.current_settings import get_current_settings_as
 from nexus.utils.exceptions import NexusException
 
 
 class _TestSettings(BaseSettings):
     pass
+
+
+def test_validator_registers_passed_settings_as_current_settings() -> None:
+    settings = _TestSettings()
+
+    NexusValidator(settings)
+
+    assert get_current_settings_as(_TestSettings) is settings
 
 
 def test_connect_discovers_node_without_validator_field() -> None:

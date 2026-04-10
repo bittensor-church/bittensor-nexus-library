@@ -14,6 +14,7 @@ from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, Source, SourceName
 from nexus.core.runtime.nexus_task import NexusTask
 from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
+from nexus.utils.current_settings import set_current_settings
 
 log = logging.getLogger("validator")
 
@@ -33,6 +34,7 @@ class NexusValidator:
     runtime: SubnetRuntime | None = None
 
     def __init__(self, settings: BaseSettings) -> None:
+        set_current_settings(settings)
         self.subnet_clock = BlockBeatNode("internal-subnet-clock")
         self._connected_nodes = {}
         self._connected_tasks = {}

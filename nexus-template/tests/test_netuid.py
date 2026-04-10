@@ -2,7 +2,7 @@
 
 import pytest
 
-from nexus.utils.exceptions import ActorMisconfiguredException
+from nexus.utils.exceptions import ActorMisconfiguredException, SubnetMisconfiguredException
 from nexus.utils.netuid import load_required_netuid_from_env, validate_netuid
 from nexus.utils.types import NetUid
 
@@ -25,12 +25,12 @@ def test_load_required_netuid_from_env_reads_and_validates(monkeypatch: pytest.M
 def test_load_required_netuid_from_env_rejects_negative_value(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VALIDATOR_NETUID", "-1")
 
-    with pytest.raises(ActorMisconfiguredException, match="VALIDATOR_NETUID must be >= 0"):
+    with pytest.raises(SubnetMisconfiguredException, match="VALIDATOR_NETUID must be >= 0"):
         load_required_netuid_from_env()
 
 
 def test_load_required_netuid_from_env_rejects_non_integer_value(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VALIDATOR_NETUID", "abc")
 
-    with pytest.raises(ActorMisconfiguredException, match="VALIDATOR_NETUID must be an integer"):
+    with pytest.raises(SubnetMisconfiguredException, match="VALIDATOR_NETUID must be an integer"):
         load_required_netuid_from_env()

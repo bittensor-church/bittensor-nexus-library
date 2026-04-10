@@ -23,10 +23,20 @@ from transform_test_utils import (
 )
 from utils import DEFAULT_TEST_NETUID
 
+import nexus.utils.subnet_settings as subnet_settings_module
 from nexus.core.dsl.nodes import Transform
 from nexus.utils.types import NetUid
 
 DEFAULT_TEST_S3_BUCKET = "uploads"
+
+
+@pytest.fixture(autouse=True)
+def _isolate_subnet_settings_between_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        subnet_settings_module,
+        "_subnet_settings_registry",
+        subnet_settings_module._SubnetSettingsRegistry(),
+    )
 
 
 @dataclass

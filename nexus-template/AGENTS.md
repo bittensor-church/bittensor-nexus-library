@@ -72,7 +72,7 @@ Always use `uv run`, never bare `python` or `pip`.
 - Do NOT leave dead code in the codebase.
 - You are allowed to restructure code. Prefer this over introducing workarounds.
 - Do NOT use assertions in production code for runtime invariants. Raise a specific exception instead.
-- `InternalFrameworkException` is a common default for invariant breaches, but choose context-specific exceptions when appropriate (for example `InternalStateCorruptionException`, `FlowMisconfiguredException`, `ActorMisconfiguredException`).
+- `InternalFrameworkException` is a common default for invariant breaches, but choose context-specific exceptions when appropriate (for example `InternalStateCorruptionException`, `FlowMisconfiguredException`, `ActorMisconfiguredException`, `SubnetMisconfiguredException`).
 
 ## Documentation guidelines
 

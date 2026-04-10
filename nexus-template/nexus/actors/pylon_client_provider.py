@@ -7,7 +7,7 @@ from pylon_client.artanis import Config, Hotkey, IdentityName, NetUid, PylonAuth
 from pylon_client.artanis.v1 import GetLatestBlockInfoResponse, GetNeuronsResponse, SetWeightsResponse
 
 from nexus.utils.env import get_optional_env_var, get_required_env_var
-from nexus.utils.exceptions import ActorMisconfiguredException
+from nexus.utils.exceptions import SubnetMisconfiguredException
 
 
 class OpenAccessPylonApiLike(Protocol):
@@ -60,7 +60,7 @@ class EnvPylonClientProvider(PylonClientProvider):
         identity_token = get_optional_env_var("VALIDATOR_PYLON_IDENTITY_TOKEN")
 
         if (identity_name is None) != (identity_token is None):
-            raise ActorMisconfiguredException(
+            raise SubnetMisconfiguredException(
                 "Pylon identity configuration must provide both name and token. "
                 "Expected VALIDATOR_PYLON_IDENTITY_NAME together with VALIDATOR_PYLON_IDENTITY_TOKEN."
             )
