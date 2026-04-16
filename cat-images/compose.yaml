@@ -7,7 +7,7 @@ services:
   pylon:
     image: backenddevelopersltd/bittensor-pylon:latest
     restart: unless-stopped
-    env_file: .env
+    env_file: ${CAT_IMAGES_ENV_FILE:-.env}
     environment:
       PYLON_UVICORN_HOST: "0.0.0.0"
       PYLON_UVICORN_PORT: "8000"
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     depends_on:
       - pylon
-    env_file: .env
+    env_file: ${CAT_IMAGES_ENV_FILE:-.env}
     environment:
       # Wire to other services via static IPs.
       VALIDATOR_EXTERNAL_IP: "172.30.0.10"
@@ -46,7 +46,7 @@ services:
     restart: unless-stopped
     depends_on:
       - validator
-    env_file: .env
+    env_file: ${CAT_IMAGES_ENV_FILE:-.env}
     environment:
       # Wire miner to the validator callback address.
       MINER_EXTERNAL_IP: "172.30.0.30"
@@ -66,7 +66,7 @@ services:
     restart: unless-stopped
     depends_on:
       - validator
-    env_file: .env
+    env_file: ${CAT_IMAGES_ENV_FILE:-.env}
     environment:
       FACI_VALIDATORS: '{"validator-01": "http://172.30.0.10:8081/cat-images"}'
     ports:
