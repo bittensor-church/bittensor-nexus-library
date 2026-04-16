@@ -58,8 +58,15 @@ def _update_axon_subprocess(config: AxonUpdaterConfig) -> tuple[bool, str]:
         neuron = subtensor.get_neuron_for_pubkey_and_subnet(hotkey_ss58, config.netuid)
         axon_info = neuron.axon_info
 
+        HTTP_PROTOCOL = 4
+
         if axon_info is not None and axon_info.ip != "0.0.0.0":
-            if axon_info.ip == external_ip and axon_info.port == external_port:
+            current_protocol = axon_info.protocol
+            if (
+                axon_info.ip == external_ip
+                and axon_info.port == external_port
+                and current_protocol == HTTP_PROTOCOL
+            ):
                 return False, f"Axon unchanged at {external_ip}:{external_port}"
 
         axon = bt.Axon(wallet=wallet, port=config.port, external_ip=external_ip, external_port=external_port)
