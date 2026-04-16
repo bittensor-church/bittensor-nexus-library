@@ -26,15 +26,10 @@ from cat_images.subnet_models import (
     MinerPublicResult,
     MinerResult,
     S3Url,
+    TaskScores,
     UserImageInput,
-    ValidationResult,
 )
 from cat_images.validator import CatValidatorSettings, Validator
-from cat_images.validator.openrouter_inference import (
-    TaskScores,
-    scores_by_task_result_id,
-)
-from cat_images.validator.validation_algorithm import validation_result_for_score
 
 
 @dataclass(frozen=True)
@@ -161,11 +156,7 @@ def test_validator_connects_successful_mining_task_results_into_sampler() -> Non
     assert validator.validation_task.input in validator.subnet_flow.pipes[validator.miner_result_sampler.sampled_batch]
 
 
-def test_scores_by_task_result_id_returns_plain_lookup() -> None:
+def test_task_scores_exposes_plain_lookup() -> None:
     scores = TaskScores(scores_by_task_result_id={"abc": 77})
 
-    assert scores_by_task_result_id(scores) == {"abc": 77}
-
-
-def test_validation_result_for_score_returns_validation_result() -> None:
-    assert validation_result_for_score(88) == ValidationResult(score=88)
+    assert dict(scores.scores_by_task_result_id) == {"abc": 77}

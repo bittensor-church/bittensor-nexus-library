@@ -11,6 +11,7 @@ from cat_images.validator import CatValidatorSettings, Validator
 
 def _build_settings() -> CatValidatorSettings:
     return CatValidatorSettings(
+        _env_file=None,
         netuid=1,
         openrouter_api_key="settings-api-key",
         openrouter_url="https://settings.test/api",
@@ -25,6 +26,7 @@ def _build_settings() -> CatValidatorSettings:
 
 def test_cat_validator_settings_restores_openrouter_defaults() -> None:
     settings = CatValidatorSettings(
+        _env_file=None,
         netuid=1,
         openrouter_api_key="settings-api-key",
         external_ip="127.0.0.1",
