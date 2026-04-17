@@ -8,7 +8,7 @@ The `cat-images` validator now treats OpenRouter scoring as a normal `NexusTask`
    - `successful_task_result` persists `SuccessfulTaskResult[MinerPayload, MinerResult, MinerPublicResult]` values.
    - `executor_failure` persists executor-side failures for retries and later accounting.
    - `error` carries framework failures that never became persisted task results.
-2. `SuccessfulTaskResultSampler` batches only `mining_task.successful_task_result` events and feeds the sampled tuple into the validation task. Executor failures never enter the OpenRouter prompt path.
+2. `EveryTaskResultSampler` batches only `mining_task.successful_task_result` events and feeds the sampled tuple into the validation task. Executor failures never enter the OpenRouter prompt path.
 3. The validator inlines an `item_selector` lambda inside `MultiOpenRouterPayloadCreator` to normalize each sampled mining result into three selected fields:
    - `task_result_id`
    - `original_image_url` from `executor_payload.input.image_s3_url`

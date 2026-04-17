@@ -20,7 +20,7 @@ Use the reusable OpenRouter task pieces when validation should run locally again
 - `OpenRouterInferenceCommunicator` to read `OpenRouterSettingsMixin` fields from the registered subnet settings and validate the model response
 - `NoopPayloadCreator` when the validated response model should be stored as-is
 
-Within `NexusTask`, `successful_task_result` is the persisted success branch, `executor_failure` is the persisted executor-failure branch, and `error` is the framework-failure branch. Success-only actors such as `SuccessfulTaskResultSampler` and the shared OpenRouter task-result selector helpers should consume `successful_task_result`, not the failure branches.
+Within `NexusTask`, `successful_task_result` is the persisted success branch, `executor_failure` is the persisted executor-failure branch, and `error` is the framework-failure branch. Success-only actors such as `EveryTaskResultSampler` and the shared OpenRouter task-result selector helpers should consume `successful_task_result`, not the failure branches.
 
 ```python
 from datetime import timedelta
@@ -38,7 +38,7 @@ from nexus.actors.neuron_router import NoopRouter
 from nexus.actors.openrouter_selection import ImageUrlField, ScalarField
 from nexus.actors.payload_creator import NoopPayloadCreator
 from nexus.actors.retry_strategy import RetryStrategy
-from nexus.actors.task_result_sampler import SuccessfulTaskResultSampler
+from nexus.actors.task_result_sampler import EveryTaskResultSampler
 from nexus.core.runtime.nexus_task import NexusTask
 from nexus.core.runtime.task_result_store import SuccessfulTaskResult
 from nexus.utils.openrouter_config import OpenRouterSettingsMixin
@@ -53,7 +53,7 @@ class ValidatorSettings(OpenRouterSettingsMixin, BaseSettings):
     validation_prompt: str = "Score these items"
 
 
-sampler = SuccessfulTaskResultSampler("sampled-mining-results")
+sampler = EveryTaskResultSampler("sampled-mining-results")
 
 validation_task = NexusTask[
     tuple[SuccessfulTaskResult[MinerPayload, MinerResult, MinerPublicResult], ...],

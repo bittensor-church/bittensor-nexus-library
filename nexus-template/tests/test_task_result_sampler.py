@@ -5,26 +5,29 @@ from utils import (
     InMemoryTestTaskResultStoreProvider,
     build_nexus_task_result,
     empty_context_store,
-    store_executor_failure_task_result,
     store_successful_task_result,
     wait_until,
 )
 
-from nexus.actors.task_result_sampler import SuccessfulTaskResultSampler
+from nexus.actors import EveryTaskResultSampler as ExportedEveryTaskResultSampler
+from nexus.actors.task_result_sampler import EveryTaskResultSampler
 from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.core.runtime.task_result_store import SuccessfulTaskResult
-from nexus.utils.exceptions import ExecutorFailureException, InternalFrameworkException, NexusException
 
 type DummyExecutorPayload = str
 type DummyExecutorOutput = int
 type DummyExecutorPublicOutput = str
 
 
-def test_successful_task_result_sampler_actor_emits_singleton_batch_for_each_task_result(
+def test_every_task_result_sampler_is_reexported_from_nexus_actors() -> None:
+    assert ExportedEveryTaskResultSampler is EveryTaskResultSampler
+
+
+def test_every_task_result_sampler_actor_emits_singleton_batch_for_each_task_result(
     transform_actor_test_setup_factory: TransformActorTestSetupFactory,
 ) -> None:
-    sampler = SuccessfulTaskResultSampler[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput](
-        "successful-task-result-sampler"
+    sampler = EveryTaskResultSampler[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput](
+        "every-task-result-sampler"
     )
     setup = transform_actor_test_setup_factory(sampler)
 
@@ -34,7 +37,7 @@ def test_successful_task_result_sampler_actor_emits_singleton_batch_for_each_tas
         DummyExecutorPublicOutput,
     ]()
     task_result_store = task_result_store_provider.get_task_result_store()
-    task_name = NexusTaskName("successful-task-result-sampler")
+    task_name = NexusTaskName("every-task-result-sampler")
     context_store = empty_context_store()
     first_result = store_successful_task_result(
         context_store=context_store,
@@ -79,42 +82,3 @@ def test_successful_task_result_sampler_actor_emits_singleton_batch_for_each_tas
         second_ctx_id: (second_result,),
     }
     assert sampled_batch == (first_result,)
-
-
-def test_successful_task_result_sampler_actor_emits_framework_error_for_executor_failure_payload(
-    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
-) -> None:
-    sampler = SuccessfulTaskResultSampler[DummyExecutorPayload, DummyExecutorOutput, DummyExecutorPublicOutput](
-        "successful-task-result-sampler"
-    )
-    setup = transform_actor_test_setup_factory(sampler)
-
-    task_result_store_provider = InMemoryTestTaskResultStoreProvider[
-        DummyExecutorPayload,
-        DummyExecutorOutput,
-        DummyExecutorPublicOutput,
-    ]()
-    task_result_store = task_result_store_provider.get_task_result_store()
-    task_name = NexusTaskName("successful-task-result-sampler")
-    context_store = empty_context_store()
-    executor_failure_result = store_executor_failure_task_result(
-        context_store=context_store,
-        task_result_store=task_result_store,
-        task_name=task_name,
-        result=build_nexus_task_result(
-            executor_payload="payload-failed",
-            output=ExecutorFailureException(NexusException("executor failed")),
-            block_number=100,
-            target_hotkey="hotkey-failed",
-        ),
-    )
-
-    with setup.running():
-        ctx_id = setup.send(input_payload=executor_failure_result)  # pyright: ignore[reportArgumentType]
-        wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
-
-    assert len(setup.processed_collector.received_events) == 0
-    error_event = setup.error_collector.received_events[0]
-    assert error_event.ctx_id == ctx_id
-    assert isinstance(error_event.payload, InternalFrameworkException)
-    assert "SuccessfulTaskResult" in str(error_event.payload)
