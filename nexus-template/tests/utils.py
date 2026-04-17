@@ -112,8 +112,8 @@ def empty_context_store() -> ContextStore:
     return ContextStore.recover_from(persistence).context_store
 
 
-def dummy_epoch_beat(block_number: BlockNumber, netuid: NetUid) -> EpochBeat:
-    return EpochBeat(epoch=get_epoch_containing_block(block_number, netuid=netuid))
+def dummy_epoch_beat(block_number: BlockNumber | int, netuid: NetUid) -> EpochBeat:
+    return EpochBeat(epoch=get_epoch_containing_block(BlockNumber(block_number), netuid=netuid))
 
 
 def dummy_block_beat(block_number: BlockNumber | int) -> BlockBeat:

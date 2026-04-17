@@ -22,6 +22,8 @@ from nexus.core.runtime.nexus_task_types import TaskResultId
 from nexus.core.runtime.task_result_store import SuccessfulTaskResult
 from nexus.utils.exceptions import SafeInvokeWrappedException
 
+type DictTaskResult = SuccessfulTaskResult[dict[str, str], dict[str, str], dict[str, str]]
+
 
 class PromptItem(BaseModel):
     item_id: str
@@ -45,7 +47,7 @@ def _build_successful_task_result(
     executor_output: dict[str, str],
     executor_public_output: dict[str, str],
     target_hotkey: str,
-) -> SuccessfulTaskResult[dict[str, str], dict[str, str], dict[str, str]]:
+) -> DictTaskResult:
     processing_started = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     return SuccessfulTaskResult(
         id=TaskResultId(task_result_id),
@@ -470,10 +472,12 @@ def test_openrouter_inference_request_rejects_malformed_rendered_message_content
 
 def test_inline_task_result_selector_extracts_supported_scalar_fields() -> None:
     task_result_id = UUID("95843dde-5f4d-4204-b3ae-d24ed6be4ffc")
-    selector = lambda task_result: {
-        "task_result_id": ScalarField(value=str(task_result.id)),
-        "target_hotkey": ScalarField(value=task_result.target.hotkey),
-    }
+
+    def selector(task_result: DictTaskResult) -> dict[str, ScalarField]:
+        return {
+            "task_result_id": ScalarField(value=str(task_result.id)),
+            "target_hotkey": ScalarField(value=task_result.target.hotkey),
+        }
 
     task_result = _build_successful_task_result(
         task_result_id=task_result_id,
@@ -493,15 +497,17 @@ def test_inline_task_result_selector_extracts_supported_scalar_fields() -> None:
 
 def test_inline_task_result_selector_extracts_mixed_openrouter_fields_in_order() -> None:
     task_result_id = UUID("95843dde-5f4d-4204-b3ae-d24ed6be4ffc")
-    selector = lambda task_result: {
-        "source_image": ImageUrlField(url=str(task_result.executor_payload["image_url"])),
-        "task_result_id": ScalarField(value=str(task_result.id)),
-        "public_caption": ScalarField(
-            value=task_result.executor_public_output["caption"]
-            if task_result.executor_public_output is not None
-            else None
-        ),
-    }
+
+    def selector(task_result: DictTaskResult) -> dict[str, ImageUrlField | ScalarField]:
+        return {
+            "source_image": ImageUrlField(url=str(task_result.executor_payload["image_url"])),
+            "task_result_id": ScalarField(value=str(task_result.id)),
+            "public_caption": ScalarField(
+                value=task_result.executor_public_output["caption"]
+                if task_result.executor_public_output is not None
+                else None
+            ),
+        }
 
     task_result = _build_successful_task_result(
         task_result_id=task_result_id,
