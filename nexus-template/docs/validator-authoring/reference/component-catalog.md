@@ -87,10 +87,10 @@ Optional knobs:
 Settings contract:
 
 - by default, `OpenRouterInferenceCommunicator` uses `SubnetSettingsOpenRouterClientProvider`
-- the default provider resolves the registered subnet settings object and builds an `OpenRouterClient` from it
+- the default provider resolves the subnet settings object currently scoped to the runtime and builds an `OpenRouterClient` from it
 - the validator settings class must implement `OpenRouterSettingsMixin`
-- subnet settings lookup uses process-global singleton state
-- `NexusValidator.run(...)` initializes the concrete settings object once during normal validator startup
+- subnet settings lookup uses scoped subnet-settings state
+- `NexusValidator.start_runtime(...)` scopes the concrete settings object for the lifetime of the runtime, and `NexusValidator.run(...)` goes through that path
 - validator construction itself does not mutate global settings state
 - standalone code and tests should use `with subnet_settings(settings):` before running `OpenRouterInferenceCommunicator`, unless they inject a custom `openrouter_client_provider`
 

@@ -29,33 +29,60 @@ def test_validator_construction_does_not_register_passed_settings_as_subnet_sett
         get_subnet_settings_as(_TestSettings)
 
 
-def test_run_initializes_subnet_settings_before_validator_construction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_start_runtime_scopes_subnet_settings_to_runtime() -> None:
     observed_settings: list[_TestSettings | None] = []
 
-    class _RunValidator(NexusValidator):
-        def __init__(self, settings: BaseSettings) -> None:
+    class _FakeRuntime:
+        @contextmanager
+        def running(self, shutdown_timeout_seconds: float = 30.0):
+            del shutdown_timeout_seconds
             try:
                 observed_settings.append(get_subnet_settings_as(_TestSettings))
             except SubnetMisconfiguredException:
                 observed_settings.append(None)
-            super().__init__(settings)
+            yield object()
 
-    @contextmanager
-    def _fake_runtime(self: NexusValidator, shutdown_timeout_seconds: float = 30.0):
-        yield object()
+    class _RuntimeScopedValidator(NexusValidator):
+        def _build_runtime(self):
+            return _FakeRuntime()
+
+    validator = _RuntimeScopedValidator(_TestSettings())
+
+    with validator.start_runtime():
+        assert isinstance(get_subnet_settings_as(_TestSettings), _TestSettings)
+        assert validator.runtime is not None
+
+    assert validator.runtime is None
+    assert len(observed_settings) == 1
+    assert isinstance(observed_settings[0], _TestSettings)
+    with pytest.raises(SubnetMisconfiguredException):
+        get_subnet_settings_as(_TestSettings)
+
+
+def test_run_can_be_called_twice_in_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    observed_settings: list[_TestSettings] = []
+
+    class _FakeRuntime:
+        @contextmanager
+        def running(self, shutdown_timeout_seconds: float = 30.0):
+            del shutdown_timeout_seconds
+            observed_settings.append(get_subnet_settings_as(_TestSettings))
+            yield object()
+
+    class _RunValidator(NexusValidator):
+        def _build_runtime(self):
+            return _FakeRuntime()
 
     def _stop_immediately(_seconds: float) -> None:
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(_RunValidator, "start_runtime", _fake_runtime)
     monkeypatch.setattr("nexus.nexus_validator.time.sleep", _stop_immediately)
 
     _RunValidator.run(settings_class=_TestSettings)
+    _RunValidator.run(settings_class=_TestSettings)
 
-    assert len(observed_settings) == 1
-    assert isinstance(observed_settings[0], _TestSettings)
+    assert len(observed_settings) == 2
+    assert all(isinstance(settings, _TestSettings) for settings in observed_settings)
 
 
 def test_connect_discovers_node_without_validator_field() -> None:
