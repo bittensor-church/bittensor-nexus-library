@@ -1,4 +1,4 @@
-from typing import cast, override
+from typing import override
 
 from nexus.core.dsl.nodes import NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
 from nexus.core.runtime.actor import Actor, ActorBuilder
@@ -6,9 +6,6 @@ from nexus.core.runtime.actor_patterns import TransformActor
 from nexus.core.runtime.context_store import Context, ContextStore
 from nexus.core.runtime.events import PipeToBus
 from nexus.core.runtime.task_result_store import SuccessfulTaskResult
-from nexus.utils.exceptions import InternalFrameworkException
-
-
 class TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     Transform[
         SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput],

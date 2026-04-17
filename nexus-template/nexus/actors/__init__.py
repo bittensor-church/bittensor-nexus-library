@@ -62,13 +62,13 @@ if TYPE_CHECKING:
     )
     from nexus.actors.openrouter_payload_creator import MultiOpenRouterPayloadCreator, OpenRouterInferenceRequest
     from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskInputOutput, TaskInputOutputCreator
-    from nexus.actors.task_result_sampler import SuccessfulTaskResultSampler
+    from nexus.actors.task_result_sampler import EveryTaskResultSampler
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "BatchedTaskInputOutput": ("nexus.actors.task_input_output_creator", "BatchedTaskInputOutput"),
     "MultiOpenRouterPayloadCreator": ("nexus.actors.openrouter_payload_creator", "MultiOpenRouterPayloadCreator"),
     "OpenRouterInferenceRequest": ("nexus.actors.openrouter_payload_creator", "OpenRouterInferenceRequest"),
-    "SuccessfulTaskResultSampler": ("nexus.actors.task_result_sampler", "SuccessfulTaskResultSampler"),
+    "EveryTaskResultSampler": ("nexus.actors.task_result_sampler", "EveryTaskResultSampler"),
     "TaskInputOutput": ("nexus.actors.task_input_output_creator", "TaskInputOutput"),
     "TaskInputOutputCreator": ("nexus.actors.task_input_output_creator", "TaskInputOutputCreator"),
     "OpenRouterInferenceCommunicator": (
@@ -125,7 +125,7 @@ __all__ = [
     "ResponseInvalidException",
     "RemoteResponseTimeoutException",
     "ResponseValidationException",
-    "SuccessfulTaskResultSampler",
+    "EveryTaskResultSampler",
     "NoRoutableNeuronsException",
     "OpenRouterClientProvider",
     "PendingAsyncHttpRequest",
