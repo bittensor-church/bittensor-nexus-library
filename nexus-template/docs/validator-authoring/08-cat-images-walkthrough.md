@@ -15,7 +15,7 @@ The `cat-images` validator now treats OpenRouter scoring as a normal `NexusTask`
    - `generated_image_url` from `executor_public_output.presigned_url`
 4. `MultiOpenRouterPayloadCreator` renders `settings.validation_prompt` plus two `image_url` blocks per sampled result into an `OpenRouterInferenceRequest`. If a validator-specific selector chooses to skip every sampled item by returning `None`, the payload creator raises `ValueError` instead of sending an empty request.
 5. `NoopRouter` keeps the validation task local while still producing the routed shape expected by the generic executor communicator contract.
-6. OpenRouter settings lookup uses process-global singleton state. In normal validator startup, `NexusValidator.run(...)` initializes the concrete `CatValidatorSettings` object once before constructing the validator, and `OpenRouterInferenceCommunicator` resolves OpenRouter settings from those registered subnet settings through `OpenRouterSettingsMixin`.
+6. OpenRouter settings lookup uses subnet-settings state that is scoped to the active validator runtime. In normal validator startup, `NexusValidator.start_runtime(...)` temporarily registers the concrete `CatValidatorSettings` object for the lifetime of the runtime, and `OpenRouterInferenceCommunicator` resolves OpenRouter settings from that scoped state through `OpenRouterSettingsMixin`.
 7. The communicator calls the shared OpenRouter client and validates the JSON response into `TaskScores`.
 8. `NoopPayloadCreator[TaskScores]` passes the validated scores through unchanged, so the validation task persists the reusable `OpenRouterInferenceRequest` as `executor_payload` and the structured `TaskScores` object as both `executor_output` and `executor_public_output`.
 

@@ -14,7 +14,7 @@ from nexus.core.dsl.flow import Flow
 from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, Source, SourceName
 from nexus.core.runtime.nexus_task import NexusTask
 from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
-from nexus.utils.subnet_settings import initialize_subnet_settings
+from nexus.utils.subnet_settings import subnet_settings
 
 log = logging.getLogger("validator")
 
@@ -24,6 +24,11 @@ class NexusValidator:
 
     Runtime components are discovered only from endpoints used in `connect(...)`.
     There is no separate node/task registration API.
+
+    The validator instance keeps its settings on `self.settings`. When the runtime starts,
+    `start_runtime()` temporarily scopes those settings into the subnet-settings registry
+    so actors that resolve settings indirectly (for example OpenRouter-backed actors)
+    see the current validator configuration only for the lifetime of that runtime.
     """
 
     subnet_clock: BlockBeatNode
@@ -58,7 +63,6 @@ class NexusValidator:
         logging.getLogger("httpx").setLevel(logging.WARN)
 
         settings = cls._load_settings_or_exit(settings_class)
-        initialize_subnet_settings(settings)
         validator = cls(settings)
 
         with validator.start_runtime(shutdown_timeout_seconds=shutdown_timeout_seconds):
@@ -103,11 +107,17 @@ class NexusValidator:
 
     @contextmanager
     def start_runtime(self, shutdown_timeout_seconds: float = 30.0) -> Generator[SubnetRuntime]:
+        """Build and run the validator while scoping this instance's settings to the runtime."""
         if self.runtime is not None:
             raise RuntimeError("Runtime already started")
-        self.runtime = self._build_runtime()
-        with self.runtime.running(shutdown_timeout_seconds=shutdown_timeout_seconds) as runtime:
-            yield runtime
+        with subnet_settings(self.settings):
+            runtime = self._build_runtime()
+            self.runtime = runtime
+            try:
+                with runtime.running(shutdown_timeout_seconds=shutdown_timeout_seconds) as running_runtime:
+                    yield running_runtime
+            finally:
+                self.runtime = None
 
     @staticmethod
     def _load_settings_or_exit[SettingsModel: BaseSettings](settings_class: type[SettingsModel]) -> SettingsModel:

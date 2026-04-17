@@ -18,7 +18,7 @@ class OpenRouterClientProvider(ABC):
 
 
 class SubnetSettingsOpenRouterClientProvider(OpenRouterClientProvider):
-    """Builds an OpenRouter client from the registered subnet settings."""
+    """Build an OpenRouter client from the subnet settings currently scoped to the runtime."""
 
     @override
     def get_client(self) -> OpenRouterClient:

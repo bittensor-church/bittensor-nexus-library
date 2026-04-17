@@ -17,7 +17,7 @@ Use the reusable OpenRouter task pieces when validation should run locally again
 
 - `MultiOpenRouterPayloadCreator` to normalize the sampled tuple and render multimodal OpenRouter messages
 - `NoopRouter` because the OpenRouter call happens locally, not on a subnet neuron
-- `OpenRouterInferenceCommunicator` to read `OpenRouterSettingsMixin` fields from the registered subnet settings and validate the model response
+- `OpenRouterInferenceCommunicator` to read `OpenRouterSettingsMixin` fields from the runtime-scoped subnet settings and validate the model response
 - `NoopPayloadCreator` when the validated response model should be stored as-is
 
 Within `NexusTask`, `successful_task_result` is the persisted success branch, `executor_failure` is the persisted executor-failure branch, and `error` is the framework-failure branch. Success-only actors such as `EveryTaskResultSampler` and the shared OpenRouter task-result selector helpers should consume `successful_task_result`, not the failure branches.
@@ -85,7 +85,7 @@ self.connect(mining_task.successful_task_result, sampler.task_results)
 self.connect(sampler.sampled_batch, validation_task.input)
 ```
 
-`OpenRouterInferenceCommunicator` no longer accepts a `config_provider`. By default it resolves an `OpenRouterClient` from process-global subnet settings state. In normal validator startup, `NexusValidator.run(...)` initializes that process-wide settings object exactly once before constructing the validator. Validator construction itself stays pure. In standalone code or tests, use `with subnet_settings(settings):` around the execution that needs OpenRouter access. If you want a different client seam, inject a custom `openrouter_client_provider`.
+`OpenRouterInferenceCommunicator` no longer accepts a `config_provider`. By default it resolves an `OpenRouterClient` from subnet settings state that is scoped to the active validator runtime. Validator construction itself stays pure. In normal validator startup, `NexusValidator.start_runtime(...)` temporarily registers `self.settings` for the lifetime of the runtime, and `NexusValidator.run(...)` uses that path. In standalone code or tests that invoke `OpenRouterInferenceCommunicator` directly, use `with subnet_settings(settings):` around the execution that needs OpenRouter access. If you want a different client seam, inject a custom `openrouter_client_provider`.
 
 `MultiOpenRouterPayloadCreator` stores the normalized `fields` tuple alongside the rendered `messages`, so later stages can recover which sampled task results were scored. `Fields.fields` is a typed `dict[str, FieldValue]`, not a bag of arbitrary objects. Field values are Pydantic models:
 
