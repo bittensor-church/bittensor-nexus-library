@@ -114,7 +114,7 @@ def test_epoch_beat_retries_after_transient_pylon_failure(
     assert any("error_type=PylonRequestException" in record.message for record in caplog.records)
 
 
-def _dummy_block_info_response(block_number: BlockNumber) -> artanis_v1.GetLatestBlockInfoResponse:
+def _dummy_block_info_response(block_number: BlockNumber | int) -> artanis_v1.GetLatestBlockInfoResponse:
     return artanis_v1.GetLatestBlockInfoResponse(
         number=artanis.BlockNumber(block_number),
         timestamp=artanis.Timestamp(block_number * 1000),

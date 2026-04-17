@@ -27,6 +27,7 @@ MinerPublicResult = WithPresignedUrl[MinerResult]
 
 class TaskScores(BaseModel):
     """Structured OpenRouter scoring response keyed by mining task-result id."""
+
     scores_by_task_result_id: dict[str, Annotated[int, Field(ge=1, le=100)]]
 
 
@@ -39,4 +40,3 @@ class ValidatorResult(BaseModel):
 
     result_image_url: S3Url = Field(validation_alias=AliasChoices("result_image_url", "presigned_url"))
     image_hash: ImageHash = Field(validation_alias=AliasChoices(AliasPath("input", "image_hash"), "image_hash"))
-

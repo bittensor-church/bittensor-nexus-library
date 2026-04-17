@@ -12,6 +12,8 @@ from nexus.core.runtime.nexus_task_types import NexusTaskName
 from nexus.utils.exceptions import InternalFrameworkException
 from nexus.utils.types import Hotkey, Weight
 
+from cat_images.subnet_models import TaskScores
+
 log = logging.getLogger("weighing-algorithm")
 
 

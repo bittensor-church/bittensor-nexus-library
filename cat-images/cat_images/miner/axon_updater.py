@@ -62,11 +62,7 @@ def _update_axon_subprocess(config: AxonUpdaterConfig) -> tuple[bool, str]:
 
         if axon_info is not None and axon_info.ip != "0.0.0.0":
             current_protocol = axon_info.protocol
-            if (
-                axon_info.ip == external_ip
-                and axon_info.port == external_port
-                and current_protocol == HTTP_PROTOCOL
-            ):
+            if axon_info.ip == external_ip and axon_info.port == external_port and current_protocol == HTTP_PROTOCOL:
                 return False, f"Axon unchanged at {external_ip}:{external_port}"
 
         axon = bt.Axon(wallet=wallet, port=config.port, external_ip=external_ip, external_port=external_port)
