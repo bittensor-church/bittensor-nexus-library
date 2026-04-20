@@ -94,7 +94,8 @@ class WeightSetterActor(TransformActor[EpochBeat, WeightSettingSuccess]):
             raise WeightSettingException(f"Failed to calculate weights for epoch {payload.epoch}") from exc
 
         try:
-            pylon.identity.put_weights({**weights})
+            with pylon:
+                pylon.identity.put_weights({**weights})
         except (PylonResponseException, PylonMisconfigured) as exc:
             raise WeightSettingException(f"Failed to set weights for epoch {payload.epoch}") from exc
 
