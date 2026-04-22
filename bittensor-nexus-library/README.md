@@ -2,6 +2,10 @@
 
 Opinionated event-driven actor framework for building Bittensor subnets. Thread-based concurrency, message-based flows.
 
+This library now lives in the `bittensor-nexus-library` subdirectory. It keeps the existing `nexus` package and public
+API used by `cat-images`, while also adopting the template-derived project scaffolding that belongs with the new
+directory.
+
 ## Prerequisites
 
 - Python 3.14+
@@ -11,13 +15,13 @@ Opinionated event-driven actor framework for building Bittensor subnets. Thread-
 
 ```sh
 git clone https://github.com/bittensor-church/nexus-poc.git
-cd nexus-poc/nexus-template
-uv sync --all-extras
+cd nexus-poc/bittensor-nexus-library
+uv sync --group lint --group test
 ```
 
 ## Development
 
-All commands must be run from the `nexus-template` directory.
+All commands must be run from the `bittensor-nexus-library` directory.
 
 ```sh
 # Lint + format
@@ -28,6 +32,14 @@ uv run basedpyright
 
 # Tests
 uv run pytest
+```
+
+If you prefer the template-style task runner, the same checks are exposed through `nox`:
+
+```sh
+uvx nox -s format
+uvx nox -s lint
+uvx nox -s test
 ```
 
 ## Validator wiring

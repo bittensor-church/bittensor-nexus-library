@@ -124,9 +124,19 @@ test = [
 ]
 
 [package.dev-dependencies]
-dev = [
+lint = [
     { name = "basedpyright" },
     { name = "boto3-stubs", extra = ["s3"] },
+    { name = "ruff" },
+]
+test = [
+    { name = "boto3-stubs", extra = ["s3"] },
+    { name = "moto", extra = ["server"] },
+    { name = "polyfactory" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "requests" },
+    { name = "tenacity" },
 ]
 
 [package.metadata]
@@ -152,9 +162,19 @@ requires-dist = [
 provides-extras = ["format", "test"]
 
 [package.metadata.requires-dev]
-dev = [
+lint = [
     { name = "basedpyright", specifier = ">=1.36.1" },
     { name = "boto3-stubs", extras = ["s3"] },
+    { name = "ruff" },
+]
+test = [
+    { name = "boto3-stubs", extras = ["s3"] },
+    { name = "moto", extras = ["server"] },
+    { name = "polyfactory" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "requests" },
+    { name = "tenacity" },
 ]
 
 [[package]]

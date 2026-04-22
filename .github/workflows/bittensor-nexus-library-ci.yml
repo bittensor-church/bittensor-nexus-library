@@ -1,0 +1,42 @@
+name: Bittensor Nexus Library CI
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - ".github/actions/setup-uv-nox/action.yml"
+      - ".github/workflows/bittensor-nexus-library-ci.yml"
+      - "bittensor-nexus-library/**"
+  pull_request:
+    branches: [master, main]
+    paths:
+      - ".github/actions/setup-uv-nox/action.yml"
+      - ".github/workflows/bittensor-nexus-library-ci.yml"
+      - "bittensor-nexus-library/**"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bittensor-nexus-library
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 1
+      - uses: ./.github/actions/setup-uv-nox
+      - name: Run linters
+        run: uvx nox -vs lint
+
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bittensor-nexus-library
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 1
+      - uses: ./.github/actions/setup-uv-nox
+      - name: Run unit tests
+        run: uvx nox -vs test
