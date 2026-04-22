@@ -15,7 +15,7 @@ concurrency, and message-based IPC.
 ## QA tools
 
 These tools are configured to comply with project conventions.
-They MUST be run within the `nexus-template` or `cat-images` directory.
+They MUST be run within the `bittensor-nexus-library` or `cat-images` directory.
 ALWAYS use these instead of manual checks.
 
 ```sh

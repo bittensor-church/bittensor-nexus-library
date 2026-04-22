@@ -35,7 +35,7 @@ services:
       context: ..
       dockerfile: docker/validator.Dockerfile
       additional_contexts:
-        nexus-lib: ../../nexus-template
+        nexus-library: ../../bittensor-nexus-library
     restart: unless-stopped
     depends_on:
       - pylon

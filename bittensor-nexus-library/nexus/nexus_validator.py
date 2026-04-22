@@ -107,7 +107,11 @@ class NexusValidator:
 
     @contextmanager
     def start_runtime(self, shutdown_timeout_seconds: float = 30.0) -> Generator[SubnetRuntime]:
-        """Build and run the validator while scoping this instance's settings to the runtime."""
+        """Build and run the validator while scoping this instance's settings to the runtime.
+
+        Raises:
+            RuntimeError: If the validator runtime is already running.
+        """
         if self.runtime is not None:
             raise RuntimeError("Runtime already started")
         with subnet_settings(self.settings):

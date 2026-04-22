@@ -218,9 +218,9 @@ wheels = [
 ]
 
 [[package]]
-name = "bittensor-nexus-lib"
+name = "bittensor-nexus-library"
 version = "0.1.0"
-source = { editable = "../nexus-template" }
+source = { editable = "../bittensor-nexus-library" }
 dependencies = [
     { name = "bittensor-pylon-client" },
     { name = "boto3" },
@@ -255,9 +255,19 @@ requires-dist = [
 provides-extras = ["format", "test"]
 
 [package.metadata.requires-dev]
-dev = [
+lint = [
     { name = "basedpyright", specifier = ">=1.36.1" },
     { name = "boto3-stubs", extras = ["s3"] },
+    { name = "ruff" },
+]
+test = [
+    { name = "boto3-stubs", extras = ["s3"] },
+    { name = "moto", extras = ["server"] },
+    { name = "polyfactory" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "requests" },
+    { name = "tenacity" },
 ]
 
 [[package]]
@@ -342,7 +352,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
-    { name = "bittensor-nexus-lib" },
+    { name = "bittensor-nexus-library" },
     { name = "litestar", extra = ["prometheus", "standard"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -378,7 +388,7 @@ miner = [
 requires-dist = [
     { name = "attrs" },
     { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.36.1" },
-    { name = "bittensor-nexus-lib", editable = "../nexus-template" },
+    { name = "bittensor-nexus-library", editable = "../bittensor-nexus-library" },
     { name = "freezegun", marker = "extra == 'format'" },
     { name = "litestar", extras = ["standard", "prometheus"], specifier = ">=2.21.0" },
     { name = "pydantic" },
