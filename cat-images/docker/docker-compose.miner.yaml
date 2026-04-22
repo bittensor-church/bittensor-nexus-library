@@ -7,7 +7,7 @@ services:
       context: ..
       dockerfile: docker/miner.Dockerfile
       additional_contexts:
-        nexus-lib: ../../bittensor-nexus-library
+        nexus-library: ../../bittensor-nexus-library
     container_name: ${MINER_CONTAINER_NAME:-cat-miner}
     restart: unless-stopped
     environment:

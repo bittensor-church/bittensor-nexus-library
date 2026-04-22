@@ -23,7 +23,7 @@ services:
       context: .
       dockerfile: docker/validator.Dockerfile
       additional_contexts:
-        nexus-lib: ../bittensor-nexus-library
+        nexus-library: ../bittensor-nexus-library
     restart: unless-stopped
     depends_on:
       - pylon
@@ -42,7 +42,7 @@ services:
       context: .
       dockerfile: docker/miner.Dockerfile
       additional_contexts:
-        nexus-lib: ../bittensor-nexus-library
+        nexus-library: ../bittensor-nexus-library
     restart: unless-stopped
     depends_on:
       - validator
@@ -62,7 +62,7 @@ services:
       context: .
       dockerfile: docker/facilitator.Dockerfile
       additional_contexts:
-        nexus-lib: ../bittensor-nexus-library
+        nexus-library: ../bittensor-nexus-library
     restart: unless-stopped
     depends_on:
       - validator

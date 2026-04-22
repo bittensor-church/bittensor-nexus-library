@@ -218,7 +218,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bittensor-nexus-lib"
+name = "bittensor-nexus-library"
 version = "0.1.0"
 source = { editable = "../bittensor-nexus-library" }
 dependencies = [
@@ -352,7 +352,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
-    { name = "bittensor-nexus-lib" },
+    { name = "bittensor-nexus-library" },
     { name = "litestar", extra = ["prometheus", "standard"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -388,7 +388,7 @@ miner = [
 requires-dist = [
     { name = "attrs" },
     { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.36.1" },
-    { name = "bittensor-nexus-lib", editable = "../bittensor-nexus-library" },
+    { name = "bittensor-nexus-library", editable = "../bittensor-nexus-library" },
     { name = "freezegun", marker = "extra == 'format'" },
     { name = "litestar", extras = ["standard", "prometheus"], specifier = ">=2.21.0" },
     { name = "pydantic" },

@@ -9,8 +9,8 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Local path dependency — only pyproject + package dir, skip .git/.venv/tests
-COPY --from=nexus-lib pyproject.toml /bittensor-nexus-library/pyproject.toml
-COPY --from=nexus-lib nexus/ /bittensor-nexus-library/nexus/
+COPY --from=nexus-library pyproject.toml /bittensor-nexus-library/pyproject.toml
+COPY --from=nexus-library nexus/ /bittensor-nexus-library/nexus/
 
 # Deps only — source changes don't bust this layer
 # adding --no-install-project otherwise the project source ends up in .venv
@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim
 
-# nexus-lib is editable (.pth -> /bittensor-nexus-library) because uv re-editables it on the
+# nexus-library is editable (.pth -> /bittensor-nexus-library) because uv re-editables it on the
 # second sync and there's no per-package override. Must ship the source.
 COPY --from=builder /bittensor-nexus-library /bittensor-nexus-library
 COPY --from=builder /app /app

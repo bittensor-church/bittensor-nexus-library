@@ -94,7 +94,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bittensor-nexus-lib"
+name = "bittensor-nexus-library"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
