@@ -1,13 +1,21 @@
 [project]
-name = "bittensor-nexus-lib"
+name = "bittensor-nexus-library"
 version = "0.1.0"
-
-description = "A PoC for the Nexus subnet template library"
+description = "Opinionated event-driven actor framework for building Bittensor subnets."
+readme = "README.md"
 authors = [
     { name = "Jakub Zytka", email = "jakub.zytka@reef.pl" },
     { name = "Kordian Kowalski", email = "kordian.kowalski@reef.pl" }
 ]
 requires-python = ">=3.14"
+license = { text = "BSD-3-Clause" }
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+]
 dependencies = [
     "pydantic-settings",
     "pydantic",
@@ -19,12 +27,10 @@ dependencies = [
     "boto3",
 ]
 
-license = { text = "../LICENSE" }
-
 [project.urls]
-homepage = "https://github.com/bittensor-church/nexus-poc"
+homepage = "https://github.com/bittensor-church/nexus-poc/tree/main/bittensor-nexus-library"
 repository = "https://github.com/bittensor-church/nexus-poc"
-documentation = "https://github.com/bittensor-church/nexus-poc#readme"
+documentation = "https://github.com/bittensor-church/nexus-poc/tree/main/bittensor-nexus-library#readme"
 
 [project.optional-dependencies]
 format = [
@@ -77,9 +83,19 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = [
+lint = [
     "basedpyright>=1.36.1",
     "boto3-stubs[s3]",
+    "ruff",
+]
+test = [
+    "boto3-stubs[s3]",
+    "polyfactory",
+    "pytest",
+    "tenacity",
+    "pytest-cov",
+    "moto[server]",
+    "requests",
 ]
 
 [tool.uv]
@@ -98,7 +114,6 @@ reportMissingTypeStubs = "warning"
 reportUndefinedVariable = "error"
 reportUnusedImport = "warning"
 reportExplicitAny = "none"
-stubPath = ".pyright-stubs"
 venvPath = "."
 venv = ".venv"
 extraPaths = [".venv/lib/python3.14/site-packages"]

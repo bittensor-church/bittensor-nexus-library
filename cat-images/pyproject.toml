@@ -12,7 +12,7 @@ dependencies = [
     "pydantic",
     "litestar[standard,prometheus]>=2.21.0",
     "attrs",
-    "bittensor-nexus-lib",
+    "bittensor-nexus-library",
 ]
 
 [project.optional-dependencies]
@@ -65,7 +65,7 @@ documentation = "https://github.com/bittensor-church/nexus-poc#readme"
 [tool.uv]
 
 [tool.uv.sources]
-bittensor-nexus-lib = { path = "../nexus-template", editable = true }
+bittensor-nexus-library = { path = "../bittensor-nexus-library", editable = true }
 
 [tool.pyright]
 pythonVersion = "3.14"

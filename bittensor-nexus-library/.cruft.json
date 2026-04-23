@@ -1,0 +1,24 @@
+{
+  "template": "https://github.com/reef-technologies/cookiecutter-rt-pkg",
+  "commit": "1cc83e6f6ea03c754ce257bf86c97ba8eefd98b6",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "package_name": "bittensor_nexus_library",
+      "repository_github_url": "https://github.com/bittensor-church/bittensor-nexus-library",
+      "python_versions": "3.14",
+      "django_versions": "",
+      "build_docker_image": false,
+      "_jinja2_env_vars": {
+        "trim_blocks": true,
+        "lstrip_blocks": true
+      },
+      "_extensions": [
+        "local_extensions.sort_versions"
+      ],
+      "_template": "https://github.com/reef-technologies/cookiecutter-rt-pkg",
+      "_commit": "1cc83e6f6ea03c754ce257bf86c97ba8eefd98b6"
+    }
+  },
+  "directory": null
+}
