@@ -43,6 +43,8 @@ type _PipelineResult = tuple[
 def mock_pylon_client():
     client = create_autospec(spec=SyncPylonClientLike, instance=True)
     client.identity = create_autospec(spec=IdentityPylonApiLike, instance=True)
+    client.__enter__.return_value = client
+    client.__exit__.return_value = None
     seal(client)
     return client
 
