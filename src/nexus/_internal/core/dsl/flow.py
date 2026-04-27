@@ -163,7 +163,7 @@ class Flow:
             )
         if targets and routes:
             raise FlowMisconfiguredException(
-                "expected continuation of the flow as either positional or keyword paramters"
+                "expected continuation of the flow as either positional or keyword parameters"
             )
 
         if targets:

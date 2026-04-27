@@ -372,7 +372,7 @@ class ContextStore:
                     completed_contexts.add(ctx)
                     last_messages.pop(ctx, None)
 
-        # true intialization of the ContextStore
+        # true initialization of the ContextStore
         context_store.__persistence = persistence
         context_store.__contexts = contexts
         context_store.__locks = ThreadContextStoreLocks()

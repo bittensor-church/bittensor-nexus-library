@@ -176,7 +176,7 @@ class TimestamperActor[Input, Output](Actor):
         events_to_send: list[SendEvent[Timestamped[Output]]] = []
         for queued_output in self.queued_outputs:
             # this is safe, because if the context is queued,
-            # there should be noone else using it
+            # there should be no one else using it
             with self.context_store.get_context(queued_output.ctx_id) as output_context:
                 timestamped_output = self._timestamp_output(ctx=output_context, output=queued_output.output)
             events_to_send.append(

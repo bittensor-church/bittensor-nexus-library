@@ -11,23 +11,26 @@ Opinionated event-driven actor framework for building Bittensor subnets. Thread-
 
 ```sh
 git clone https://github.com/bittensor-church/nexus-poc.git
-cd nexus-poc/nexus-template
-uv sync --all-extras
+cd nexus-poc
+uv sync --all-groups
 ```
 
 ## Development
 
-All commands must be run from the `nexus-template` directory.
+Full-project QA is run from the repository root through nox.
 
 ```sh
-# Lint + format
-uv run ruff check --fix && uv run ruff format
+# Root lint, formatting check, type check, docs/shell checks
+uvx nox -vs lint
 
-# Type checking
-uv run basedpyright
+# Root tests
+uvx nox -vs test-3.14
 
-# Tests
-uv run pytest
+# cat-images demo lint, formatting check, type check
+uvx nox -vs cat-images-lint
+
+# cat-images demo tests
+uvx nox -vs cat-images-test
 ```
 
 ## Validator wiring
