@@ -218,9 +218,8 @@ wheels = [
 ]
 
 [[package]]
-name = "bittensor-nexus-lib"
-version = "0.1.0"
-source = { editable = "../nexus-template" }
+name = "bittensor-nexus-library"
+source = { editable = "../../" }
 dependencies = [
     { name = "bittensor-pylon-client" },
     { name = "boto3" },
@@ -234,30 +233,45 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "basedpyright", marker = "extra == 'test'" },
     { name = "bittensor-pylon-client" },
     { name = "boto3" },
-    { name = "boto3-stubs", extras = ["s3"], marker = "extra == 'test'" },
     { name = "deepdiff" },
     { name = "httpx" },
-    { name = "litestar", extras = ["standard", "prometheus"] },
-    { name = "moto", extras = ["server"], marker = "extra == 'test'" },
-    { name = "polyfactory", marker = "extra == 'test'" },
+    { name = "litestar", extras = ["prometheus", "standard"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "pytest", marker = "extra == 'test'" },
-    { name = "pytest-cov", marker = "extra == 'test'" },
-    { name = "requests", marker = "extra == 'test'" },
-    { name = "ruff", marker = "extra == 'format'" },
     { name = "sniffio" },
-    { name = "tenacity", marker = "extra == 'test'" },
 ]
-provides-extras = ["format", "test"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "basedpyright", specifier = ">=1.36.1" },
     { name = "boto3-stubs", extras = ["s3"] },
+    { name = "ruff", specifier = "==0.15.8" },
+]
+format = [{ name = "ruff" }]
+lint = [
+    { name = "codespell", extras = ["toml"], specifier = "==2.4.2" },
+    { name = "mypy", specifier = "==1.20.0" },
+    { name = "ruff", specifier = "==0.15.8" },
+    { name = "types-freezegun", specifier = "==1.1.10" },
+    { name = "types-python-dateutil", specifier = "==2.9.0.20260323" },
+    { name = "types-requests", specifier = "==2.33.0.20260327" },
+]
+test = [
+    { name = "basedpyright" },
+    { name = "boto3-stubs", extras = ["s3"] },
+    { name = "freezegun", specifier = "==1.5.5" },
+    { name = "moto", extras = ["server"] },
+    { name = "polyfactory" },
+    { name = "pytest" },
+    { name = "pytest", specifier = "==9.0.2" },
+    { name = "pytest-apiver", specifier = "==0.1.0" },
+    { name = "pytest-asyncio", specifier = "==1.3.0" },
+    { name = "pytest-cov" },
+    { name = "pytest-xdist", specifier = "==3.8.0" },
+    { name = "requests" },
+    { name = "tenacity" },
 ]
 
 [[package]]
@@ -342,7 +356,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
-    { name = "bittensor-nexus-lib" },
+    { name = "bittensor-nexus-library" },
     { name = "litestar", extra = ["prometheus", "standard"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -378,7 +392,7 @@ miner = [
 requires-dist = [
     { name = "attrs" },
     { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.36.1" },
-    { name = "bittensor-nexus-lib", editable = "../nexus-template" },
+    { name = "bittensor-nexus-library", editable = "../../" },
     { name = "freezegun", marker = "extra == 'format'" },
     { name = "litestar", extras = ["standard", "prometheus"], specifier = ">=2.21.0" },
     { name = "pydantic" },

@@ -1,10 +1,11 @@
 import pytest
-from nexus.actors.executor_communicator.openrouter_inference_communicator import (
+from nexus.v1 import (
     OpenRouterInferenceCommunicator,
+    OpenRouterSettingsMixin,
+    SubnetMisconfiguredException,
+    get_subnet_settings_as,
+    subnet_settings,
 )
-from nexus.utils.exceptions import SubnetMisconfiguredException
-from nexus.utils.openrouter_config import OpenRouterSettingsMixin
-from nexus.utils.subnet_settings import get_subnet_settings_as, subnet_settings
 
 from cat_images.validator import CatValidatorSettings, Validator
 

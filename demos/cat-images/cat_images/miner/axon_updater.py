@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 
-from nexus.utils.types import NetUid, Port
+from nexus.v1 import NetUid, Port
 
 log = logging.getLogger("axon_updater")
 
