@@ -7,7 +7,7 @@ services:
       context: ..
       dockerfile: docker/miner.Dockerfile
       additional_contexts:
-        nexus-lib: ../../nexus-template
+        nexus-lib: ../../..
     container_name: ${MINER_CONTAINER_NAME:-cat-miner}
     restart: unless-stopped
     environment:

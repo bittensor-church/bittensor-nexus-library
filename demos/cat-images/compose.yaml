@@ -13,6 +13,8 @@ services:
       PYLON_UVICORN_PORT: "8000"
     volumes:
       - ~/.bittensor/wallets:/root/.bittensor/wallets:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       catnet:
         ipv4_address: 172.30.0.20
@@ -23,7 +25,7 @@ services:
       context: .
       dockerfile: docker/validator.Dockerfile
       additional_contexts:
-        nexus-lib: ../nexus-template
+        nexus-lib: ../..
     restart: unless-stopped
     depends_on:
       - pylon
@@ -42,7 +44,7 @@ services:
       context: .
       dockerfile: docker/miner.Dockerfile
       additional_contexts:
-        nexus-lib: ../nexus-template
+        nexus-lib: ../..
     restart: unless-stopped
     depends_on:
       - validator
@@ -50,6 +52,9 @@ services:
     environment:
       # Wire miner to the validator callback address.
       MINER_EXTERNAL_IP: "172.30.0.30"
+      MINER_WALLET_NAME: "${MINER_WALLET_NAME:-default}"
+      MINER_NETUID: "${MINER_NETUID:-2}"
+      MINER_SUBTENSOR_NETWORK: "${MINER_SUBTENSOR_NETWORK:-http://host.docker.internal:9944}"
     volumes:
       - ~/.bittensor/wallets:/root/.bittensor/wallets:ro
     networks:
@@ -62,7 +67,7 @@ services:
       context: .
       dockerfile: docker/facilitator.Dockerfile
       additional_contexts:
-        nexus-lib: ../nexus-template
+        nexus-lib: ../..
     restart: unless-stopped
     depends_on:
       - validator

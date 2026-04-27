@@ -1,4 +1,4 @@
-# Cat-Images Local Scenario Manual (All 4 Services)
+# Cat-Images Localnet Scenario Manual (All 4 Services)
 
 This guide starts the full stack together with one Compose file:
 
@@ -7,10 +7,14 @@ This guide starts the full stack together with one Compose file:
 3. `miner`
 4. `facilitator` (user-facing UI/API on `http://127.0.0.1:8080`)
 
+It assumes a Bittensor localnet/subtensor node is already running on the host and exposing HTTP RPC on
+`http://127.0.0.1:9944`. Compose maps `host.docker.internal` to the host gateway so pylon can reach that localnet from
+inside its container.
+
 ## 1) Prepare `.env` for compose
 
 ```bash
-cd /home/kuba/repos/nexus-poc/cat-images
+cd /home/kuba/repos/nexus-poc/demos/cat-images
 cp .env.compose.example .env
 ```
 
@@ -21,13 +25,25 @@ Required variables:
 - Pylon (open access): `PYLON_BITTENSOR_NETWORK`, `PYLON_OPEN_ACCESS_TOKEN`, `PYLON_RECENT_OBJECTS_NETUIDS`
 - Pylon (identity for weight writes): `PYLON_IDENTITIES`, `PYLON_ID_VALIDATOR_WALLET_NAME`, `PYLON_ID_VALIDATOR_HOTKEY_NAME`, `PYLON_ID_VALIDATOR_NETUID`, `PYLON_ID_VALIDATOR_TOKEN`
 - Validator: `VALIDATOR_NETUID`, `VALIDATOR_OPENROUTER_API_KEY`, `VALIDATOR_PYLON_OPEN_ACCESS_TOKEN`, `VALIDATOR_PYLON_IDENTITY_NAME`, `VALIDATOR_PYLON_IDENTITY_TOKEN`, `VALIDATOR_S3_BUCKET`
-- Miner: `MINER_OPENROUTER_API_KEY`, `MINER_HOTKEY_NAME`, `MINER_UPDATE_AXON`
+- Miner: `MINER_OPENROUTER_API_KEY`, `MINER_WALLET_NAME`, `MINER_HOTKEY_NAME`, `MINER_NETUID`, `MINER_UPDATE_AXON`
 - AWS/S3: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`
 - Facilitator: `FACI_S3_BUCKET`, `FACI_S3_ACCESS_KEY`, `FACI_S3_SECRET_KEY` (optional `FACI_S3_REGION`, `FACI_S3_ENDPOINT_URL`)
 
+Localnet defaults:
+
+- `PYLON_BITTENSOR_NETWORK=http://host.docker.internal:9944`
+- `PYLON_RECENT_OBJECTS_NETUIDS=[2]`
+- `PYLON_ID_VALIDATOR_NETUID=2`
+- `VALIDATOR_NETUID=2`
+- `MINER_NETUID=2`
+- `MINER_SUBTENSOR_NETWORK=http://host.docker.internal:9944`
+- `MINER_UPDATE_AXON=false`
+- This checkout's localnet subnet `2` wallet matches are `cat-images-validator-kuba-2/default` for the validator and
+  `cat-images-miner-kuba-2/default` for the miner.
+
 Notes:
 
-- For testnet subnet `278` with `cat-images-validator-kuba` + `default` hotkey, set:
+- For testnet subnet `278` with `cat-images-validator-kuba` + `default` hotkey, override the localnet defaults:
   - `PYLON_BITTENSOR_NETWORK=test`
   - `PYLON_RECENT_OBJECTS_NETUIDS=[278]`
   - `PYLON_IDENTITIES=["validator"]`
@@ -37,7 +53,7 @@ Notes:
   - `VALIDATOR_NETUID=278`
   - `VALIDATOR_PYLON_IDENTITY_NAME=validator`
   - `VALIDATOR_PYLON_IDENTITY_TOKEN` must match `PYLON_ID_VALIDATOR_TOKEN`
-- For local smoke tests, `MINER_UPDATE_AXON=false` is usually the easiest option.
+- Keep `MINER_UPDATE_AXON=false` for local smoke tests unless the miner wallet should write axon metadata to the chain.
 - `FACI_VALIDATORS` is already wired in `compose.yaml` to the validator container.
 
 ## 2) Start all services
