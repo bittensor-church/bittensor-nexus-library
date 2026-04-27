@@ -8,6 +8,12 @@ A subnet where miners add cats to images using AI image generation via OpenRoute
 uv sync --all-groups --all-extras
 ```
 
+## Localnet compose
+
+Use [RUNBOOK.md](RUNBOOK.md) to start pylon, validator, miner, and facilitator together against a host-run localnet.
+The Docker builds use the repository root as the `bittensor-nexus-library` source so the demo package's `../..`
+editable dependency resolves the same way in containers as it does locally.
+
 ## Facilitator (Catificator)
 
 Web UI that lets users upload images, dispatches catification jobs to validators, and streams progress back via SSE.

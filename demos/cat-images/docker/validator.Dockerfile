@@ -6,11 +6,11 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_NO_DEV=1 \
     UV_FROZEN=1
 
-WORKDIR /app
+WORKDIR /app/demos/cat-images
 
-# Local path dependency — only pyproject + package dir, skip .git/.venv/tests
-COPY --from=nexus-lib pyproject.toml /nexus-template/pyproject.toml
-COPY --from=nexus-lib nexus/ /nexus-template/nexus/
+# Local path dependency at ../.. from the cat-images project.
+COPY --from=nexus-lib pyproject.toml README.md /app/
+COPY --from=nexus-lib src/ /app/src/
 
 # Deps only — source changes don't bust this layer
 # adding --no-install-project otherwise the project source ends up in .venv
@@ -25,12 +25,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim
 
-# nexus-lib is editable (.pth -> /nexus-template) because uv re-editables it on the
-# second sync and there's no per-package override. Must ship the source.
-COPY --from=builder /nexus-template /nexus-template
 COPY --from=builder /app /app
 
-ENV PATH="/app/.venv/bin:$PATH"
-WORKDIR /app
+ENV PATH="/app/demos/cat-images/.venv/bin:$PATH"
+WORKDIR /app/demos/cat-images
 EXPOSE 9090
 ENTRYPOINT ["python", "-m", "cat_images.validator"]

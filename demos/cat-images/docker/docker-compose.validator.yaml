@@ -9,19 +9,21 @@ services:
       PYLON_UVICORN_HOST: "0.0.0.0"
       PYLON_UVICORN_PORT: "8000"
       # Chain config (override in .env if needed).
-      PYLON_BITTENSOR_NETWORK: ${PYLON_BITTENSOR_NETWORK:-test}
+      PYLON_BITTENSOR_NETWORK: ${PYLON_BITTENSOR_NETWORK:-http://host.docker.internal:9944}
       # Open-access recent-object cache configuration for subnet routing.
-      PYLON_RECENT_OBJECTS_NETUIDS: "${PYLON_RECENT_OBJECTS_NETUIDS:-[278]}"
+      PYLON_RECENT_OBJECTS_NETUIDS: "${PYLON_RECENT_OBJECTS_NETUIDS:-[2]}"
       # Open-access token used by validator's pylon client.
       PYLON_OPEN_ACCESS_TOKEN: ${PYLON_OPEN_ACCESS_TOKEN:-local-open-access-token}
       # Identity used for write operations (weights).
       PYLON_IDENTITIES: "${PYLON_IDENTITIES:-[\"validator\"]}"
       PYLON_ID_VALIDATOR_WALLET_NAME: ${PYLON_ID_VALIDATOR_WALLET_NAME:-cat-images-validator-kuba}
       PYLON_ID_VALIDATOR_HOTKEY_NAME: ${PYLON_ID_VALIDATOR_HOTKEY_NAME:-default}
-      PYLON_ID_VALIDATOR_NETUID: ${PYLON_ID_VALIDATOR_NETUID:-278}
+      PYLON_ID_VALIDATOR_NETUID: ${PYLON_ID_VALIDATOR_NETUID:-2}
       PYLON_ID_VALIDATOR_TOKEN: ${PYLON_ID_VALIDATOR_TOKEN:?set PYLON_ID_VALIDATOR_TOKEN}
     volumes:
       - ~/.bittensor/wallets:/root/.bittensor/wallets:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       validator_net:
         ipv4_address: ${PYLON_CONTAINER_IP:-172.30.0.20}
@@ -35,13 +37,13 @@ services:
       context: ..
       dockerfile: docker/validator.Dockerfile
       additional_contexts:
-        nexus-lib: ../../nexus-template
+        nexus-lib: ../../..
     restart: unless-stopped
     depends_on:
       - pylon
     environment:
       # Required validator settings.
-      VALIDATOR_NETUID: ${VALIDATOR_NETUID:-278}
+      VALIDATOR_NETUID: ${VALIDATOR_NETUID:-2}
       VALIDATOR_OPENROUTER_API_KEY: ${VALIDATOR_OPENROUTER_API_KEY:?set VALIDATOR_OPENROUTER_API_KEY}
       VALIDATOR_EXTERNAL_IP: ${VALIDATOR_CONTAINER_IP:-172.30.0.10}
       VALIDATOR_PYLON_SERVICE_ADDRESS: ${VALIDATOR_PYLON_SERVICE_ADDRESS:-http://pylon:8000}

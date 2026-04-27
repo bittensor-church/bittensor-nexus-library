@@ -62,7 +62,7 @@ Compose environment variables (typically defined in ${DOCKER_DIR}/.env.validator
     PYLON_HOST_PORT                Host-local pylon debug port (default: 18000)
 
   Optional validator runtime:
-    VALIDATOR_NETUID               Subnet netuid (default: 1)
+    VALIDATOR_NETUID               Subnet netuid (default: 2)
     VALIDATOR_REST_ENTRY_POINT_PORT Validator ingress port (default: 8081)
     VALIDATOR_MINER_CALLBACK_PORT  Validator callback port (default: 9091)
     VALIDATOR_OPENROUTER_URL       OpenRouter endpoint
@@ -79,14 +79,15 @@ Compose environment variables (typically defined in ${DOCKER_DIR}/.env.validator
     VALIDATOR_PYLON_IDENTITY_NAME  Pylon identity name for write operations (default: validator)
 
   Optional pylon runtime:
-    PYLON_BITTENSOR_NETWORK        Bittensor network (default: test)
+    PYLON_BITTENSOR_NETWORK        Bittensor network or endpoint
+                                  (default: http://host.docker.internal:9944)
     PYLON_RECENT_OBJECTS_NETUIDS   JSON list of cached netuids for open-access routing
-                                   (default: [1])
+                                   (default: [2])
     PYLON_OPEN_ACCESS_TOKEN        Pylon open-access token
     PYLON_IDENTITIES               JSON list of configured identity names (default: ["validator"])
     PYLON_ID_VALIDATOR_WALLET_NAME Wallet coldkey name used to set weights (default: some-wallet-name)
     PYLON_ID_VALIDATOR_HOTKEY_NAME Wallet hotkey name used to set weights (default: default)
-    PYLON_ID_VALIDATOR_NETUID      Subnet bound to identity (default: 1)
+    PYLON_ID_VALIDATOR_NETUID      Subnet bound to identity (default: 2)
     PYLON_ID_VALIDATOR_TOKEN       Shared secret token for identity auth (required)
 
   Optional AWS:

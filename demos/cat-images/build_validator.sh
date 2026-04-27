@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 docker build \
   -f "$SCRIPT_DIR/docker/validator.Dockerfile" \
-  --build-context nexus-lib="$SCRIPT_DIR/../nexus-template" \
+  --build-context nexus-lib="$SCRIPT_DIR/../.." \
   -t "$IMAGE" \
   "$@" \
   "$SCRIPT_DIR"
