@@ -3,12 +3,12 @@ from datetime import timedelta
 from threading import Timer
 from typing import Any, NewType, cast, override
 
-from nexus import get_logger
-from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
-from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.utils.exceptions import (
+from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.exceptions import (
     InternalFrameworkException,
     InternalStateCorruptionException,
     NexusException,
@@ -39,7 +39,8 @@ class RetriesExhaustedException(NexusException):
 
 
 class RetryStrategy[T](Node, ActorBuilder):
-    """Re-emits the original input on each signal to `failed_attempt`, up to a configured number of
+    """
+    Re-emits the original input on each signal to `failed_attempt`, up to a configured number of
     attempts with a delay between each. Emits the first attempt immediately on receiving the input.
 
     sink input: original payload, starts the retry cycle

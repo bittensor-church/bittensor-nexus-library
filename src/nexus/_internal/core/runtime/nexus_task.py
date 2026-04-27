@@ -1,18 +1,21 @@
-from nexus.actors import ExecutorCommunicator, NeuronRouter, Routed, TimestamperNode
-from nexus.actors.chain_beat.block_beat import BlockBeat
-from nexus.actors.executor_communicator import ProcessedInput
-from nexus.actors.mux import Mux2
-from nexus.actors.payload_creator import PayloadCreator
-from nexus.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
-from nexus.actors.task_result_dispatcher import TaskResultDispatcher
-from nexus.actors.task_result_preparer import TaskResultPreparer
-from nexus.actors.task_result_store_provider import DEFAULT_TASK_RESULT_STORE_PROVIDER, TaskResultStoreProvider
-from nexus.actors.task_result_storer import ExecutorFailureTaskResultStorer, SuccessfulTaskResultStorer
-from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import Node, NodeId, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.task_result_store import ExecutorFailureTaskResult, SuccessfulTaskResult
-from nexus.utils.exceptions import NexusException
+from nexus._internal.actors import ExecutorCommunicator, NeuronRouter, Routed, TimestamperNode
+from nexus._internal.actors.chain_beat.block_beat import BlockBeat
+from nexus._internal.actors.executor_communicator import ProcessedInput
+from nexus._internal.actors.mux import Mux2
+from nexus._internal.actors.payload_creator import PayloadCreator
+from nexus._internal.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
+from nexus._internal.actors.task_result_dispatcher import TaskResultDispatcher
+from nexus._internal.actors.task_result_preparer import TaskResultPreparer
+from nexus._internal.actors.task_result_store_provider import (
+    DEFAULT_TASK_RESULT_STORE_PROVIDER,
+    TaskResultStoreProvider,
+)
+from nexus._internal.actors.task_result_storer import ExecutorFailureTaskResultStorer, SuccessfulTaskResultStorer
+from nexus._internal.core.dsl.flow import Flow
+from nexus._internal.core.dsl.nodes import Node, NodeId, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
+from nexus._internal.core.runtime.nexus_task_types import NexusTaskName
+from nexus._internal.core.runtime.task_result_store import ExecutorFailureTaskResult, SuccessfulTaskResult
+from nexus._internal.utils.exceptions import NexusException
 
 
 class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput = ExecutorOutput]:

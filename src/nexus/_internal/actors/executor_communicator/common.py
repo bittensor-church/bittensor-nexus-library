@@ -2,7 +2,7 @@ from datetime import timedelta
 from ipaddress import IPv4Address, IPv6Address
 from typing import NewType
 
-from nexus.utils.exceptions import ActorMisconfiguredException
+from nexus._internal.utils.exceptions import ActorMisconfiguredException
 
 NormalizedHttpPath = NewType("NormalizedHttpPath", str)
 UrlHost = NewType("UrlHost", str)

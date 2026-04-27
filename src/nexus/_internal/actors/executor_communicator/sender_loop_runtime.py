@@ -11,9 +11,9 @@ from dataclasses import dataclass
 import httpx
 from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
 
-from nexus.core.runtime.context_store_types import ContextId
-from nexus.logging_utils import get_logger
-from nexus.utils.exceptions import (
+from nexus._internal.core.runtime.context_store_types import ContextId
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.exceptions import (
     AsyncHttpNeuronCommunicatorException,
     InternalFrameworkException,
     NexusException,
@@ -121,6 +121,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
 
         Raises:
             InternalFrameworkException: If bootstrap times out or fails.
+
         """
 
         bootstrap_queue: queue.Queue[

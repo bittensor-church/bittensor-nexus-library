@@ -308,6 +308,7 @@ class ContextStore:
         Raises:
             InternalFrameworkException: if recovered log entries violate framework invariants.
             InternalStateCorruptionException: if log entries violate context history consistency.
+
         """
         contexts: dict[ContextId, Context] = {}
         last_messages: LastMessages = {}
@@ -387,7 +388,7 @@ class ContextStore:
     @contextmanager
     def create_context(self, *, parents: tuple[ContextId, ...] = ()) -> Iterator[Context]:
         """
-        creates a new Context with the given parent contexts, and yields it with a context manager
+        Creates a new Context with the given parent contexts, and yields it with a context manager
         that ensures mutual exclusion on the new context.
 
         Parents get locked for the duration of the context creation to ensure that no new log entries
@@ -396,6 +397,7 @@ class ContextStore:
         Raises:
             InvalidContextIdException: if one of the provided parent context ids does not exist.
             ContextCompletedException: if one of the provided parent contexts is already completed.
+
         """
         parent_ids = tuple(dict.fromkeys(parents))
         with self._lock_contexts(parent_ids):
@@ -437,6 +439,7 @@ class ContextStore:
         Raises:
             InvalidContextIdException: if the context does not exist.
             InternalStateCorruptionException: if the key is missing or value has unexpected type.
+
         """
         with self.get_context(ctx_id) as context:
             value = context.user_data.get(key)
@@ -497,6 +500,7 @@ class InMemoryContextStorePersistence(ContextStorePersistence):
 
         Raises:
             InternalFrameworkException: if one of the parent contexts is missing internal state.
+
         """
         for parent_ctx in parents:
             if parent_ctx not in self.__context_tree:

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from nexus.utils.env import get_required_env_var
-from nexus.utils.exceptions import ActorMisconfiguredException, NexusException, SubnetMisconfiguredException
-from nexus.utils.types import NetUid
+from nexus._internal.utils.env import get_required_env_var
+from nexus._internal.utils.exceptions import ActorMisconfiguredException, NexusException, SubnetMisconfiguredException
+from nexus._internal.utils.types import NetUid
 
 
 def validate_netuid(

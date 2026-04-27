@@ -1,11 +1,11 @@
 from typing import override
 
-from nexus.core.dsl.nodes import NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
-from nexus.core.runtime.actor import Actor, ActorBuilder
-from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus
-from nexus.core.runtime.task_result_store import SuccessfulTaskResult
+from nexus._internal.core.dsl.nodes import NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import TransformActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
+from nexus._internal.core.runtime.task_result_store import SuccessfulTaskResult
 
 
 class TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
@@ -15,7 +15,8 @@ class TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     ],
     ActorBuilder,
 ):
-    """Base transform that batches individual task results for downstream processing (e.g. validation).
+    """
+    Base transform that batches individual task results for downstream processing (e.g. validation).
     Subclasses define the sampling strategy and when batches are emitted.
 
     sink task_results: individual task results
@@ -49,7 +50,8 @@ class TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
 class EveryTaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
     TaskResultSampler[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput], ActorBuilder
 ):
-    """TaskResultSampler that emits immediately for every result as a single-element batch.
+    """
+    TaskResultSampler that emits immediately for every result as a single-element batch.
 
     sink task_results: individual task results
     source sampled_batch: single-element batch containing the input result

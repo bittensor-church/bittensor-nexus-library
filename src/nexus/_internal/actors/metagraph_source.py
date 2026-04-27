@@ -5,14 +5,14 @@ from typing import Any, override
 
 from pylon_client.artanis.v1 import Neuron
 
-from nexus.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
-from nexus.core.dsl.nodes import NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
-from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
-from nexus.utils.immutable_map import ImmutableMap
-from nexus.utils.netuid import load_required_netuid_from_env, validate_netuid
-from nexus.utils.types import Hotkey, NetUid
+from nexus._internal.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
+from nexus._internal.core.dsl.nodes import NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
+from nexus._internal.utils.immutable_map import ImmutableMap
+from nexus._internal.utils.netuid import load_required_netuid_from_env, validate_netuid
+from nexus._internal.utils.types import Hotkey, NetUid
 
 
 class NeuronMap(ImmutableMap[Hotkey, Neuron]):

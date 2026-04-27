@@ -5,10 +5,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NewType, TypeVar, override
 
-from nexus.utils.exceptions import InternalFrameworkException, NexusException
+from nexus._internal.utils.exceptions import InternalFrameworkException, NexusException
 
 if TYPE_CHECKING:
-    from nexus.core.runtime.nexus_task import NexusTask
+    from nexus._internal.core.runtime.nexus_task import NexusTask
 
 T = TypeVar("T")
 

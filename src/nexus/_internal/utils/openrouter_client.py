@@ -5,7 +5,7 @@ from typing import Any, cast
 import httpx
 from pydantic import BaseModel
 
-from nexus.utils.openrouter_config import OpenRouterSettingsMixin
+from nexus._internal.utils.openrouter_config import OpenRouterSettingsMixin
 
 _RETRY_TRANSPORT = httpx.HTTPTransport(retries=3)
 
@@ -74,11 +74,13 @@ class OpenRouterClient:
         messages: list[dict[str, Any]],
         response_model: type[ResponseModelT],
     ) -> ResponseModelT:
-        """Send a chat completion request to OpenRouter and validate the JSON reply.
+        """
+        Send a chat completion request to OpenRouter and validate the JSON reply.
 
         Raises:
             ValueError: The OpenRouter response envelope is malformed.
             ValidationError: The OpenRouter message content is invalid JSON or does not match ``response_model``.
+
         """
         payload = {
             "model": self._model,

@@ -1,14 +1,15 @@
 from typing import override
 
-from nexus.core.dsl.nodes import DoubleTransform
-from nexus.core.runtime.actor import ActorBuilder
-from nexus.core.runtime.actor_patterns import DoubleTransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus
+from nexus._internal.core.dsl.nodes import DoubleTransform
+from nexus._internal.core.runtime.actor import ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import DoubleTransformActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
 
 
 class CaseModifier[T](DoubleTransform[str, str, str, str], ActorBuilder):
-    """Example double transform. Lowercases strings on the input path, uppercases on the output path.
+    """
+    Example double transform. Lowercases strings on the input path, uppercases on the output path.
 
     sink input_sink: string to lowercase
     sink output_sink: string to uppercase

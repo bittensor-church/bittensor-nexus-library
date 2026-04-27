@@ -1,4 +1,5 @@
-"""Timestamper node and actor.
+"""
+Timestamper node and actor.
 
 This component tracks processing time boundaries around two logical phases:
 - input phase: records the latest processing start timestamp in context user data
@@ -17,14 +18,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, override
 
-from nexus.actors.chain_beat.block_beat import BlockBeat
-from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
-from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.context_store_types import ContextId
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.logging_utils import get_logger
-from nexus.utils.exceptions import InternalStateCorruptionException
+from nexus._internal.actors.chain_beat.block_beat import BlockBeat
+from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.context_store_types import ContextId
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.exceptions import InternalStateCorruptionException
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -53,7 +54,8 @@ class QueuedOutput[Output]:
 
 
 class TimestamperNode[Input, Output](Node, ActorBuilder):
-    """Wraps a processing step with timing metadata. Records a start timestamp on input,
+    """
+    Wraps a processing step with timing metadata. Records a start timestamp on input,
     then enriches the output with start/end times and the latest observed block beat.
     Connect the processing step from `forwarded_input` back to `executor_output`.
     Outputs are queued until at least one BlockBeat has been received.
@@ -111,12 +113,14 @@ class TimestamperNode[Input, Output](Node, ActorBuilder):
 
 
 class TimestamperActor[Input, Output](Actor):
-    """Runtime behavior for `TimestamperNode`.
+    """
+    Runtime behavior for `TimestamperNode`.
 
     Notes:
     - Input events overwrite the stored start timestamp (latest input wins).
     - Output events require a `BlockBeat`; otherwise they are queued.
     - Warning logs are emitted only when crossing the warning threshold for the current queue head.
+
     """
 
     spec: TimestamperNode[Input, Output]
@@ -238,10 +242,12 @@ class TimestamperActor[Input, Output](Actor):
         return dropped_count
 
     def _timestamp_output(self, *, ctx: Context, output: Output) -> Timestamped[Output]:
-        """Build `Timestamped` using context start time, current UTC end time, and latest block beat.
+        """
+        Build `Timestamped` using context start time, current UTC end time, and latest block beat.
 
         Raises:
             InternalStateCorruptionException: if no block beat was observed yet.
+
         """
         started_at = self._started_at(ctx.id)
         block_beat = self.latest_block_beat
@@ -256,10 +262,12 @@ class TimestamperActor[Input, Output](Actor):
         )
 
     def _started_at(self, ctx_id: ContextId) -> datetime:
-        """Load and validate processing start timestamp from context user data.
+        """
+        Load and validate processing start timestamp from context user data.
 
         Raises:
             InternalStateCorruptionException: if the stored timestamp is missing, invalid, or timezone-naive.
+
         """
         with self.context_store.get_context(ctx_id) as ctx:
             started_at = ctx.user_data.get(self.spec.processing_started_at_user_data_key)

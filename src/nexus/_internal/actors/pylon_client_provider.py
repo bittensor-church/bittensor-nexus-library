@@ -6,8 +6,8 @@ from typing import Protocol, override
 from pylon_client.artanis import Config, Hotkey, IdentityName, NetUid, PylonAuthToken, PylonClient, Weight
 from pylon_client.artanis.v1 import GetLatestBlockInfoResponse, GetNeuronsResponse, SetWeightsResponse
 
-from nexus.utils.env import get_optional_env_var, get_required_env_var
-from nexus.utils.exceptions import SubnetMisconfiguredException
+from nexus._internal.utils.env import get_optional_env_var, get_required_env_var
+from nexus._internal.utils.exceptions import SubnetMisconfiguredException
 
 
 class OpenAccessPylonApiLike(Protocol):

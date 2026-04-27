@@ -16,12 +16,12 @@ from litestar.response import Response
 from pydantic import BaseModel, ValidationError
 from pylon_client.artanis import Port
 
-from nexus.core.dsl.nodes import Source
-from nexus.core.runtime.context_store import ContextStore
-from nexus.core.runtime.context_store_types import ContextId
-from nexus.core.runtime.events import PipeToBus, SendEvent
-from nexus.logging_utils import get_logger
-from nexus.utils.exceptions import InternalFrameworkException
+from nexus._internal.core.dsl.nodes import Source
+from nexus._internal.core.runtime.context_store import ContextStore
+from nexus._internal.core.runtime.context_store_types import ContextId
+from nexus._internal.core.runtime.events import PipeToBus, SendEvent
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.exceptions import InternalFrameworkException
 
 from .executor_communicator.common import NormalizedHttpPath
 from .executor_communicator.http_server_lifecycle import start_uvicorn_server, stop_uvicorn_server

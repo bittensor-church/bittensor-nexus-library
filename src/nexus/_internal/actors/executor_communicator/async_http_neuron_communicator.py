@@ -10,12 +10,12 @@ from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
 from pylon_client.artanis import Port
 from pylon_client.artanis.v1 import AxonProtocol, Neuron
 
-from nexus.actors.neuron_router import Routed
-from nexus.core.runtime.actor import Actor, ActorBuilder
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
-from nexus.logging_utils import get_logger
-from nexus.utils.exceptions import (
+from nexus._internal.actors.neuron_router import Routed
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.exceptions import (
     ActorMisconfiguredException,
     InternalFrameworkException,
     NeuronAddressInvalidException,
@@ -60,7 +60,8 @@ class HttpBindEndpoint:
 class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel](
     ExecutorCommunicator[InputModel, OutputModel], ActorBuilder
 ):
-    """ExecutorCommunicator that forwards routed input payloads to a target neuron's HTTP axon
+    """
+    ExecutorCommunicator that forwards routed input payloads to a target neuron's HTTP axon
     and asynchronously resolves responses via a local callback endpoint.
     For each input, it serializes the payload as JSON, sends it to the neuron's address on
     `target_path`, and stores a pending request keyed by request id. The communicator binds
@@ -128,6 +129,7 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
             ActorMisconfiguredException: If timeouts are non-positive, max_in_flight
                 is not positive, response_bind.port is outside [0, 65535], or
                 callback_base_url contains query/fragment components.
+
         """
         super().__init__(_id, input_model, output_model)
         validate_positive_timeout(timeout=send_timeout, parameter_name="send_timeout")

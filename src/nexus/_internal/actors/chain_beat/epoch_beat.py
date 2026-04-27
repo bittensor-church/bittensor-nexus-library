@@ -10,15 +10,15 @@ from typing import override
 
 from pylon_client.artanis import BasePylonException
 
-from nexus.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
-from nexus.core.dsl.nodes import Producer
-from nexus.core.runtime.actor import ActorBuilder
-from nexus.core.runtime.actor_patterns import ProducerActor
-from nexus.core.runtime.context_store import ContextStore
-from nexus.core.runtime.events import PipeToBus
-from nexus.logging_utils import get_logger
-from nexus.utils.chain import get_epoch_containing_block
-from nexus.utils.types import BlockCount, BlockNumber, Epoch, NetUid
+from nexus._internal.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
+from nexus._internal.core.dsl.nodes import Producer
+from nexus._internal.core.runtime.actor import ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import ProducerActor
+from nexus._internal.core.runtime.context_store import ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.chain import get_epoch_containing_block
+from nexus._internal.utils.types import BlockCount, BlockNumber, Epoch, NetUid
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -29,7 +29,8 @@ class EpochBeat:
 
 
 class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
-    """Emits a beat whenever the epoch changes for a given subnet.
+    """
+    Emits a beat whenever the epoch changes for a given subnet.
     Epoch boundaries are derived from block numbers, so the same gaps and jitter
     from BlockBeatNode apply here.
     The optional delay parameter delays the beat after the actual epoch change,
@@ -61,6 +62,7 @@ class EpochBeatNode(Producer[EpochBeat], ActorBuilder):
             delay: How many blocks after the start of an epoch to emit the beat
             polling_interval: How often to poll for the latest block number
             pylon_client_provider: Provider for pylon client instances
+
         """
         super().__init__(_id)
         self.netuid = netuid

@@ -4,7 +4,7 @@ import datetime
 import threading
 from dataclasses import dataclass
 
-from nexus.utils.exceptions import RemoteResponseTimeoutException
+from nexus._internal.utils.exceptions import RemoteResponseTimeoutException
 
 from .common import timeout_seconds
 from .pending_requests import PendingAsyncHttpRequestStore

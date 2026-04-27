@@ -1,3 +1,5 @@
-from .logging_utils import configure_default_logging, get_logger
+"""
+Internal implementation of bittensor_nexus_library.
 
-__all__ = ["configure_default_logging", "get_logger"]
+This project uses ApiVer, and as such, all imports should be done from v* submodules.
+"""

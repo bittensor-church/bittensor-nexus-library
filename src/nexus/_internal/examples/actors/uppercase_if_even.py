@@ -1,14 +1,15 @@
 from typing import override
 
-from nexus.core.dsl.nodes import Fork
-from nexus.core.runtime.actor import ActorBuilder
-from nexus.core.runtime.actor_patterns import ForkActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus
+from nexus._internal.core.dsl.nodes import Fork
+from nexus._internal.core.runtime.actor import ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import ForkActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
 
 
 class UppercaseIfEven(Fork[str, str, str], ActorBuilder):
-    """Example fork. Uppercases strings with even length to `left`, passes odd-length strings unchanged to `right`.
+    """
+    Example fork. Uppercases strings with even length to `left`, passes odd-length strings unchanged to `right`.
 
     sink sink: string to process
     source left: uppercased string (even-length inputs)

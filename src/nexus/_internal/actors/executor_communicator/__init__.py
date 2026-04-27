@@ -1,15 +1,15 @@
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
-from nexus.utils.exceptions import (
+from nexus._internal.utils.exceptions import (
     AsyncHttpNeuronCommunicatorException,
     NeuronAddressInvalidException,
+    RemoteExecutionException,
     RemoteRequestFailedException,
     RemoteRequestRejectedException,
-    ResponseInvalidException,
     RemoteResponseTimeoutException,
+    ResponseInvalidException,
     ResponseValidationException,
-    RemoteExecutionException,
     UnsupportedAxonProtocolException,
 )
 
@@ -47,11 +47,11 @@ if TYPE_CHECKING:
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "OpenRouterInferenceCommunicator": (
-        "nexus.actors.executor_communicator.openrouter_inference_communicator",
+        "nexus._internal.actors.executor_communicator.openrouter_inference_communicator",
         "OpenRouterInferenceCommunicator",
     ),
     "OpenRouterInferenceCommunicatorActor": (
-        "nexus.actors.executor_communicator.openrouter_inference_communicator",
+        "nexus._internal.actors.executor_communicator.openrouter_inference_communicator",
         "OpenRouterInferenceCommunicatorActor",
     ),
 }

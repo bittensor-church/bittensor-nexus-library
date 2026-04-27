@@ -1,4 +1,4 @@
-from nexus.utils.types import BlockNumber, Epoch, NetUid, Tempo
+from nexus._internal.utils.types import BlockNumber, Epoch, NetUid, Tempo
 
 DEFAULT_TEMPO = Tempo(360)  # This is actually a subnet hyperparam. It's rare for it to be changed, but possible.
 
@@ -13,6 +13,7 @@ def get_epoch_containing_block(block: BlockNumber, netuid: NetUid, tempo: Tempo 
 
     Raises:
         ValueError: If tempo is not positive (tempo <= 0).
+
     """
     if tempo <= 0:
         raise ValueError("tempo must be positive")

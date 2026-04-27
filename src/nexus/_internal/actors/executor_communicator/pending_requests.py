@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import override
 
-from nexus.core.runtime.context_store_types import ContextId
-from nexus.utils.exceptions import InternalFrameworkException
+from nexus._internal.core.runtime.context_store_types import ContextId
+from nexus._internal.utils.exceptions import InternalFrameworkException
 
 from .async_http_protocol import RequestId
 

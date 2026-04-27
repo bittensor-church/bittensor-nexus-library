@@ -12,7 +12,8 @@ BlockCount = NewType("BlockCount", int)
 
 
 class Epoch(NamedTuple):
-    """Represents an epoch as a range of block numbers,
+    """
+    Represents an epoch as a range of block numbers,
     inclusive of the first and last block.
     """
 
@@ -24,10 +25,12 @@ class Epoch(NamedTuple):
         return self.first_block <= block_number <= self.last_block
 
     def previous(self) -> Epoch:
-        """Returns the immediately preceding epoch with the same block span.
+        """
+        Returns the immediately preceding epoch with the same block span.
 
         Raises:
             ValueError: If this epoch cannot be shifted backward without block underflow.
+
         """
         epoch_span = int(self.last_block) - int(self.first_block) + 1
         if epoch_span <= 0:

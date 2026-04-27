@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, NewType
 
-from nexus.utils.exceptions import FlowMisconfiguredException
+from nexus._internal.utils.exceptions import FlowMisconfiguredException
 
 from .nodes import Node, NodeSinks, NodeSources, Pipes, Sink, SinkNode, Source, SourceName, SourceNode
 

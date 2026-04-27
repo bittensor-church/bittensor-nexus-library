@@ -4,7 +4,7 @@ from collections.abc import Callable
 from threading import Thread
 from typing import Any, NewType
 
-from nexus.logging_utils import get_logger
+from nexus._internal.logging_utils import get_logger
 
 from ..dsl.nodes import Sink
 from .context_store import Context, ContextStore

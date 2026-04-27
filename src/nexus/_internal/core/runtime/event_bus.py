@@ -3,7 +3,7 @@ from threading import Thread
 from traceback import format_exception
 from typing import Any
 
-from nexus.logging_utils import get_logger
+from nexus._internal.logging_utils import get_logger
 
 from ..dsl.nodes import Pipes, Sink
 from .actor import Actor

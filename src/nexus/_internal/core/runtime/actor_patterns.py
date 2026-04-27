@@ -4,8 +4,8 @@ from collections.abc import Callable, Generator
 from threading import Thread
 from typing import Any, cast, override
 
-from nexus.logging_utils import get_logger
-from nexus.utils.exceptions import InternalFrameworkException, NexusException, SafeInvokeWrappedException
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.exceptions import InternalFrameworkException, NexusException, SafeInvokeWrappedException
 
 from ..dsl.nodes import Fork, Producer, Sink, Source, Transform
 from .actor import Actor, EventHandler
@@ -166,9 +166,17 @@ class TransformActor[From, To](ForkActor[From, To, NexusException], ABC):
 
 class DoubleTransformActor[InputFrom, InputTo, OutputFrom, OutputTo](Actor, ABC):
     class Input:
+        """
+        Input-side message tags for the double transform actor.
+        """
+
         pass
 
     class Output:
+        """
+        Output-side message tags for the double transform actor.
+        """
+
         pass
 
     input_spec: Transform[InputFrom, InputTo]

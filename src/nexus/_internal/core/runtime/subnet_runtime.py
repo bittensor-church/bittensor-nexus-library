@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 from threading import Thread
 from time import monotonic
 
-from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import Node
-from nexus.core.dsl.piping import Piping
+from nexus._internal.core.dsl.flow import Flow
+from nexus._internal.core.dsl.nodes import Node
+from nexus._internal.core.dsl.piping import Piping
 
 from .actor import Actor, ActorBuilder
 from .context_store import ContextStore, InMemoryContextStorePersistence

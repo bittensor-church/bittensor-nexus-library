@@ -1,16 +1,9 @@
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
-from nexus.actors.chain_beat.block_beat import BlockBeatNode, BlockBeatActor
-from nexus.actors.chain_beat.epoch_beat import EpochBeatNode, EpochBeatActor
-from nexus.actors.timestamper import TimestamperNode, TimestamperActor, Timestamped
-from nexus.actors.pylon_client_provider import (
-    PylonClientProvider,
-)
-from nexus.actors.openrouter_client_provider import (
-    OpenRouterClientProvider,
-)
-from nexus.actors.executor_communicator import (
+from nexus._internal.actors.chain_beat.block_beat import BlockBeatActor, BlockBeatNode
+from nexus._internal.actors.chain_beat.epoch_beat import EpochBeatActor, EpochBeatNode
+from nexus._internal.actors.executor_communicator import (
     AsyncHttpNeuronCommunicator,
     AsyncHttpNeuronCommunicatorActor,
     AsyncHttpNeuronService,
@@ -20,63 +13,80 @@ from nexus.actors.executor_communicator import (
     PendingAsyncHttpRequest,
     PendingAsyncHttpRequestStore,
 )
-from nexus.actors.metagraph_source import MetagraphSource, NeuronMap, TriggeredMetagraph
-from nexus.actors.openrouter_selection import (
-    FileField,
-    ImageUrlField,
-    InputAudioField,
-    ScalarField,
-    FieldValue,
-    Fields,
-    VideoUrlField,
-)
-from nexus.actors.rest_entry_point import RestEntryPoint, RestEntryPointActor
-from nexus.actors.neuron_router import (
-    NoRoutableNeuronsException,
+from nexus._internal.actors.metagraph_source import MetagraphSource, NeuronMap, TriggeredMetagraph
+from nexus._internal.actors.neuron_router import (
+    Neuron,
     NeuronFilter,
-    RoundRobinNeuronRouter,
-    Routed,
     NeuronRouter,
     NeuronRouterActor,
-    Neuron,
+    NoRoutableNeuronsException,
+    RoundRobinNeuronRouter,
+    Routed,
     keep_all_neurons,
     miners_only,
     validators_only,
 )
-from nexus.utils.exceptions import (
+from nexus._internal.actors.openrouter_client_provider import (
+    OpenRouterClientProvider,
+)
+from nexus._internal.actors.openrouter_selection import (
+    Fields,
+    FieldValue,
+    FileField,
+    ImageUrlField,
+    InputAudioField,
+    ScalarField,
+    VideoUrlField,
+)
+from nexus._internal.actors.pylon_client_provider import (
+    PylonClientProvider,
+)
+from nexus._internal.actors.rest_entry_point import RestEntryPoint, RestEntryPointActor
+from nexus._internal.actors.timestamper import Timestamped, TimestamperActor, TimestamperNode
+from nexus._internal.utils.exceptions import (
     AsyncHttpNeuronCommunicatorException,
     NeuronAddressInvalidException,
+    RemoteExecutionException,
     RemoteRequestFailedException,
     RemoteRequestRejectedException,
-    ResponseInvalidException,
     RemoteResponseTimeoutException,
+    ResponseInvalidException,
     ResponseValidationException,
-    RemoteExecutionException,
     UnsupportedAxonProtocolException,
 )
 
 if TYPE_CHECKING:
-    from nexus.actors.executor_communicator.openrouter_inference_communicator import (
+    from nexus._internal.actors.executor_communicator.openrouter_inference_communicator import (
         OpenRouterInferenceCommunicator,
         OpenRouterInferenceCommunicatorActor,
     )
-    from nexus.actors.openrouter_payload_creator import MultiOpenRouterPayloadCreator, OpenRouterInferenceRequest
-    from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskInputOutput, TaskInputOutputCreator
-    from nexus.actors.task_result_sampler import EveryTaskResultSampler
+    from nexus._internal.actors.openrouter_payload_creator import (
+        MultiOpenRouterPayloadCreator,
+        OpenRouterInferenceRequest,
+    )
+    from nexus._internal.actors.task_input_output_creator import (
+        BatchedTaskInputOutput,
+        TaskInputOutput,
+        TaskInputOutputCreator,
+    )
+    from nexus._internal.actors.task_result_sampler import EveryTaskResultSampler
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    "BatchedTaskInputOutput": ("nexus.actors.task_input_output_creator", "BatchedTaskInputOutput"),
-    "MultiOpenRouterPayloadCreator": ("nexus.actors.openrouter_payload_creator", "MultiOpenRouterPayloadCreator"),
-    "OpenRouterInferenceRequest": ("nexus.actors.openrouter_payload_creator", "OpenRouterInferenceRequest"),
-    "EveryTaskResultSampler": ("nexus.actors.task_result_sampler", "EveryTaskResultSampler"),
-    "TaskInputOutput": ("nexus.actors.task_input_output_creator", "TaskInputOutput"),
-    "TaskInputOutputCreator": ("nexus.actors.task_input_output_creator", "TaskInputOutputCreator"),
+    "BatchedTaskInputOutput": ("nexus._internal.actors.task_input_output_creator", "BatchedTaskInputOutput"),
+    "MultiOpenRouterPayloadCreator": (
+        "nexus._internal.actors.openrouter_payload_creator",
+        "MultiOpenRouterPayloadCreator",
+    ),
+    "OpenRouterInferenceRequest": ("nexus._internal.actors.openrouter_payload_creator", "OpenRouterInferenceRequest"),
+    "EveryTaskResultSampler": ("nexus._internal.actors.task_result_sampler", "EveryTaskResultSampler"),
+    "TaskInputOutput": ("nexus._internal.actors.task_input_output_creator", "TaskInputOutput"),
+    "TaskInputOutputCreator": ("nexus._internal.actors.task_input_output_creator", "TaskInputOutputCreator"),
     "OpenRouterInferenceCommunicator": (
-        "nexus.actors.executor_communicator.openrouter_inference_communicator",
+        "nexus._internal.actors.executor_communicator.openrouter_inference_communicator",
         "OpenRouterInferenceCommunicator",
     ),
     "OpenRouterInferenceCommunicatorActor": (
-        "nexus.actors.executor_communicator.openrouter_inference_communicator",
+        "nexus._internal.actors.executor_communicator.openrouter_inference_communicator",
         "OpenRouterInferenceCommunicatorActor",
     ),
 }

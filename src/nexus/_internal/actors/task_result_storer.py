@@ -1,20 +1,23 @@
 from typing import Any, override
 
-from nexus.actors.task_result_store_provider import DEFAULT_TASK_RESULT_STORE_PROVIDER, TaskResultStoreProvider
-from nexus.core.dsl.nodes import NodeId, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
-from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.task_result_store import (
+from nexus._internal.actors.task_result_store_provider import (
+    DEFAULT_TASK_RESULT_STORE_PROVIDER,
+    TaskResultStoreProvider,
+)
+from nexus._internal.core.dsl.nodes import NodeId, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus._internal.core.runtime.actor_patterns import TransformActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus._internal.core.runtime.nexus_task_types import NexusTaskName
+from nexus._internal.core.runtime.task_result_store import (
     ExecutorFailureTaskResult,
     ExecutorFailureTaskResultToPersist,
     SuccessfulTaskResult,
     SuccessfulTaskResultToPersist,
     TaskResultStore,
 )
-from nexus.utils.exceptions import InternalFrameworkException, RetryTaskAfterExecutorFailureException
+from nexus._internal.utils.exceptions import InternalFrameworkException, RetryTaskAfterExecutorFailureException
 
 
 class SuccessfulTaskResultStorer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](
@@ -24,7 +27,8 @@ class SuccessfulTaskResultStorer[ExecutorPayload, ExecutorOutput, ExecutorPublic
     ],
     ActorBuilder,
 ):
-    """Persist one successful task result and emit the stored record.
+    """
+    Persist one successful task result and emit the stored record.
 
     sink sink: SuccessfulTaskResultToPersist to store
     source successful_task_result: persisted SuccessfulTaskResult
@@ -150,7 +154,8 @@ class ExecutorFailureTaskResultStorerActor[ExecutorPayload, ExecutorOutput, Exec
         ExecutorFailureTaskResult[ExecutorPayload],
     ]
 ):
-    """Persist one executor failure, emit it, then signal retry through the error branch.
+    """
+    Persist one executor failure, emit it, then signal retry through the error branch.
 
     Store write failures are surfaced on the error branch instead of being dropped by the runtime loop.
     """

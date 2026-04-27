@@ -14,8 +14,8 @@ from litestar.response import Response
 from pydantic import AnyHttpUrl, BaseModel, ValidationError
 from pylon_client.artanis import Port
 
-from nexus.logging_utils import get_logger
-from nexus.utils.exceptions import ActorMisconfiguredException, RemoteRequestFailedException
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.exceptions import ActorMisconfiguredException, RemoteRequestFailedException
 
 from .async_http_protocol import (
     AsyncHttpNeuronRequestEnvelope,

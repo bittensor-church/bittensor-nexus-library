@@ -3,18 +3,19 @@ from typing import override
 
 from pydantic import BaseModel
 
-from nexus.actors import ExecutorCommunicator, Routed
-from nexus.actors.executor_communicator import CommunicatorActor
-from nexus.core.runtime.actor import Actor, ActorBuilder
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
-from nexus.utils.exceptions import EmbeddedExecutorFailureException
+from nexus._internal.actors import ExecutorCommunicator, Routed
+from nexus._internal.actors.executor_communicator import CommunicatorActor
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
+from nexus._internal.utils.exceptions import EmbeddedExecutorFailureException
 
 
 class EmbeddedExecutorCommunicator[InputModel: BaseModel, OutputModel: BaseModel](
     ExecutorCommunicator[InputModel, OutputModel], ActorBuilder
 ):
-    """ExecutorCommunicator that runs the executor function in-process instead of calling a remote neuron.
+    """
+    ExecutorCommunicator that runs the executor function in-process instead of calling a remote neuron.
     Takes a callable at construction time and invokes it directly for each input.
 
     sink input: routed request payload

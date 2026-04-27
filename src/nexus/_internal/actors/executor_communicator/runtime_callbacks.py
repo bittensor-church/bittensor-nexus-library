@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from nexus.core.runtime.context_store_types import ContextId
-from nexus.utils.exceptions import NexusException
+from nexus._internal.core.runtime.context_store_types import ContextId
+from nexus._internal.utils.exceptions import NexusException
 
 
 @dataclass(frozen=True)

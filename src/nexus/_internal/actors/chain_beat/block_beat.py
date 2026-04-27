@@ -10,14 +10,14 @@ from typing import override
 
 from pylon_client.artanis import BasePylonException
 
-from nexus.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
-from nexus.core.dsl.nodes import Producer
-from nexus.core.runtime.actor import ActorBuilder
-from nexus.core.runtime.actor_patterns import ProducerActor
-from nexus.core.runtime.context_store import ContextStore
-from nexus.core.runtime.events import PipeToBus
-from nexus.logging_utils import get_logger
-from nexus.utils.types import BlockCount, BlockHash, BlockNumber, Timestamp
+from nexus._internal.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
+from nexus._internal.core.dsl.nodes import Producer
+from nexus._internal.core.runtime.actor import ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import ProducerActor
+from nexus._internal.core.runtime.context_store import ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.types import BlockCount, BlockHash, BlockNumber, Timestamp
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -30,7 +30,8 @@ class BlockBeat:
 
 
 class BlockBeatNode(Producer[BlockBeat], ActorBuilder):
-    """Emits a beat whenever the current block number changes.
+    """
+    Emits a beat whenever the current block number changes.
     Emitted block numbers are real as received from the chain, not time-predicted.
     There may be gaps — if connection is lost and regained, there is no backfilling.
     The beat will not happen at a stable 12-second pace; expect jitter and delay.
@@ -58,6 +59,7 @@ class BlockBeatNode(Producer[BlockBeat], ActorBuilder):
             every_nth: Emit only every n-th block
             polling_interval: How often to poll for the latest block
             pylon_client_provider: Provider for pylon client instances
+
         """
         super().__init__(_id)
         self.every_nth = every_nth

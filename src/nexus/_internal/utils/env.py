@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from nexus.utils.exceptions import SubnetMisconfiguredException
+from nexus._internal.utils.exceptions import SubnetMisconfiguredException
 
 
 def _get_non_empty_env_var(key: str) -> str | None:
