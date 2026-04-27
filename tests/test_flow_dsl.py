@@ -4,9 +4,10 @@ from typing import override
 
 import pytest
 
-from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import (
+from nexus.v1 import (
     DoubleTransform,
+    Flow,
+    FlowMisconfiguredException,
     Fork,
     Node,
     NodeSinks,
@@ -17,7 +18,6 @@ from nexus.core.dsl.nodes import (
     SourceName,
     Transform,
 )
-from nexus.utils.exceptions import FlowMisconfiguredException
 
 
 class DualSinkPreferred(Node):

@@ -5,8 +5,7 @@ import uuid
 
 from pylon_client.artanis.v1 import AxonProtocol
 
-from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
-from nexus.utils.exceptions import TaskResultNotFoundException, UnsupportedAxonProtocolException
+from nexus.v1 import NexusTaskName, TaskResultId, TaskResultNotFoundException, UnsupportedAxonProtocolException
 
 
 def test_unsupported_axon_protocol_exception_round_trips_through_pickle() -> None:

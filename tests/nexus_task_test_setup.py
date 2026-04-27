@@ -1,6 +1,7 @@
 # pyright: basic
 
-"""Reusable NexusTask wiring setup for internal flow tests.
+"""
+Reusable NexusTask wiring setup for internal flow tests.
 
 The setup intentionally uses distinct payload types across retry/payload/router/
 communicator stages so wiring mistakes are caught by static type checking.
@@ -18,29 +19,39 @@ from fake_pylon_client import FakePylonClientProvider
 from pylon_client.artanis.v1 import Neuron
 from utils import CollectorActor, InMemoryTestTaskResultStoreProvider, build_neuron, dummy_block_beat
 
-from nexus.actors.chain_beat.block_beat import BlockBeat
-from nexus.actors.executor_communicator.base_communicator import CommunicatorActor, ExecutorCommunicator, ProcessedInput
-from nexus.actors.neuron_router import NeuronRouter, Routed
-from nexus.actors.payload_creator import NoopPayloadCreator, PayloadCreator
-from nexus.actors.retry_strategy import RetryStrategy
-from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import Source
-from nexus.core.runtime.actor import Actor, ActorBuilder
-from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.context_store_types import ContextId
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
-from nexus.core.runtime.task_result_store import (
+from nexus.v1 import (
+    Actor,
+    ActorBuilder,
+    BlockBeat,
+    CommunicatorActor,
+    Context,
+    ContextId,
+    ContextStore,
+    ExecutorCommunicator,
     ExecutorFailureTaskResult,
+    Flow,
+    MessagesToSend,
+    NeuronRouter,
+    NexusException,
+    NexusTaskName,
+    NoopPayloadCreator,
+    PayloadCreator,
+    PipeToBus,
+    ProcessedInput,
+    ReceiveEvent,
+    RetryStrategy,
+    Routed,
+    SendEvent,
+    Source,
+    SubnetBuilder,
+    SubnetRuntime,
     SuccessfulTaskResult,
     TaskResultStore,
+    TransformActor,
 )
-from nexus.utils.exceptions import NexusException
 
 if TYPE_CHECKING:
-    from nexus.core.runtime.nexus_task import NexusTask
+    from nexus.v1 import NexusTask
 
 DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_SECONDS = 1.5
 
@@ -328,7 +339,7 @@ def build_nexus_task_test_setup(
 ) -> NexusTaskTestSetup:
     """Construct a full NexusTask runtime using local, deterministic test actors."""
 
-    from nexus.core.runtime.nexus_task import NexusTask
+    from nexus.v1 import NexusTask
 
     task_result_store_provider = InMemoryTestTaskResultStoreProvider[
         DummyExecutorPayload,

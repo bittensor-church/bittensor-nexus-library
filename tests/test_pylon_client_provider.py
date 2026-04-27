@@ -4,8 +4,7 @@ from typing import cast
 
 import pytest
 
-from nexus.actors import pylon_client_provider
-from nexus.utils.exceptions import SubnetMisconfiguredException
+from nexus.v1 import SubnetMisconfiguredException, pylon_client_provider
 
 
 class _FakePylonClient:

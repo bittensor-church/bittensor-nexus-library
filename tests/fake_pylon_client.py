@@ -8,13 +8,14 @@ from typing import override
 from pylon_client.artanis import BlockHash, BlockNumber, NetUid, Timestamp
 from pylon_client.artanis.v1 import Block, GetLatestBlockInfoResponse, GetNeuronsResponse, Neuron, SetWeightsResponse
 
-from nexus.actors.pylon_client_provider import (
+from nexus.v1 import (
+    Hotkey,
     IdentityPylonApiLike,
     OpenAccessPylonApiLike,
     PylonClientProvider,
     SyncPylonClientLike,
+    Weight,
 )
-from nexus.utils.types import Hotkey, Weight
 
 
 @dataclass(frozen=True)

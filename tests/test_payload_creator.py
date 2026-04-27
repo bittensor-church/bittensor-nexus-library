@@ -10,9 +10,14 @@ import pytest
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import wait_until
 
-from nexus.actors.payload_creator import NoopPayloadCreator, PresignedUrlCreator, WithPresignedUrl
-from nexus.actors.s3_client_provider import S3ClientProvider
-from nexus.utils.exceptions import ActorMisconfiguredException, SafeInvokeWrappedException
+from nexus.v1 import (
+    ActorMisconfiguredException,
+    NoopPayloadCreator,
+    PresignedUrlCreator,
+    S3ClientProvider,
+    SafeInvokeWrappedException,
+    WithPresignedUrl,
+)
 
 
 def _request_url(method: str, url: str, body: bytes | None = None) -> tuple[int, bytes]:

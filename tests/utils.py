@@ -10,30 +10,41 @@ from polyfactory.factories.pydantic_factory import ModelFactory
 from pylon_client.artanis.v1 import Neuron
 from tenacity import RetryError, retry, stop_after_delay, wait_fixed
 
-from nexus.actors.chain_beat.block_beat import BlockBeat
-from nexus.actors.chain_beat.epoch_beat import EpochBeat
-from nexus.actors.executor_communicator.base_communicator import ProcessedInput
-from nexus.actors.neuron_router import Routed
-from nexus.actors.pylon_client_provider import OpenAccessPylonApiLike, PylonClientProvider, SyncPylonClientLike
-from nexus.actors.task_result_store_provider import TaskResultStoreProvider
-from nexus.actors.timestamper import Timestamped
-from nexus.core.dsl.nodes import Sink
-from nexus.core.runtime.actor import Actor, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore, InMemoryContextStorePersistence
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.task_result_store import (
+from nexus.v1 import (
+    Actor,
+    BlockBeat,
+    BlockHash,
+    BlockNumber,
+    Context,
+    ContextStore,
+    EpochBeat,
+    EventHandler,
+    ExecutorFailureException,
     ExecutorFailureTaskResult,
     ExecutorFailureTaskResultToPersist,
+    InMemoryContextStorePersistence,
     InMemoryTaskResultStore,
+    MessagesToSend,
+    NetUid,
+    NexusException,
+    NexusTaskName,
+    OpenAccessPylonApiLike,
+    PipeToBus,
+    ProcessedInput,
+    PylonClientProvider,
+    ReceiveEvent,
+    Routed,
+    Sink,
     StoredTaskExecution,
     SuccessfulTaskResult,
     SuccessfulTaskResultToPersist,
+    SyncPylonClientLike,
     TaskResultStore,
+    TaskResultStoreProvider,
+    Timestamp,
+    Timestamped,
+    get_epoch_containing_block,
 )
-from nexus.utils.chain import get_epoch_containing_block
-from nexus.utils.exceptions import ExecutorFailureException, NexusException
-from nexus.utils.types import BlockHash, BlockNumber, NetUid, Timestamp
 
 DEFAULT_TEST_NETUID = NetUid(1)
 
@@ -230,7 +241,8 @@ def store_executor_failure_task_result[ExecutorPayload, ExecutorOutput, Executor
 
 
 class MockPylonClientProvider(PylonClientProvider):
-    """Provides a mock pylon client for testing beat actors.
+    """
+    Provides a mock pylon client for testing beat actors.
 
     Use prepare_mock_client() to create and configure the mock before the actor runs.
     """

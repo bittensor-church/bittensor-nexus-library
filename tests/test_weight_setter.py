@@ -13,23 +13,28 @@ from utils import (
     wait_until,
 )
 
-from nexus.actors import PylonClientProvider
-from nexus.actors.chain_beat.epoch_beat import EpochBeat
-from nexus.actors.pylon_client_provider import IdentityPylonApiLike, SyncPylonClientLike
-from nexus.actors.weight_setter import (
+from nexus.v1 import (
+    BlockNumber,
+    EpochBeat,
+    Flow,
+    Hotkey,
+    IdentityPylonApiLike,
+    NetUid,
+    NexusException,
+    NexusTaskName,
+    PylonClientProvider,
+    SendEvent,
+    Source,
+    SubnetBuilder,
+    SyncPylonClientLike,
     WeighingFunc,
+    Weight,
     WeightsCalculationBundle,
     WeightSetterNode,
+    WeightSettingException,
     WeightSettingSuccess,
+    get_epoch_containing_block,
 )
-from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import Source
-from nexus.core.runtime.events import SendEvent
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.subnet_runtime import SubnetBuilder
-from nexus.utils.chain import get_epoch_containing_block
-from nexus.utils.exceptions import NexusException, WeightSettingException
-from nexus.utils.types import BlockNumber, Hotkey, NetUid, Weight
 
 NETUID = NetUid(1)
 EPOCH = get_epoch_containing_block(BlockNumber(500), netuid=NETUID)
@@ -81,6 +86,8 @@ def _seed_results_across_epochs(
 def mock_pylon_client():
     client = create_autospec(spec=SyncPylonClientLike, instance=True)
     client.identity = create_autospec(spec=IdentityPylonApiLike, instance=True)
+    client.__enter__.return_value = client
+    client.__exit__.return_value = None
     seal(client)
     return client
 

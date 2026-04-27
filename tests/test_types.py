@@ -1,5 +1,5 @@
 # pyright: basic
-from nexus.utils.types import BlockNumber, Epoch
+from nexus.v1 import BlockNumber, Epoch
 
 
 def test_epoch_previous_returns_immediately_preceding_epoch() -> None:

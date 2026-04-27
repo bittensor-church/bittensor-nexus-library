@@ -9,10 +9,8 @@ from utils import (
     wait_until,
 )
 
-from nexus.actors import EveryTaskResultSampler as ExportedEveryTaskResultSampler
-from nexus.actors.task_result_sampler import EveryTaskResultSampler
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.task_result_store import SuccessfulTaskResult
+from nexus.v1 import EveryTaskResultSampler, NexusTaskName, SuccessfulTaskResult
+from nexus.v1 import EveryTaskResultSampler as ExportedEveryTaskResultSampler
 
 type DummyExecutorPayload = str
 type DummyExecutorOutput = int

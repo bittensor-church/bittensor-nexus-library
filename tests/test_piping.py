@@ -1,8 +1,6 @@
 # pyright: basic
 
-from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import Sink, Source
-from nexus.core.dsl.piping import Piping
+from nexus.v1 import Flow, Piping, Sink, Source
 
 
 def test_add_flow_aggregates_sources_sinks_and_pipes_from_multiple_flows() -> None:

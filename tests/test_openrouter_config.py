@@ -7,21 +7,21 @@ import pytest
 from pydantic import BaseModel, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from nexus.utils import openrouter_client
-from nexus.utils.exceptions import SubnetMisconfiguredException
-from nexus.utils.openrouter_config import OpenRouterSettingsMixin
-from nexus.utils.subnet_settings import (
+from nexus.v1 import (
+    OpenRouterSettingsMixin,
+    SubnetMisconfiguredException,
     get_subnet_settings_as,
     initialize_subnet_settings,
+    openrouter_client,
     subnet_settings,
 )
 
 
 def test_subnet_settings_module_exports_subnet_settings_api() -> None:
-    spec = importlib.util.find_spec("nexus.utils.subnet_settings")
+    spec = importlib.util.find_spec("nexus.v1.utils")
 
     assert spec is not None
-    module = importlib.import_module("nexus.utils.subnet_settings")
+    module = importlib.import_module("nexus.v1.utils")
     assert hasattr(module, "subnet_settings")
     assert hasattr(module, "get_subnet_settings_as")
     assert hasattr(module, "initialize_subnet_settings")

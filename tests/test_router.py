@@ -9,7 +9,7 @@ from pylon_client.artanis.v1 import Neuron
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import build_neuron, wait_until
 
-from nexus.actors.neuron_router import (
+from nexus.v1 import (
     NoRoutableNeuronsException,
     RoundRobinNeuronRouter,
     miners_only,

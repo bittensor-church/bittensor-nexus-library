@@ -8,10 +8,7 @@ from pylon_client import artanis
 from pylon_client.artanis import v1 as artanis_v1
 from utils import CollectorActor, MockPylonClientProvider, dummy_epoch_beat, wait_until
 
-from nexus.actors.chain_beat.epoch_beat import EpochBeat, EpochBeatNode
-from nexus.core.dsl.flow import Flow
-from nexus.core.runtime.subnet_runtime import SubnetBuilder
-from nexus.utils.types import BlockCount, BlockNumber
+from nexus.v1 import BlockCount, BlockNumber, EpochBeat, EpochBeatNode, Flow, SubnetBuilder
 
 # Netuid 1 epochs for reference:
 # -3 -> 357 (yes, it goes negative)
@@ -103,7 +100,7 @@ def test_epoch_beat_retries_after_transient_pylon_failure(
     )
     runtime = builder.add_flows(Flow.from_connectable(node.source).then(collector.sink)).add_actors(collector).build()
 
-    with caplog.at_level("WARNING", logger="nexus.actors.chain_beat.epoch_beat"):
+    with caplog.at_level("WARNING", logger="nexus._internal.actors.chain_beat.epoch_beat"):
         with runtime.running(shutdown_timeout_seconds=1.0):
             wait_until(lambda: len(collector.received_events) >= len(expected_beats))
             wait_until(

@@ -1,6 +1,6 @@
 # pyright: basic
 
-from nexus.actors.openrouter_selection import (
+from nexus.v1 import (
     FileField,
     ImageUrlField,
     InputAudioField,

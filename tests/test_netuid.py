@@ -2,9 +2,13 @@
 
 import pytest
 
-from nexus.utils.exceptions import ActorMisconfiguredException, SubnetMisconfiguredException
-from nexus.utils.netuid import load_required_netuid_from_env, validate_netuid
-from nexus.utils.types import NetUid
+from nexus.v1 import (
+    ActorMisconfiguredException,
+    NetUid,
+    SubnetMisconfiguredException,
+    load_required_netuid_from_env,
+    validate_netuid,
+)
 
 
 def test_validate_netuid_accepts_non_negative_value() -> None:
