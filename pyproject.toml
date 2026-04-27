@@ -27,6 +27,8 @@ dependencies = [
     "deepdiff",
     "bittensor-pylon-client",
     "boto3",
+    # FIXME(https://reeftechnologies.atlassian.net/browse/BACT-393): remove this runtime dependency.
+    "polyfactory",
 ]
 
 [project.urls]
