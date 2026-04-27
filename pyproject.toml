@@ -1,13 +1,23 @@
 [project]
-name = "bittensor-nexus-lib"
-version = "0.1.0"
-
-description = "A PoC for the Nexus subnet template library"
+name = "bittensor-nexus-library"
+requires-python = ">=3.14"
+keywords = []
+license = {text = "MIT"}
+readme = "README.md"
 authors = [
     { name = "Jakub Zytka", email = "jakub.zytka@reef.pl" },
     { name = "Kordian Kowalski", email = "kordian.kowalski@reef.pl" }
 ]
-requires-python = ">=3.14"
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+]
+dynamic = [
+    "version",
+]
 dependencies = [
     "pydantic-settings",
     "pydantic",
@@ -19,14 +29,31 @@ dependencies = [
     "boto3",
 ]
 
-license = { text = "../LICENSE" }
-
 [project.urls]
-homepage = "https://github.com/bittensor-church/nexus-poc"
-repository = "https://github.com/bittensor-church/nexus-poc"
-documentation = "https://github.com/bittensor-church/nexus-poc#readme"
+"Source" = "https://github.com/bittensor-church/bittensor-nexus-library"
+"Issue Tracker" = "https://github.com/bittensor-church/bittensor-nexus-library/issues"
+"Changelog" = "https://github.com/bittensor-church/bittensor-nexus-library/blob/master/CHANGELOG.md"
 
-[project.optional-dependencies]
+[build-system]
+requires = ["hatchling==1.29.0", "hatch-vcs==0.5.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/nexus/_version.py"
+
+[tool.hatch.build]
+exclude = [
+    "/demos",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nexus"]
+
+[dependency-groups]
 format = [
     "ruff",
 ]
@@ -39,66 +66,91 @@ test = [
     "pytest-cov",
     "moto[server]",
     "requests",
+    "freezegun==1.5.5",
+    "pytest==9.0.2",
+    "pytest-apiver==0.1.0",
+    "pytest-asyncio==1.3.0",
+    "pytest-xdist==3.8.0",
 ]
+lint = [
+    "codespell[toml]==2.4.2",
+    "mypy==1.20.0",
+    "ruff==0.15.8",
+    "types-freezegun==1.1.10",
+    "types-python-dateutil==2.9.0.20260323",
+    "types-requests==2.33.0.20260327",
+]
+dev = [
+    "basedpyright>=1.36.1",
+    "boto3-stubs[s3]",
+    "ruff==0.15.8",
+]
+
+[tool.commitizen]
+version_provider = "scm"
+annotated_tag = true
+tag_format = "v$version"
+changelog_file = "CHANGELOG.md"
+update_changelog_on_bump = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["demos"]
+pythonpath = ["src", "tests"]  # allow importing nexus and test helpers
+target_package_name = "nexus"  # required by pytest-apiver
+
 
 [tool.ruff]
 line-length = 120
 target-version = "py314"
+extend-exclude = ["demos"]
 
 [tool.ruff.lint]
 select = [
-    "E", "F", "I", "UP", "B", "TC005",
+    "D",
+    "E", "F", "I", "UP",
+    "B",
+    "TC005",
 ]
-#ignore = [
-#    "D100", "D105", "D107", "D200", "D202", "D203", "D205", "D212", "D400", "D401", "D415",
-#    "D101", "D102","D103", "D104",
-#    "E501", "B027", "B904", "B905",
-#]
-preview = true
-explicit-preview-rules = true
-extend-select = ["DOC501"]
+ignore = [
+    "D100", "D105", "D107", "D200", "D202", "D203", "D205", "D212", "D400", "D401", "D415",
+    "D101", "D102", "D103", "D104", # TODO remove once we have docstring for all public methods
+]
 
 [tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "F403"]
+"test/**" = ["D", "F403", "F405"]
 
-"__init__.py" = ["I", "F401"]
+[tool.codespell]
+skip = "*.min.js,uv.lock,demos/*"
+ignore-words-list = "datas"
 
-[tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = [
+[tool.mypy]
+files = ["src/nexus", "tests"]
+exclude = "^demos/"
+
+[[tool.mypy.overrides]]
+module = [
+    "nox",
+    "pytest",
+    "tests.*",
 ]
-
-[tool.pytest.ini_options]
-filterwarnings = [
-"error::pytest.PytestUnhandledThreadExceptionWarning",
-]
-
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[dependency-groups]
-dev = [
-    "basedpyright>=1.36.1",
-    "boto3-stubs[s3]",
-]
+ignore_missing_imports = true
 
 [tool.uv]
-# uv-specific settings can go here
-
-[tool.hatch.build.targets.wheel]
-packages = ["nexus"]
+exclude-newer = "14 days"
 
 [tool.basedpyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
-include = ["nexus", "tests"]
+include = ["src/nexus", "tests"]
+exclude = ["demos"]
 verboseOutput = true
 useLibraryCodeForTypes = true
 reportMissingTypeStubs = "warning"
 reportUndefinedVariable = "error"
 reportUnusedImport = "warning"
 reportExplicitAny = "none"
-stubPath = ".pyright-stubs"
 venvPath = "."
 venv = ".venv"
 extraPaths = [".venv/lib/python3.14/site-packages"]
