@@ -11,9 +11,8 @@ from pydantic import BaseModel
 from pylon_client.artanis import NetUid, PylonClient
 from pylon_client.artanis.v1 import GetNeuronsResponse, Neuron
 
-from nexus import get_logger
-from nexus.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
-from nexus.core.dsl.nodes import (
+from nexus._internal.actors.pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
+from nexus._internal.core.dsl.nodes import (
     NodeSinks,
     NodeSources,
     Sink,
@@ -22,11 +21,12 @@ from nexus.core.dsl.nodes import (
     SourceName,
     Transform,
 )
-from nexus.core.runtime.actor import Actor, ActorBuilder
-from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus
-from nexus.utils.exceptions import (
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import TransformActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.exceptions import (
     ActorMisconfiguredException,
     InternalStateCorruptionException,
     NoRoutableNeuronsException,
@@ -57,7 +57,8 @@ class Routed[Input]:
 
 
 class NeuronRouter[Input](Transform[Input, Routed[Input]]):
-    """Assigns a target neuron to each input message by querying the metagraph via pylon.
+    """
+    Assigns a target neuron to each input message by querying the metagraph via pylon.
     Subclasses must define the routing strategy by implementing neuron selection.
 
     sink input: payload to route
@@ -111,7 +112,8 @@ class RoundRobinRoutingState(BaseModel):
 
 
 class RoundRobinNeuronRouter[Input](NeuronRouter[Input], ActorBuilder):
-    """NeuronRouter that distributes inputs across neurons in round-robin order.
+    """
+    NeuronRouter that distributes inputs across neurons in round-robin order.
     Neuron ordering is randomized per context but stable for a given neuron set.
 
     sink input: payload to route
@@ -216,7 +218,7 @@ class RoundRobinNeuronRouterActor[Input](NeuronRouterActor[Input]):
 
 class NoopPylonClientProvider(PylonClientProvider):
     """
-    This shouldn't be needed, but we need to generalize the router to support the noop case smoothly
+    Placeholder pylon provider for routers that bypass pylon-backed neuron discovery.
     """
 
     def get_client(self) -> PylonClient:
@@ -224,7 +226,8 @@ class NoopPylonClientProvider(PylonClientProvider):
 
 
 class NoopRouter[Input](NeuronRouter[Input], ActorBuilder):
-    """NeuronRouter that attaches a synthetic neuron, skipping pylon entirely.
+    """
+    NeuronRouter that attaches a synthetic neuron, skipping pylon entirely.
     Useful for embedded executors that run locally.
 
     sink input: payload to route

@@ -1,11 +1,11 @@
 from typing import override
 
-from nexus.core.dsl.nodes import Transform
-from nexus.core.runtime.actor import ActorBuilder
-from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus
-from nexus.utils.exceptions import NexusException
+from nexus._internal.core.dsl.nodes import Transform
+from nexus._internal.core.runtime.actor import ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import TransformActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
+from nexus._internal.utils.exceptions import NexusException
 
 
 class EvenSucks(NexusException):
@@ -13,7 +13,8 @@ class EvenSucks(NexusException):
 
 
 class UppercaseOrError(Transform[str, str], ActorBuilder):
-    """Example transform. Uppercases strings with an odd character count, errors on even.
+    """
+    Example transform. Uppercases strings with an odd character count, errors on even.
 
     sink input: string to transform
     source ok: uppercased string (odd-length inputs only)

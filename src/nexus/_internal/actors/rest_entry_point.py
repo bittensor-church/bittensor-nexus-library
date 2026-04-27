@@ -8,11 +8,11 @@ from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 from pylon_client.artanis import Port
 
-from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
-from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
-from nexus.logging_utils import get_logger
+from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
+from nexus._internal.logging_utils import get_logger
 
 from .executor_communicator.common import NormalizedHttpPath, normalize_http_path
 from .rest_entry_point_runtime import (
@@ -35,7 +35,8 @@ DEFAULT_BIND_IP = "0.0.0.0"
 
 
 class RestEntryPoint[Model: BaseModel](Node, ActorBuilder):
-    """Exposes an HTTP endpoint that accepts incoming requests and returns pipeline results as HTTP responses.
+    """
+    Exposes an HTTP endpoint that accepts incoming requests and returns pipeline results as HTTP responses.
     Incoming requests are emitted into the pipeline via `source`. Connect the pipeline's final output
     back to `sink` to complete the request-response cycle.
 

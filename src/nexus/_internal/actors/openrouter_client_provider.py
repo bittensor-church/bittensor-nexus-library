@@ -5,9 +5,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Final, override
 
-from nexus.utils.openrouter_client import OpenRouterClient
-from nexus.utils.openrouter_config import OpenRouterSettingsMixin
-from nexus.utils.subnet_settings import get_subnet_settings_as
+from nexus._internal.utils.openrouter_client import OpenRouterClient
+from nexus._internal.utils.openrouter_config import OpenRouterSettingsMixin
+from nexus._internal.utils.subnet_settings import get_subnet_settings_as
 
 
 class OpenRouterClientProvider(ABC):

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, cast, override
 
-from nexus.core.runtime.task_result_store import InMemoryTaskResultStore, TaskResultStore
+from nexus._internal.core.runtime.task_result_store import InMemoryTaskResultStore, TaskResultStore
 
 DEFAULT_TASK_RESULT_STORE: TaskResultStore[Any, Any, Any] = InMemoryTaskResultStore()
 

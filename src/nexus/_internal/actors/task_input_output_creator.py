@@ -3,13 +3,13 @@ from typing import override
 
 from pydantic import BaseModel
 
-from nexus.actors.payload_creator import PayloadCreator
-from nexus.core.runtime.actor import Actor, ActorBuilder
-from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus
-from nexus.core.runtime.nexus_task_types import TaskResultId
-from nexus.core.runtime.task_result_store import SuccessfulTaskResult
+from nexus._internal.actors.payload_creator import PayloadCreator
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import TransformActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
+from nexus._internal.core.runtime.nexus_task_types import TaskResultId
+from nexus._internal.core.runtime.task_result_store import SuccessfulTaskResult
 
 
 @dataclass(frozen=True)
@@ -35,7 +35,8 @@ class TaskInputOutputCreator[ExecutorPayload, ExecutorOutput, ExecutorPublicOutp
     ],
     ActorBuilder,
 ):
-    """PayloadCreator for validation pipelines. Repackages a batch of stored mining task results
+    """
+    PayloadCreator for validation pipelines. Repackages a batch of stored mining task results
     into a structured format for the validation executor, extracting each result's input, output,
     and public output. Expects only successful results — failed ones should be filtered upstream.
 

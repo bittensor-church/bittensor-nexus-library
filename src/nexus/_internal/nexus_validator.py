@@ -9,18 +9,19 @@ from typing import Any
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
-from nexus.actors import BlockBeatNode
-from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, Source, SourceName
-from nexus.core.runtime.nexus_task import NexusTask
-from nexus.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
-from nexus.utils.subnet_settings import subnet_settings
+from nexus._internal.actors import BlockBeatNode
+from nexus._internal.core.dsl.flow import Flow
+from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, Source, SourceName
+from nexus._internal.core.runtime.nexus_task import NexusTask
+from nexus._internal.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
+from nexus._internal.utils.subnet_settings import subnet_settings
 
 log = logging.getLogger("validator")
 
 
 class NexusValidator:
-    """Base class for validator graphs built from explicit `connect(...)` wiring.
+    """
+    Base class for validator graphs built from explicit `connect(...)` wiring.
 
     Runtime components are discovered only from endpoints used in `connect(...)`.
     There is no separate node/task registration API.

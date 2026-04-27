@@ -9,19 +9,19 @@ from typing import override
 
 from pylon_client.artanis.v1 import Neuron
 
-from nexus.actors.chain_beat.block_beat import BlockBeat
-from nexus.actors.executor_communicator import ProcessedInput
-from nexus.actors.neuron_router import Routed
-from nexus.actors.timestamper import Timestamped
-from nexus.core.runtime.context_store import Context
-from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
-from nexus.utils.exceptions import (
+from nexus._internal.actors.chain_beat.block_beat import BlockBeat
+from nexus._internal.actors.executor_communicator import ProcessedInput
+from nexus._internal.actors.neuron_router import Routed
+from nexus._internal.actors.timestamper import Timestamped
+from nexus._internal.core.runtime.context_store import Context
+from nexus._internal.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
+from nexus._internal.utils.exceptions import (
     ExecutorFailureException,
     InternalFrameworkException,
     NexusException,
     TaskResultNotFoundException,
 )
-from nexus.utils.types import Epoch, Hotkey
+from nexus._internal.utils.types import Epoch, Hotkey
 
 type StoredTaskExecution[ExecutorPayload, Output] = Timestamped[ProcessedInput[Routed[ExecutorPayload], Output]]
 
@@ -69,7 +69,8 @@ class ExecutorFailureTaskResult[ExecutorPayload](TaskResultBase[ExecutorPayload]
 
 
 class TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](ABC):
-    """Interface for storing and querying split Nexus task results.
+    """
+    Interface for storing and querying split Nexus task results.
 
     Implementations must be thread-safe.
     """
@@ -109,10 +110,12 @@ class TaskResultStore[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](ABC
         SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]
         | ExecutorFailureTaskResult[ExecutorPayload]
     ):
-        """Retrieves one task result for a given task name and task-result id.
+        """
+        Retrieves one task result for a given task name and task-result id.
 
         Raises:
             TaskResultNotFoundException: If no result exists for the given task name and result id.
+
         """
         pass
 

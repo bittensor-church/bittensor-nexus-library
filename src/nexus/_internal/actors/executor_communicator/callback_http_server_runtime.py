@@ -23,8 +23,8 @@ from litestar.response import Response
 from pydantic import BaseModel, ValidationError
 from pylon_client.artanis import Port
 
-from nexus.logging_utils import get_logger
-from nexus.utils.exceptions import (
+from nexus._internal.logging_utils import get_logger
+from nexus._internal.utils.exceptions import (
     RemoteExecutionException,
     ResponseInvalidException,
     ResponseValidationException,
@@ -103,6 +103,7 @@ class CallbackHttpServerRuntime[OutputModel: BaseModel]:
 
         Returns:
             A running `CallbackHttpServerRuntime` with the effective bound port.
+
         """
         app = CallbackHttpServerRuntime._build_litestar_app(
             communicator_id=config.communicator_id,
@@ -209,6 +210,7 @@ class CallbackHttpServerRuntime[OutputModel: BaseModel]:
             - Unknown request id -> `404`
             - Remote-side error/invalid output -> emit executor failure on `processed`, return `202`
             - Valid output payload -> emit processed output, return `202`
+
         """
         try:
             envelope = AsyncHttpNeuronResponseEnvelope.model_validate_json(body)

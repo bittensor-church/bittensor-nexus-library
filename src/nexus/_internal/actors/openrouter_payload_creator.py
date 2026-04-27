@@ -3,7 +3,7 @@ from typing import Literal, TypedDict, cast, override
 
 from pydantic import BaseModel, ValidationError, field_validator
 
-from nexus.actors.openrouter_selection import (
+from nexus._internal.actors.openrouter_selection import (
     Fields,
     FieldValue,
     FileField,
@@ -14,11 +14,11 @@ from nexus.actors.openrouter_selection import (
     VideoUrlField,
     text_content_block,
 )
-from nexus.actors.payload_creator import PayloadCreator
-from nexus.core.runtime.actor import Actor, ActorBuilder
-from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus
+from nexus._internal.actors.payload_creator import PayloadCreator
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import TransformActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
 
 
 class OpenRouterUserMessage(TypedDict):
@@ -91,7 +91,8 @@ class MultiOpenRouterPayloadCreator[Item](
     PayloadCreator[tuple[Item, ...], OpenRouterInferenceRequest],
     ActorBuilder,
 ):
-    """Build an OpenRouter request from a tuple input using typed multimodal selections.
+    """
+    Build an OpenRouter request from a tuple input using typed multimodal selections.
 
     ``item_selector`` may return ``None`` to skip one input item. The creator raises
     ``ValueError`` if every input item is skipped and no selected items remain.

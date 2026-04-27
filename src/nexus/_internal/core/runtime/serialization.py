@@ -2,7 +2,7 @@ import io
 import pickle
 from typing import Any, BinaryIO
 
-from nexus.utils.exceptions import InternalFrameworkException
+from nexus._internal.utils.exceptions import InternalFrameworkException
 
 
 class _UnsafeDeepDiffUnpickler(pickle.Unpickler):

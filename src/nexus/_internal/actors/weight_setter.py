@@ -7,12 +7,12 @@ from typing import Any, override
 
 from pylon_client.artanis import PylonMisconfigured, PylonResponseException
 
-from nexus.core.dsl.nodes import Transform
-from nexus.core.runtime.actor import ActorBuilder
-from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus
-from nexus.logging_utils import get_logger
+from nexus._internal.core.dsl.nodes import Transform
+from nexus._internal.core.runtime.actor import ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import TransformActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
+from nexus._internal.logging_utils import get_logger
 
 from ..core.runtime.task_result_store import TaskResultStore
 from ..utils.exceptions import WeightSettingException
@@ -43,7 +43,8 @@ class WeightsCalculationBundle:
 
 
 class WeightSetterNode(Transform[EpochBeat, WeightSettingSuccess], ActorBuilder):
-    """Calculates neuron weights using the provided weighing function and sets them on-chain via pylon.
+    """
+    Calculates neuron weights using the provided weighing function and sets them on-chain via pylon.
     Triggered by epoch beats. Weights are arbitrary non-negative floats, set for all neurons in one go.
     No normalization needed. Note that subnet hyperparams may further influence the effective weights.
 

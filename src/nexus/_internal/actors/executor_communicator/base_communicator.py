@@ -3,13 +3,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast, override
 
-from nexus.actors.neuron_router import Routed
-from nexus.core.dsl.nodes import NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
-from nexus.core.runtime.actor import Actor, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.context_store_types import ContextId
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.utils.exceptions import ExecutorFailureException, NexusException
+from nexus._internal.actors.neuron_router import Routed
+from nexus._internal.core.dsl.nodes import NodeSinks, NodeSources, Sink, SinkName, Source, SourceName, Transform
+from nexus._internal.core.runtime.actor import Actor, EventHandler
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.context_store_types import ContextId
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus._internal.utils.exceptions import ExecutorFailureException, NexusException
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,8 @@ type InputValidator[Input] = Callable[[ContextId, Input], None]
 
 
 class ExecutorCommunicator[Input, Output](Transform[Routed[Input], ProcessedInput[Routed[Input], Output]]):
-    """Transport-agnostic contract for executor-facing communicators.
+    """
+    Transport-agnostic contract for executor-facing communicators.
     Bridges routed execution requests and executor results in the processing graph.
     This class defines only the logical node interface and naming conventions.
     Concrete implementations provide transport/protocol details (e.g. async HTTP, embedded).

@@ -1,20 +1,21 @@
 from typing import Any, cast, override
 
-from nexus.actors.timestamper import Timestamped
-from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
-from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.core.runtime.task_result_store import (
+from nexus._internal.actors.timestamper import Timestamped
+from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus._internal.core.runtime.task_result_store import (
     ExecutorFailureTaskResultToPersist,
     StoredTaskExecution,
     SuccessfulTaskResultToPersist,
 )
-from nexus.utils.exceptions import ExecutorFailureException, InternalFrameworkException, NexusException
+from nexus._internal.utils.exceptions import ExecutorFailureException, InternalFrameworkException, NexusException
 
 
 class TaskResultPreparer[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](Node, ActorBuilder):
-    """Assembles a persistable task result from a timestamped executor result and its public output.
+    """
+    Assembles a persistable task result from a timestamped executor result and its public output.
     The public output is produced asynchronously: the raw executor output is sent out for external
     conversion via `executor_output_for_conversion`. Connect a conversion pipeline from that source
     back to `converted_public_output` (or `conversion_failed` on error).

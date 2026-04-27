@@ -4,7 +4,7 @@ from typing import cast
 
 from pydantic_settings import BaseSettings
 
-from nexus.utils.exceptions import SubnetMisconfiguredException
+from nexus._internal.utils.exceptions import SubnetMisconfiguredException
 
 
 class _SubnetSettingsRegistry:
@@ -12,20 +12,24 @@ class _SubnetSettingsRegistry:
         self._subnet_settings: BaseSettings | None = None
 
     def initialize(self, settings: BaseSettings) -> None:
-        """Register the process-wide subnet settings object once.
+        """
+        Register the process-wide subnet settings object once.
 
         Raises:
             RuntimeError: If subnet settings were already initialized.
+
         """
         if self._subnet_settings is not None:
             raise RuntimeError("Subnet settings are already initialized.")
         self._subnet_settings = settings
 
     def get_as[SettingsT](self, required_mixin: type[SettingsT]) -> SettingsT:
-        """Return the registered subnet settings object if it implements the requested mixin.
+        """
+        Return the registered subnet settings object if it implements the requested mixin.
 
         Raises:
             SubnetMisconfiguredException: If no subnet settings are registered or the mixin is not implemented.
+
         """
         settings = self._subnet_settings
         if settings is None:

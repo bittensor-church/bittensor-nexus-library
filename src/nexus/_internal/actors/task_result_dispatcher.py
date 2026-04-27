@@ -1,10 +1,10 @@
 from typing import Any, override
 
-from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
-from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
-from nexus.core.runtime.task_result_store import ExecutorFailureTaskResult, SuccessfulTaskResult
+from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus._internal.core.runtime.task_result_store import ExecutorFailureTaskResult, SuccessfulTaskResult
 
 
 class TaskResultDispatcher[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](Node, ActorBuilder):

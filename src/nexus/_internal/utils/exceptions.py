@@ -1,5 +1,5 @@
-from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
-from nexus.utils.types import AxonProtocol
+from nexus._internal.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
+from nexus._internal.utils.types import AxonProtocol
 
 
 class NexusException(Exception):
@@ -15,8 +15,10 @@ class InternalStateCorruptionException(NexusException):
 
 
 class SafeInvokeWrappedException(NexusException):
-    """Raised when an unexpected exception is caught during safe_invoke
-    and wrapped for propagation."""
+    """
+    Raised when an unexpected exception is caught during safe_invoke
+    and wrapped for propagation.
+    """
 
     pass
 
@@ -28,22 +30,28 @@ class NoRoutableNeuronsException(NexusException):
 
 
 class InternalFrameworkException(NexusException):
-    """Raised when an unexpected error occurs within the framework itself,
-    indicating a potential bug."""
+    """
+    Raised when an unexpected error occurs within the framework itself,
+    indicating a potential bug.
+    """
 
     pass
 
 
 class FlowMisconfiguredException(NexusException):
-    """Raised when a flow looks misconfigured, e.g. when invalid
-    sinks are being connected etc."""
+    """
+    Raised when a flow looks misconfigured, e.g. when invalid
+    sinks are being connected etc.
+    """
 
     pass
 
 
 class ActorMisconfiguredException(NexusException):
-    """Raised when an actor is misconfigured, e.g. when its specification
-    is invalid."""
+    """
+    Raised when an actor is misconfigured, e.g. when its specification
+    is invalid.
+    """
 
     pass
 
@@ -55,7 +63,8 @@ class SubnetMisconfiguredException(NexusException):
 
 
 class ExecutorFailureException(NexusException):
-    """Raised when executor fails while handling a specific input.
+    """
+    Raised when executor fails while handling a specific input.
 
     We persist context payloads using deep-copy/pickling paths. Exception
     reconstruction for custom exceptions relies on constructor arguments, so we
@@ -74,7 +83,8 @@ class ExecutorFailureException(NexusException):
 
 
 class UnsupportedAxonProtocolException(NexusException):
-    """Raised when an operation expects one axon protocol but receives another one.
+    """
+    Raised when an operation expects one axon protocol but receives another one.
 
     Stores both `expected_protocol` and `actual_protocol` for downstream handling.
 
@@ -148,8 +158,10 @@ class RemoteExecutionException(AsyncHttpNeuronCommunicatorException):
 
 
 class WeightSettingException(NexusException):
-    """Raised when the weight setting actor fails when executing the weighing
-    function or has trouble reaching pylon"""
+    """
+    Raised when the weight setting actor fails when executing the weighing
+    function or has trouble reaching pylon
+    """
 
     pass
 
@@ -161,7 +173,8 @@ class RetryTaskAfterExecutorFailureException(NexusException):
 
 
 class TaskResultNotFoundException(NexusException):
-    """Raised when a task result id cannot be found for a given task name.
+    """
+    Raised when a task result id cannot be found for a given task name.
 
     We persist context payloads using deep-copy/pickling paths, so this
     exception stores typed lookup fields and implements ``__reduce__`` for

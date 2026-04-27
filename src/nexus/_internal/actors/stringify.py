@@ -1,14 +1,15 @@
 from typing import override
 
-from nexus.core.dsl.nodes import Transform
-from nexus.core.runtime.actor import ActorBuilder
-from nexus.core.runtime.actor_patterns import TransformActor
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import PipeToBus
+from nexus._internal.core.dsl.nodes import Transform
+from nexus._internal.core.runtime.actor import ActorBuilder
+from nexus._internal.core.runtime.actor_patterns import TransformActor
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import PipeToBus
 
 
 class Stringify[T](Transform[T, str], ActorBuilder):
-    """Example transform. Converts any input to its string representation.
+    """
+    Example transform. Converts any input to its string representation.
 
     sink input: value to stringify
     source ok: stringified value

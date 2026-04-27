@@ -1,14 +1,15 @@
 from typing import Any, cast, override
 
-from nexus.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
-from nexus.core.runtime.actor import Actor, ActorBuilder, EventHandler
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.context_store_types import ContextId
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.context_store_types import ContextId
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 
 
 class Mux2[Common, Left, Right](Node, ActorBuilder):
-    """Merges two input streams into a single output.
+    """
+    Merges two input streams into a single output.
 
     sink left: first input stream
     sink right: second input stream

@@ -11,7 +11,7 @@ from typing import Any, cast
 import uvicorn
 from pylon_client.artanis import Port
 
-from nexus.utils.exceptions import InternalFrameworkException
+from nexus._internal.utils.exceptions import InternalFrameworkException
 
 
 def start_uvicorn_server(

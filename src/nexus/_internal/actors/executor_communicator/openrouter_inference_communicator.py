@@ -4,13 +4,16 @@ from typing import Any, override
 
 from pydantic import BaseModel
 
-from nexus.actors.neuron_router import Routed
-from nexus.actors.openrouter_client_provider import DEFAULT_OPENROUTER_CLIENT_PROVIDER, OpenRouterClientProvider
-from nexus.actors.openrouter_payload_creator import OpenRouterInferenceRequest
-from nexus.core.runtime.actor import Actor, ActorBuilder
-from nexus.core.runtime.context_store import Context, ContextStore
-from nexus.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
-from nexus.utils.exceptions import NexusException
+from nexus._internal.actors.neuron_router import Routed
+from nexus._internal.actors.openrouter_client_provider import (
+    DEFAULT_OPENROUTER_CLIENT_PROVIDER,
+    OpenRouterClientProvider,
+)
+from nexus._internal.actors.openrouter_payload_creator import OpenRouterInferenceRequest
+from nexus._internal.core.runtime.actor import Actor, ActorBuilder
+from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
+from nexus._internal.utils.exceptions import NexusException
 
 from .base_communicator import CommunicatorActor, ExecutorCommunicator
 
