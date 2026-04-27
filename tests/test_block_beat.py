@@ -8,10 +8,7 @@ from pylon_client import artanis
 from pylon_client.artanis import v1 as artanis_v1
 from utils import CollectorActor, MockPylonClientProvider, dummy_block_beat, wait_until
 
-from nexus.actors.chain_beat.block_beat import BlockBeat, BlockBeatNode
-from nexus.core.dsl.flow import Flow
-from nexus.core.runtime.subnet_runtime import SubnetBuilder
-from nexus.utils.types import BlockCount, BlockNumber
+from nexus.v1 import BlockBeat, BlockBeatNode, BlockCount, BlockNumber, Flow, SubnetBuilder
 
 
 @pytest.mark.parametrize(
@@ -98,7 +95,7 @@ def test_block_beat_retries_after_transient_pylon_failure(caplog: pytest.LogCapt
     )
     runtime = builder.add_flows(Flow.from_connectable(beat.source).then(collector.sink)).add_actors(collector).build()
 
-    with caplog.at_level("WARNING", logger="nexus.actors.chain_beat.block_beat"):
+    with caplog.at_level("WARNING", logger="nexus._internal.actors.chain_beat.block_beat"):
         with runtime.running(shutdown_timeout_seconds=1.0):
             wait_until(lambda: len(collector.received_events) >= len(expected_beats))
             wait_until(

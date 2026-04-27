@@ -3,9 +3,13 @@
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import InMemoryTestTaskResultStoreProvider, build_nexus_task_result, store_successful_task_result, wait_until
 
-from nexus.actors.task_input_output_creator import BatchedTaskInputOutput, TaskInputOutput, TaskInputOutputCreator
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.task_result_store import SuccessfulTaskResult
+from nexus.v1 import (
+    BatchedTaskInputOutput,
+    NexusTaskName,
+    SuccessfulTaskResult,
+    TaskInputOutput,
+    TaskInputOutputCreator,
+)
 
 type DummyExecutorPayload = str
 type DummyExecutorOutput = int

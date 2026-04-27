@@ -12,19 +12,20 @@ from pylon_client.artanis.v1 import AxonInfo, AxonProtocol, Neuron
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import build_neuron, wait_until
 
-from nexus.actors.executor_communicator import (
+from nexus.v1 import (
     AsyncHttpNeuronCommunicator,
     AsyncHttpNeuronService,
+    EmbeddedExecutorCommunicator,
+    EmbeddedExecutorFailureException,
+    ExecutorFailureException,
     HttpBindEndpoint,
     ProcessedInput,
     RemoteExecutionException,
     RemoteRequestFailedException,
     RemoteResponseTimeoutException,
+    Routed,
     UnsupportedAxonProtocolException,
 )
-from nexus.actors.executor_communicator.embedded_executor_communicator import EmbeddedExecutorCommunicator
-from nexus.actors.neuron_router import Routed
-from nexus.utils.exceptions import EmbeddedExecutorFailureException, ExecutorFailureException
 
 DEFAULT_SERVICE_PATH = "/process"
 DEFAULT_RESPONSE_PATH = "/response"

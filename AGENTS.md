@@ -59,6 +59,9 @@ Always use `uv run`, never bare `python` or `pip`.
 ## Coding guidelines
 
 - All imports MUST go at the top of a file. No inline imports.
+- Public consumers MUST import Nexus interfaces from `nexus.v1`. Implementation modules live under
+  `nexus._internal`; do not import from legacy public paths such as `nexus.actors`, `nexus.core`, `nexus.utils`, or
+  `nexus.nexus_validator`.
 - Prefer short and concise code. Avoid deeply nested code.
 - Code MUST be well-typed. Prefer typed structures over dictionaries.
 - Be strict with domain types: avoid bare `str`/`int`/`float` for domain values when a stronger type exists.

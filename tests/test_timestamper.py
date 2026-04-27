@@ -5,11 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from utils import CollectorActor, dummy_block_beat, wait_until
 
-from nexus.actors.timestamper import Timestamped, TimestamperNode
-from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import Source
-from nexus.core.runtime.events import SendEvent
-from nexus.core.runtime.subnet_runtime import SubnetBuilder
+from nexus.v1 import Flow, SendEvent, Source, SubnetBuilder, Timestamped, TimestamperNode
 
 
 def test_timestamper_input_sets_start_timestamp_and_forwards_input() -> None:
@@ -191,7 +187,7 @@ def test_timestamper_drops_entries_older_than_five_minutes_when_logging_error(ca
 
     beat = dummy_block_beat(5)
     with runtime.running(shutdown_timeout_seconds=1.0):
-        with caplog.at_level("ERROR", logger="nexus.actors.timestamper"):
+        with caplog.at_level("ERROR", logger="nexus._internal.actors.timestamper"):
             runtime.pipe_to_bus.put(SendEvent(ctx_id=old_ctx_id, source=upstream_output, payload="too-old"))
             wait_until(
                 lambda: any("dropped_old_entries=1" in record.message for record in caplog.records),
@@ -224,7 +220,7 @@ def test_timestamper_logs_warning_only_once_after_threshold_crossing(caplog: pyt
         )
 
     with runtime.running(shutdown_timeout_seconds=1.0):
-        with caplog.at_level("WARNING", logger="nexus.actors.timestamper"):
+        with caplog.at_level("WARNING", logger="nexus._internal.actors.timestamper"):
             runtime.pipe_to_bus.put(SendEvent(ctx_id=old_ctx_id, source=upstream_output, payload="first"))
             wait_until(lambda: sum("Timestamper queue head is old" in record.message for record in caplog.records) == 1)
 

@@ -3,7 +3,7 @@ import pickle
 
 import pytest
 
-from nexus.utils.immutable_map import ImmutableMap
+from nexus.v1 import ImmutableMap
 
 
 def test_immutable_map_copies_input_and_blocks_item_assignment() -> None:

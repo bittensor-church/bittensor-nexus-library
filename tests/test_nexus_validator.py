@@ -1,5 +1,6 @@
 # pyright: basic
 
+import time
 from contextlib import contextmanager
 
 import pytest
@@ -9,11 +10,14 @@ from nexus_task_test_setup import (
 )
 from pydantic_settings import BaseSettings
 
-from nexus.actors.payload_creator import NoopPayloadCreator
-from nexus.core.dsl.nodes import Sink, Source
-from nexus.nexus_validator import NexusValidator
-from nexus.utils.exceptions import SubnetMisconfiguredException
-from nexus.utils.subnet_settings import get_subnet_settings_as
+from nexus.v1 import (
+    NexusValidator,
+    NoopPayloadCreator,
+    Sink,
+    Source,
+    SubnetMisconfiguredException,
+    get_subnet_settings_as,
+)
 
 
 class _TestSettings(BaseSettings):
@@ -76,7 +80,7 @@ def test_run_can_be_called_twice_in_process(monkeypatch: pytest.MonkeyPatch) -> 
     def _stop_immediately(_seconds: float) -> None:
         raise KeyboardInterrupt
 
-    monkeypatch.setattr("nexus.nexus_validator.time.sleep", _stop_immediately)
+    monkeypatch.setattr(time, "sleep", _stop_immediately)
 
     _RunValidator.run(settings_class=_TestSettings)
     _RunValidator.run(settings_class=_TestSettings)

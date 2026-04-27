@@ -6,15 +6,17 @@ from pydantic import BaseModel
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import build_neuron, wait_until
 
-from nexus.actors.executor_communicator import ProcessedInput
-from nexus.actors.executor_communicator.openrouter_inference_communicator import (
+from nexus.v1 import (
+    ExecutorFailureException,
+    NexusException,
+    OpenRouterClient,
+    OpenRouterClientProvider,
     OpenRouterInferenceCommunicator,
+    OpenRouterInferenceRequest,
+    ProcessedInput,
+    Routed,
+    SubnetMisconfiguredException,
 )
-from nexus.actors.neuron_router import Routed
-from nexus.actors.openrouter_client_provider import OpenRouterClientProvider
-from nexus.actors.openrouter_payload_creator import OpenRouterInferenceRequest
-from nexus.utils.exceptions import ExecutorFailureException, NexusException, SubnetMisconfiguredException
-from nexus.utils.openrouter_client import OpenRouterClient
 
 
 class ResponseModel(BaseModel):

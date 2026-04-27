@@ -23,9 +23,7 @@ from transform_test_utils import (
 )
 from utils import DEFAULT_TEST_NETUID
 
-import nexus.utils.subnet_settings as subnet_settings_module
-from nexus.core.dsl.nodes import Transform
-from nexus.utils.types import NetUid
+from nexus.v1 import NetUid, Transform, subnet_settings_module
 
 DEFAULT_TEST_S3_BUCKET = "uploads"
 
@@ -86,6 +84,7 @@ class PortBlockAllocator:
 
         Raises:
             RuntimeError: if all ports in the claimed block were already allocated.
+
         """
         with self._lock:
             if self._next_port > self._end_port:

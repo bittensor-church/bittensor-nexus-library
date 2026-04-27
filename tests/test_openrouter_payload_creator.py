@@ -10,17 +10,18 @@ from pydantic import BaseModel, ValidationError
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import build_neuron, dummy_block_beat, wait_until
 
-from nexus.actors.openrouter_payload_creator import MultiOpenRouterPayloadCreator, OpenRouterInferenceRequest
-from nexus.actors.openrouter_selection import (
+from nexus.v1 import (
     FileField,
     ImageUrlField,
     InputAudioField,
+    MultiOpenRouterPayloadCreator,
+    OpenRouterInferenceRequest,
+    SafeInvokeWrappedException,
     ScalarField,
+    SuccessfulTaskResult,
+    TaskResultId,
     VideoUrlField,
 )
-from nexus.core.runtime.nexus_task_types import TaskResultId
-from nexus.core.runtime.task_result_store import SuccessfulTaskResult
-from nexus.utils.exceptions import SafeInvokeWrappedException
 
 type DictTaskResult = SuccessfulTaskResult[dict[str, str], dict[str, str], dict[str, str]]
 
@@ -404,12 +405,14 @@ def test_multi_openrouter_payload_creator_skips_items_with_no_selected_fields(
 ) -> None:
     creator = MultiOpenRouterPayloadCreator[PromptItem](
         "openrouter-payload-creator",
-        item_selector=lambda item: None
-        if item.item_id == "skip"
-        else {
-            "task_result_id": ScalarField(value=item.item_id),
-            "title": ScalarField(value=item.title),
-        },
+        item_selector=lambda item: (
+            None
+            if item.item_id == "skip"
+            else {
+                "task_result_id": ScalarField(value=item.item_id),
+                "title": ScalarField(value=item.title),
+            }
+        ),
     )
     setup = transform_actor_test_setup_factory(creator)
 

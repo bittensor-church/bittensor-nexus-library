@@ -12,18 +12,26 @@ from pylon_client.artanis import PylonResponseException
 from pylon_client.artanis.v1 import SetWeightsResponse
 from utils import CollectorActor, InMemoryTestTaskResultStoreProvider, wait_until
 
-from nexus.actors import PylonClientProvider
-from nexus.actors.chain_beat.epoch_beat import EpochBeat
-from nexus.actors.pylon_client_provider import IdentityPylonApiLike, SyncPylonClientLike
-from nexus.actors.retry_strategy import RetryStrategy
-from nexus.actors.weight_setter import WeighingFunc, WeightSetterNode, WeightSettingSuccess
-from nexus.core.dsl.flow import Flow
-from nexus.core.dsl.nodes import Source
-from nexus.core.runtime.events import SendEvent
-from nexus.core.runtime.subnet_runtime import SubnetBuilder
-from nexus.utils.chain import get_epoch_containing_block
-from nexus.utils.exceptions import NexusException
-from nexus.utils.types import BlockNumber, Hotkey, NetUid, Weight
+from nexus.v1 import (
+    BlockNumber,
+    EpochBeat,
+    Flow,
+    Hotkey,
+    IdentityPylonApiLike,
+    NetUid,
+    NexusException,
+    PylonClientProvider,
+    RetryStrategy,
+    SendEvent,
+    Source,
+    SubnetBuilder,
+    SyncPylonClientLike,
+    WeighingFunc,
+    Weight,
+    WeightSetterNode,
+    WeightSettingSuccess,
+    get_epoch_containing_block,
+)
 
 NETUID = NetUid(1)
 EPOCH = get_epoch_containing_block(BlockNumber(500), netuid=NETUID)
@@ -43,6 +51,8 @@ type _PipelineResult = tuple[
 def mock_pylon_client():
     client = create_autospec(spec=SyncPylonClientLike, instance=True)
     client.identity = create_autospec(spec=IdentityPylonApiLike, instance=True)
+    client.__enter__.return_value = client
+    client.__exit__.return_value = None
     seal(client)
     return client
 
