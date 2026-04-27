@@ -16,6 +16,8 @@ jobs:
       - uses: ./.github/actions/setup-uv-nox
       - name: Run linters
         run: uvx nox -vs lint
+      - name: Run cat-images linters
+        run: uvx nox -vs cat-images-lint
 
   test:
     timeout-minutes: 10
@@ -34,3 +36,5 @@ jobs:
       - uses: ./.github/actions/setup-uv-nox
       - name: Run unit tests
         run: uvx nox -vs "test-${{ matrix.python-version }}"
+      - name: Run cat-images tests
+        run: uvx nox -vs cat-images-test

@@ -10,9 +10,10 @@ import nox
 
 CI = os.environ.get("CI") is not None
 
-ROOT = Path(".")
+ROOT = Path(__file__).resolve().parent
+CAT_IMAGES_ROOT = ROOT / "demos" / "cat-images"
 MAIN_BRANCH_NAME = "master"
-PYPROJECT = nox.project.load_toml(Path(__file__).resolve().parent / "pyproject.toml")
+PYPROJECT = nox.project.load_toml(ROOT / "pyproject.toml")
 PYTHON_VERSIONS = nox.project.python_versions(PYPROJECT)
 
 
@@ -34,6 +35,11 @@ def install(session: nox.Session, *groups, dev: bool = True, editable: bool = Fa
     for group in groups:
         other_args.extend(["--group", group])
     session.run("uv", "sync", "--active", *other_args, external=True)
+
+
+def install_cat_images(session: nox.Session) -> None:
+    session.chdir(str(CAT_IMAGES_ROOT))
+    session.run("uv", "sync", "--active", "--extra", "dev", external=True)
 
 
 @functools.lru_cache
@@ -131,11 +137,11 @@ def format_(session):
 @nox.session(tags=["check"])
 def lint(session):
     """Run linters in readonly mode."""
-    # "test" group is required for mypy to work against test files
+    # "test" group is required for basedpyright to resolve test dependencies.
     install(session, "lint", "test")
     session.run("ruff", "check", "--diff", "--unsafe-fixes", ".")
     session.run("ruff", "format", "--diff", ".")
-    session.run("mypy", ".")
+    session.run("basedpyright")
     session.run("codespell", ".")
     run_shellcheck(session, mode="check")
     run_readable(session, mode="check")
@@ -145,3 +151,19 @@ def lint(session):
 def test(session):
     install(session, "test")
     session.run("pytest", "-vv", "-n", "auto", *session.posargs)
+
+
+@nox.session(name="cat-images-lint", tags=["check"])
+def cat_images_lint(session):
+    """Run cat-images demo linters and type checks."""
+    install_cat_images(session)
+    session.run("ruff", "check", ".")
+    session.run("ruff", "format", "--check", ".")
+    session.run("basedpyright")
+
+
+@nox.session(name="cat-images-test", tags=["check"])
+def cat_images_test(session):
+    """Run cat-images demo tests."""
+    install_cat_images(session)
+    session.run("pytest", "-q", "--tb=line", "-r", "f", *session.posargs)

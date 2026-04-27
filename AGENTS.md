@@ -15,13 +15,15 @@ concurrency, and message-based IPC.
 ## QA tools
 
 These tools are configured to comply with project conventions.
-They MUST be run within the `nexus-template` or `cat-images` directory.
+Full-project QA MUST be run from the repository root through nox.
+Focused package checks may be run with `uv run` from that package directory.
 ALWAYS use these instead of manual checks.
 
 ```sh
-uv run ruff check --fix && uv run ruff format   # lint + format
-uv run basedpyright                             # type checking
-uv run pytest -q --tb=line -r f                 # tests
+uvx nox -vs lint              # root lint, formatting check, type check, docs/shell checks
+uvx nox -vs test-3.14         # root tests
+uvx nox -vs cat-images-lint   # cat-images demo lint, formatting check, type check
+uvx nox -vs cat-images-test   # cat-images demo tests
 ```
 
 ## Architecture
@@ -54,7 +56,7 @@ Contexts are always linear. If there is a scatter point during processing multip
 **Naming matters** — node and actor IDs/names are used for identification across persistence, tracing, and routing. Pick
 descriptive, stable, unique names.
 
-Always use `uv run`, never bare `python` or `pip`.
+Always use `uv` or `uvx`, never bare `python` or `pip`.
 
 ## Coding guidelines
 
