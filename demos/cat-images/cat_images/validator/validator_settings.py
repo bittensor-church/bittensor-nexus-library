@@ -1,7 +1,6 @@
 from typing import Self
 
-from nexus.utils.openrouter_config import OpenRouterSettingsMixin
-from nexus.utils.types import NetUid, Port
+from nexus.v1 import NetUid, OpenRouterSettingsMixin, Port
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

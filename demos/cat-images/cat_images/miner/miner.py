@@ -8,9 +8,7 @@ from datetime import timedelta
 from typing import Any, Self
 
 import httpx
-from nexus.actors.executor_communicator import AsyncHttpNeuronService
-from nexus.actors.payload_creator import WithPresignedUrl
-from nexus.utils.types import NetUid, Port
+from nexus.v1 import AsyncHttpNeuronService, NetUid, Port, WithPresignedUrl
 from pydantic import ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

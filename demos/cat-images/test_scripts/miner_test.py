@@ -24,7 +24,7 @@ import httpx
 import uvicorn
 from litestar import Controller, Litestar, Request, Response, get, post, put
 from litestar.datastructures import State
-from nexus.actors.executor_communicator.async_http_protocol import (
+from nexus.v1 import (
     AsyncHttpNeuronRequestEnvelope,
     AsyncHttpNeuronResponseEnvelope,
     RequestId,

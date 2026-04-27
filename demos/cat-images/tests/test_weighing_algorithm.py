@@ -3,10 +3,16 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
 
-from nexus.actors.openrouter_selection import Fields, ScalarField
-from nexus.actors.weight_setter import WeightsCalculationBundle
-from nexus.core.runtime.nexus_task_types import NexusTaskName, TaskResultId
-from nexus.utils.types import BlockNumber, Epoch, Hotkey
+from nexus.v1 import (
+    BlockNumber,
+    Epoch,
+    Fields,
+    Hotkey,
+    NexusTaskName,
+    ScalarField,
+    TaskResultId,
+    WeightsCalculationBundle,
+)
 
 from cat_images.subnet_models import TaskScores
 from cat_images.validator import weighing_algorithm

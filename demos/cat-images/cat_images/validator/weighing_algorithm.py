@@ -6,11 +6,15 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from nexus.actors.openrouter_selection import Fields, ScalarField
-from nexus.actors.weight_setter import WeightsCalculationBundle
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.utils.exceptions import InternalFrameworkException
-from nexus.utils.types import Hotkey, Weight
+from nexus.v1 import (
+    Fields,
+    Hotkey,
+    InternalFrameworkException,
+    NexusTaskName,
+    ScalarField,
+    Weight,
+    WeightsCalculationBundle,
+)
 
 from cat_images.subnet_models import TaskScores
 

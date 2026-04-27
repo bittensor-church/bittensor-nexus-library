@@ -1,5 +1,5 @@
-import nexus.utils.subnet_settings as subnet_settings_module
 import pytest
+from nexus.v1 import subnet_settings_module
 
 
 @pytest.fixture(autouse=True)

@@ -1,6 +1,6 @@
 from typing import Annotated, NewType
 
-from nexus.actors.payload_creator import WithPresignedUrl
+from nexus.v1 import WithPresignedUrl
 from pydantic import AliasChoices, AliasPath, BaseModel, Field
 
 S3Url = NewType("S3Url", str)

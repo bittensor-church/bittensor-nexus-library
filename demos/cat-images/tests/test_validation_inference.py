@@ -6,19 +6,24 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from nexus.actors.chain_beat.block_beat import BlockBeat
-from nexus.actors.openrouter_payload_creator import (
+from nexus.v1 import (
+    BlockBeat,
+    BlockHash,
+    BlockNumber,
+    ContextStore,
+    EveryTaskResultSampler,
+    ImageUrlField,
+    InMemoryContextStorePersistence,
     MultiOpenRouterPayloadCreator,
     MultiOpenRouterPayloadCreatorActor,
+    NetUid,
     OpenRouterInferenceRequest,
+    S3PresignedUrl,
+    ScalarField,
+    SuccessfulTaskResult,
+    TaskResultId,
+    Timestamp,
 )
-from nexus.actors.openrouter_selection import ImageUrlField, ScalarField
-from nexus.actors.payload_creator import S3PresignedUrl
-from nexus.actors.task_result_sampler import EveryTaskResultSampler
-from nexus.core.runtime.context_store import ContextStore, InMemoryContextStorePersistence
-from nexus.core.runtime.nexus_task_types import TaskResultId
-from nexus.core.runtime.task_result_store import SuccessfulTaskResult
-from nexus.utils.types import BlockHash, BlockNumber, NetUid, Timestamp
 
 from cat_images.subnet_models import (
     ImageHash,

@@ -3,27 +3,29 @@
 import logging
 from datetime import timedelta
 
-from nexus.actors import (
+from nexus.v1 import (
     AsyncHttpNeuronCommunicator,
+    BlockCount,
     EpochBeatNode,
+    EveryTaskResultSampler,
+    ImageUrlField,
     MultiOpenRouterPayloadCreator,
+    NexusTask,
+    NexusTaskName,
+    NexusValidator,
+    NoopPayloadCreator,
+    NoopRouter,
     OpenRouterInferenceCommunicator,
     OpenRouterInferenceRequest,
+    PresignedUrlCreator,
     RestEntryPoint,
+    RetryStrategy,
     RoundRobinNeuronRouter,
+    ScalarField,
+    SuccessfulTaskResult,
+    WeightSetterNode,
     miners_only,
 )
-from nexus.actors.neuron_router import NoopRouter
-from nexus.actors.openrouter_selection import ImageUrlField, ScalarField
-from nexus.actors.payload_creator import NoopPayloadCreator, PresignedUrlCreator
-from nexus.actors.retry_strategy import RetryStrategy
-from nexus.actors.task_result_sampler import EveryTaskResultSampler
-from nexus.actors.weight_setter import WeightSetterNode
-from nexus.core.runtime.nexus_task import NexusTask
-from nexus.core.runtime.nexus_task_types import NexusTaskName
-from nexus.core.runtime.task_result_store import SuccessfulTaskResult
-from nexus.nexus_validator import NexusValidator
-from nexus.utils.types import BlockCount
 
 from cat_images.subnet_models import (
     MinerPayload,

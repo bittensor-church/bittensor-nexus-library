@@ -12,7 +12,7 @@ dependencies = [
     "pydantic",
     "litestar[standard,prometheus]>=2.21.0",
     "attrs",
-    "bittensor-nexus-lib",
+    "bittensor-nexus-library",
 ]
 
 [project.optional-dependencies]
@@ -57,6 +57,10 @@ extend-select = ["DOC501"]
 extend-immutable-calls = [
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
 [project.urls]
 homepage = "https://github.com/bittensor-church/nexus-poc"
 repository = "https://github.com/bittensor-church/nexus-poc"
@@ -65,7 +69,7 @@ documentation = "https://github.com/bittensor-church/nexus-poc#readme"
 [tool.uv]
 
 [tool.uv.sources]
-bittensor-nexus-lib = { path = "../nexus-template", editable = true }
+bittensor-nexus-library = { path = "../..", editable = true }
 
 [tool.pyright]
 pythonVersion = "3.14"
@@ -75,7 +79,6 @@ useLibraryCodeForTypes = true
 reportMissingTypeStubs = "warning"
 reportUndefinedVariable = "error"
 reportUnusedImport = "warning"
-stubPath = ".pyright-stubs"
 venvPath = "."
 venv = ".venv"
 extraPaths = [".venv/lib/python3.14/site-packages"]
