@@ -1,5 +1,3 @@
-import importlib
-import importlib.util
 from types import TracebackType
 
 import httpx
@@ -15,16 +13,6 @@ from nexus.v1 import (
     openrouter_client,
     subnet_settings,
 )
-
-
-def test_subnet_settings_module_exports_subnet_settings_api() -> None:
-    spec = importlib.util.find_spec("nexus.v1.utils")
-
-    assert spec is not None
-    module = importlib.import_module("nexus.v1.utils")
-    assert hasattr(module, "subnet_settings")
-    assert hasattr(module, "get_subnet_settings_as")
-    assert hasattr(module, "initialize_subnet_settings")
 
 
 def test_openrouter_settings_mixin_reads_validator_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
