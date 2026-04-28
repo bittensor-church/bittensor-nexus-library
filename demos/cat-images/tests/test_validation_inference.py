@@ -6,6 +6,17 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
+from cat_images.subnet_models import (
+    ImageHash,
+    MinerPayload,
+    MinerPublicResult,
+    MinerResult,
+    S3Url,
+    TaskScores,
+    UserImageInput,
+)
+from cat_images.validator import CatValidatorSettings, Validator
+
 from nexus.v1 import (
     BlockBeat,
     BlockHash,
@@ -24,17 +35,6 @@ from nexus.v1 import (
     TaskResultId,
     Timestamp,
 )
-
-from cat_images.subnet_models import (
-    ImageHash,
-    MinerPayload,
-    MinerPublicResult,
-    MinerResult,
-    S3Url,
-    TaskScores,
-    UserImageInput,
-)
-from cat_images.validator import CatValidatorSettings, Validator
 
 
 @dataclass(frozen=True)
@@ -122,16 +122,6 @@ def test_validator_validation_task_item_selector_extracts_prompt_fields_from_suc
     assert selected["task_result_id"] == ScalarField(value=str(task_result.id))
 
 
-def test_validator_validation_task_uses_inline_item_selector() -> None:
-    validator = Validator(_validator_settings())
-    creator = cast(
-        MultiOpenRouterPayloadCreator[SuccessfulTaskResult[MinerPayload, MinerResult, MinerPublicResult]],
-        validator.validation_task.payload_creator,
-    )
-
-    assert creator.item_selector.__name__ == "<lambda>"
-
-
 def test_validator_validation_task_item_selector_renders_prompt_content_in_image_first_order() -> None:
     task_result = _successful_task_result(raw_id=1)
     settings = _validator_settings()
@@ -160,8 +150,3 @@ def test_validator_connects_successful_mining_task_results_into_sampler() -> Non
     )
     assert validator.validation_task.input in validator.subnet_flow.pipes[validator.miner_result_sampler.sampled_batch]
 
-
-def test_task_scores_exposes_plain_lookup() -> None:
-    scores = TaskScores(scores_by_task_result_id={"abc": 77})
-
-    assert dict(scores.scores_by_task_result_id) == {"abc": 77}

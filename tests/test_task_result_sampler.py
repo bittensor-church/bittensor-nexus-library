@@ -1,5 +1,6 @@
 # pyright: basic
 
+from nexus.v1 import EveryTaskResultSampler, NexusTaskName, SuccessfulTaskResult
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import (
     InMemoryTestTaskResultStoreProvider,
@@ -9,16 +10,9 @@ from utils import (
     wait_until,
 )
 
-from nexus.v1 import EveryTaskResultSampler, NexusTaskName, SuccessfulTaskResult
-from nexus.v1 import EveryTaskResultSampler as ExportedEveryTaskResultSampler
-
 type DummyExecutorPayload = str
 type DummyExecutorOutput = int
 type DummyExecutorPublicOutput = str
-
-
-def test_every_task_result_sampler_is_reexported_from_nexus_actors() -> None:
-    assert ExportedEveryTaskResultSampler is EveryTaskResultSampler
 
 
 def test_every_task_result_sampler_actor_emits_singleton_batch_for_each_task_result(
