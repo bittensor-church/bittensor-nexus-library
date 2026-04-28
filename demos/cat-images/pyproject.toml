@@ -79,9 +79,7 @@ useLibraryCodeForTypes = true
 reportMissingTypeStubs = "warning"
 reportUndefinedVariable = "error"
 reportUnusedImport = "warning"
-venvPath = "."
-venv = ".venv"
-extraPaths = [".venv/lib/python3.14/site-packages"]
+extraPaths = ["../../src", ".", "tests"]
 exclude = [
   "cat_images/facilitator",
   "cat_images/miner",

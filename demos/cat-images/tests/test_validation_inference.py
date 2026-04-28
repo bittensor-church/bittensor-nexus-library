@@ -6,17 +6,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from cat_images.subnet_models import (
-    ImageHash,
-    MinerPayload,
-    MinerPublicResult,
-    MinerResult,
-    S3Url,
-    TaskScores,
-    UserImageInput,
-)
-from cat_images.validator import CatValidatorSettings, Validator
-
 from nexus.v1 import (
     BlockBeat,
     BlockHash,
@@ -35,6 +24,16 @@ from nexus.v1 import (
     TaskResultId,
     Timestamp,
 )
+
+from cat_images.subnet_models import (
+    ImageHash,
+    MinerPayload,
+    MinerPublicResult,
+    MinerResult,
+    S3Url,
+    UserImageInput,
+)
+from cat_images.validator import CatValidatorSettings, Validator
 
 
 @dataclass(frozen=True)
@@ -149,4 +148,3 @@ def test_validator_connects_successful_mining_task_results_into_sampler() -> Non
         in validator.subnet_flow.pipes[validator.mining_task.successful_task_result]
     )
     assert validator.validation_task.input in validator.subnet_flow.pipes[validator.miner_result_sampler.sampled_batch]
-
