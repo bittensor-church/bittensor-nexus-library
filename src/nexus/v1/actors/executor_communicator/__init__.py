@@ -1,17 +1,78 @@
-# pyright: reportUnusedImport=false, reportWildcardImportFromLibrary=false, reportUnsupportedDunderAll=false
+# pyright: reportUnusedImport=false
 """Public v1 executor communicator interfaces."""
 
-from nexus._internal.actors.executor_communicator import *
-from nexus._internal.actors.executor_communicator import __all__ as _base_all
+from nexus._internal.actors.executor_communicator import (
+    AsyncHttpNeuronCommunicator,
+    AsyncHttpNeuronCommunicatorActor,
+    AsyncHttpNeuronRequestEnvelope,
+    AsyncHttpNeuronResponseEnvelope,
+    AsyncHttpNeuronService,
+    CommunicatorActor,
+    ExecutorCommunicator,
+    HttpBindEndpoint,
+    InMemoryPendingAsyncHttpRequestStore,
+    NormalizedHttpPath,
+    PendingAsyncHttpRequest,
+    PendingAsyncHttpRequestStore,
+    ProcessedInput,
+    RequestId,
+    UrlHost,
+    format_host_for_url,
+    normalize_http_path,
+    timeout_seconds,
+    validate_positive_timeout,
+)
 from nexus._internal.actors.executor_communicator.embedded_executor_communicator import (
     EmbeddedExecutorCommunicator,
     EmbeddedExecutorCommunicatorActor,
 )
-
-__all__ = sorted(
-    {
-        *_base_all,
-        "EmbeddedExecutorCommunicator",
-        "EmbeddedExecutorCommunicatorActor",
-    }
+from nexus._internal.actors.executor_communicator.openrouter_inference_communicator import (
+    OpenRouterInferenceCommunicator,
+    OpenRouterInferenceCommunicatorActor,
 )
+from nexus._internal.utils.exceptions import (
+    AsyncHttpNeuronCommunicatorException,
+    NeuronAddressInvalidException,
+    RemoteExecutionException,
+    RemoteRequestFailedException,
+    RemoteRequestRejectedException,
+    RemoteResponseTimeoutException,
+    ResponseInvalidException,
+    ResponseValidationException,
+    UnsupportedAxonProtocolException,
+)
+
+__all__ = [
+    "AsyncHttpNeuronCommunicator",
+    "AsyncHttpNeuronCommunicatorActor",
+    "AsyncHttpNeuronCommunicatorException",
+    "AsyncHttpNeuronRequestEnvelope",
+    "AsyncHttpNeuronResponseEnvelope",
+    "AsyncHttpNeuronService",
+    "CommunicatorActor",
+    "EmbeddedExecutorCommunicator",
+    "EmbeddedExecutorCommunicatorActor",
+    "ExecutorCommunicator",
+    "HttpBindEndpoint",
+    "InMemoryPendingAsyncHttpRequestStore",
+    "NeuronAddressInvalidException",
+    "NormalizedHttpPath",
+    "OpenRouterInferenceCommunicator",
+    "OpenRouterInferenceCommunicatorActor",
+    "PendingAsyncHttpRequest",
+    "PendingAsyncHttpRequestStore",
+    "ProcessedInput",
+    "RemoteExecutionException",
+    "RemoteRequestFailedException",
+    "RemoteRequestRejectedException",
+    "RemoteResponseTimeoutException",
+    "RequestId",
+    "ResponseInvalidException",
+    "ResponseValidationException",
+    "UnsupportedAxonProtocolException",
+    "UrlHost",
+    "format_host_for_url",
+    "normalize_http_path",
+    "timeout_seconds",
+    "validate_positive_timeout",
+]

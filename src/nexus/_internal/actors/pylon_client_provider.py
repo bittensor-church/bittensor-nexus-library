@@ -47,11 +47,15 @@ class SyncPylonClientLike(Protocol):
 
 
 class PylonClientProvider(ABC):
+    """Provides sync Pylon clients to actors that read or write chain state."""
+
     @abstractmethod
     def get_client(self) -> SyncPylonClientLike: ...
 
 
 class EnvPylonClientProvider(PylonClientProvider):
+    """Builds Pylon clients from validator environment variables."""
+
     @override
     def get_client(self) -> SyncPylonClientLike:
         address = get_required_env_var("VALIDATOR_PYLON_SERVICE_ADDRESS")
