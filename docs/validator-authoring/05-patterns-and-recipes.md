@@ -29,19 +29,20 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from nexus.actors import (
+from nexus.v1 import (
+    EveryTaskResultSampler,
+    ImageUrlField,
     MultiOpenRouterPayloadCreator,
+    NexusTask,
+    NoopPayloadCreator,
+    NoopRouter,
     OpenRouterInferenceCommunicator,
     OpenRouterInferenceRequest,
+    OpenRouterSettingsMixin,
+    RetryStrategy,
+    ScalarField,
+    SuccessfulTaskResult,
 )
-from nexus.actors.neuron_router import NoopRouter
-from nexus.actors.openrouter_selection import ImageUrlField, ScalarField
-from nexus.actors.payload_creator import NoopPayloadCreator
-from nexus.actors.retry_strategy import RetryStrategy
-from nexus.actors.task_result_sampler import EveryTaskResultSampler
-from nexus.core.runtime.nexus_task import NexusTask
-from nexus.core.runtime.task_result_store import SuccessfulTaskResult
-from nexus.utils.openrouter_config import OpenRouterSettingsMixin
 
 
 class TaskScores(BaseModel):
@@ -99,64 +100,52 @@ Each `*Field` model persists a `kind` discriminator in its JSON shape and render
 
 `MultiOpenRouterPayloadCreator.item_selector` may return `None` for a sampled item. Use that to skip a success-path item that should not be projected into the OpenRouter prompt, such as a result missing optional media needed by the prompt. If every sampled item is skipped, the payload creator raises `ValueError` instead of sending an empty request.
 
-The reusable selection models live in `nexus/actors/openrouter_selection.py`. For `SuccessfulTaskResult` inputs, use the shared selector helpers in `nexus/actors/openrouter_task_result_selection.py`:
-
-- `select_single_task_result_metadata(...)`
-- `select_single_task_result_scalar_field(...)`
-- `select_single_task_result_image_url_field(...)`
-- `select_single_task_result_file_field(...)`
-- `select_single_task_result_input_audio_field(...)`
-- `select_single_task_result_video_url_field(...)`
-- `compose_single_task_result_selectors(...)`
-
-`select_single_task_result_metadata(...)` covers the universal metadata fields, while the typed extractor helpers build `ScalarField`, `ImageUrlField`, `FileField`, `InputAudioField`, and `VideoUrlField` values directly. `compose_single_task_result_selectors(...)` merges those extractors in insertion order and raises if two helpers select the same field name.
+The reusable field models are exposed through `nexus.v1`. Nexus does not currently ship a public
+task-result selector helper module, so keep reusable selector helpers in the subnet package when a selector is shared
+between tasks or tests.
 
 ## Mix scalar metadata with direct multimodal selections
 
-Use the shared task-result selector helpers so the selector stays explicit and type-checkable. Each helper returns `FieldValue` objects directly, and `MultiOpenRouterPayloadCreator` assembles the final `OpenRouterInferenceRequest`, so the selector stays close to the payload shape and there is no separate content-block layer to maintain.
+Use small subnet-local selector helpers so the selector stays explicit and type-checkable. Each helper returns
+`FieldValue` objects directly, and `MultiOpenRouterPayloadCreator` assembles the final `OpenRouterInferenceRequest`, so
+the selector stays close to the payload shape and there is no separate content-block layer to maintain.
 
 ```python
 from collections.abc import Callable
 
-from nexus.actors import FieldValue
-from nexus.actors.openrouter_task_result_selection import (
-    compose_single_task_result_selectors,
-    select_single_task_result_file_field,
-    select_single_task_result_image_url_field,
-    select_single_task_result_input_audio_field,
-    select_single_task_result_metadata,
-    select_single_task_result_scalar_field,
-    select_single_task_result_video_url_field,
+from nexus.v1 import (
+    FieldValue,
+    FileField,
+    ImageUrlField,
+    InputAudioField,
+    ScalarField,
+    SuccessfulTaskResult,
+    VideoUrlField,
 )
-from nexus.core.runtime.task_result_store import SuccessfulTaskResult
 
 
 def build_media_review_item_selector() -> Callable[[SuccessfulTaskResult], dict[str, FieldValue]]:
-    return compose_single_task_result_selectors(
-        select_single_task_result_metadata(include_task_result_id=True),
-        select_single_task_result_scalar_field(
-            "review_instruction",
-            lambda _task_result: "Compare the screenshot, transcript, narration, and reference clip.",
-        ),
-        select_single_task_result_image_url_field(
-            "screenshot",
-            lambda task_result: task_result.executor_public_output.screenshot_url,
-        ),
-        select_single_task_result_file_field(
-            "transcript",
-            filename_getter=lambda task_result: task_result.executor_payload.transcript_filename,
-            file_data_getter=lambda task_result: task_result.executor_payload.transcript_file_data,
-        ),
-        select_single_task_result_input_audio_field(
-            "narration",
-            data_getter=lambda task_result: task_result.executor_payload.narration_audio_base64,
-            format_getter=lambda _task_result: "wav",
-        ),
-        select_single_task_result_video_url_field(
-            "reference_clip",
-            lambda task_result: task_result.executor_public_output.demo_video_url,
-        ),
-    )
+    def select(task_result: SuccessfulTaskResult) -> dict[str, FieldValue]:
+        return {
+            "task_result_id": ScalarField(value=str(task_result.id)),
+            "review_instruction": ScalarField(
+                value="Compare the screenshot, transcript, narration, and reference clip."
+            ),
+            "screenshot": ImageUrlField(url=task_result.executor_public_output.screenshot_url),
+            "transcript": FileField(
+                filename=task_result.executor_payload.transcript_filename,
+                file_data=task_result.executor_payload.transcript_file_data,
+            ),
+            "narration": InputAudioField(
+                data=task_result.executor_payload.narration_audio_base64,
+                format="wav",
+            ),
+            "reference_clip": VideoUrlField(url=task_result.executor_public_output.demo_video_url),
+        }
+
+    return select
 ```
 
-That selector mixes scalar text metadata with `ImageUrlField`, `FileField`, `InputAudioField`, and `VideoUrlField` without manually instantiating those field models. `MultiOpenRouterPayloadCreator` preserves field insertion order, so the rendered OpenRouter request keeps the same sequence shown above.
+That selector mixes scalar text metadata with `ImageUrlField`, `FileField`, `InputAudioField`, and `VideoUrlField`.
+`MultiOpenRouterPayloadCreator` preserves field insertion order, so the rendered OpenRouter request keeps the same
+sequence shown above.

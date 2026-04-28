@@ -2,7 +2,9 @@
 
 ## 1) `MetagraphSource[Trigger]`
 
-Module: `nexus/actors/metagraph_source.py`
+Public import: `from nexus.v1 import MetagraphSource`
+
+Implementation: `src/nexus/_internal/actors/metagraph_source.py`
 
 Purpose:
 
@@ -24,7 +26,9 @@ Endpoints:
 
 ## 2) `MultiOpenRouterPayloadCreator[Item]`
 
-Module: `nexus/actors/openrouter_payload_creator.py`
+Public import: `from nexus.v1 import MultiOpenRouterPayloadCreator`
+
+Implementation: `src/nexus/_internal/actors/openrouter_payload_creator.py`
 
 Purpose:
 
@@ -46,10 +50,9 @@ Selection contract:
 
 - `item_selector` must return a `Mapping[str, FieldValue] | None`, and `Fields.fields` stores typed `*Field` values instead of arbitrary `object` values
 - returning `None` skips that sampled item during projection; if every item is skipped, `MultiOpenRouterPayloadCreator` raises `ValueError`
-- the reusable field models live in `nexus/actors/openrouter_selection.py`, while the task-result selector helpers live in `nexus/actors/openrouter_task_result_selection.py`
-- those helpers operate on `SuccessfulTaskResult[...]` values from a task's `successful_task_result` branch
-- use `select_single_task_result_metadata(...)` for universal metadata fields, `select_single_task_result_scalar_field(...)` for plain text values, and the typed helpers `select_single_task_result_image_url_field(...)`, `select_single_task_result_file_field(...)`, `select_single_task_result_input_audio_field(...)`, and `select_single_task_result_video_url_field(...)` for multimodal fields
-- compose those helpers with `compose_single_task_result_selectors(...)` to build ordered task-result projections
+- the reusable field models are exported from `nexus.v1`
+- Nexus does not currently ship a public task-result selector helper module; keep shared projection helpers in the subnet package
+- selectors that operate on `SuccessfulTaskResult[...]` values should consume a task's `successful_task_result` branch
 - scalar metadata uses `ScalarField(value=...)` and renders as a `text` block like `item[0].field_name: value`
 - `ImageUrlField(url=...)` renders an `image_url` block
 - `FileField(filename=..., file_data=...)` renders a `file` block
@@ -67,7 +70,9 @@ Endpoints:
 
 ## 3) `OpenRouterInferenceCommunicator[OutputModel]`
 
-Module: `nexus/actors/executor_communicator/openrouter_inference_communicator.py`
+Public import: `from nexus.v1 import OpenRouterInferenceCommunicator`
+
+Implementation: `src/nexus/_internal/actors/executor_communicator/openrouter_inference_communicator.py`
 
 Purpose:
 

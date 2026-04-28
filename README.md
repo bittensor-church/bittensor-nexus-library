@@ -51,14 +51,15 @@ Implementation modules live under `nexus._internal` and are not public API. Do n
 ## Project structure
 
 ```
-nexus/
-├── v1/               # Public versioned API facade
-└── _internal/        # Implementation modules
+src/nexus/
+├── v1/                # Public versioned API facade
+└── _internal/         # Implementation modules
     ├── core/
-    │   ├── dsl/      # Flow DSL — nodes, pipes, flow definitions
-    │   └── runtime/  # Event bus, actors, context store, serialization
-    ├── actors/       # Built-in actors (retry, REST, task-result splitting, S3, etc.)
-    ├── examples/     # Examples of actor usage
-    └── utils/        # Shared utilities, including OpenRouter chat-completion helpers
-tests/                # pytest suite (includes NexusTask wiring scaffolds in tests/nexus_task_test_setup.py)
+    │   ├── dsl/       # Flow DSL: nodes, pipes, flow definitions
+    │   └── runtime/   # Event bus, actors, context store, serialization
+    ├── actors/        # Built-in actors (retry, REST, task-result splitting, S3, etc.)
+    ├── examples/      # Examples of actor usage
+    └── utils/         # Shared utilities, including OpenRouter chat-completion helpers
+demos/cat-images/      # Demo subnet package and Docker/localnet tooling
+tests/                 # pytest suite (includes NexusTask wiring scaffolds in tests/nexus_task_test_setup.py)
 ```
