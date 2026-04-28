@@ -4,7 +4,9 @@
 
 **Goal:** Replace the module-level OpenRouter `query()` helper with a concrete `OpenRouterClient` and inject it into the OpenRouter communicator through a provider.
 
-**Architecture:** Keep the HTTP request and response parsing logic in `nexus/utils/openrouter_client.py`, but move it onto an `OpenRouterClient` instance that binds settings at construction time. Add `nexus/actors/openrouter_client_provider.py` to build the default client from subnet settings, and change `OpenRouterInferenceCommunicator` to depend on that provider so tests can inject a mocked `OpenRouterClient`.
+**Status:** Archived implementation plan. Current public consumers import from `nexus.v1`; implementation files live under `src/nexus/_internal`.
+
+**Architecture:** Keep the HTTP request and response parsing logic in `src/nexus/_internal/utils/openrouter_client.py`, but move it onto an `OpenRouterClient` instance that binds settings at construction time. Add `src/nexus/_internal/actors/openrouter_client_provider.py` to build the default client from subnet settings, and change `OpenRouterInferenceCommunicator` to depend on that provider so tests can inject a mocked `OpenRouterClient`.
 
 **Tech Stack:** Python 3.14, pytest, httpx, pydantic, basedpyright
 
@@ -27,10 +29,10 @@ Expected: FAIL because `OpenRouterInferenceCommunicator` does not yet accept an 
 ### Task 2: Implement Client And Provider
 
 **Files:**
-- Modify: `nexus/utils/openrouter_client.py`
-- Create: `nexus/actors/openrouter_client_provider.py`
-- Modify: `nexus/actors/executor_communicator/openrouter_inference_communicator.py`
-- Modify: `nexus/actors/__init__.py`
+- Modify: `src/nexus/_internal/utils/openrouter_client.py`
+- Create: `src/nexus/_internal/actors/openrouter_client_provider.py`
+- Modify: `src/nexus/_internal/actors/executor_communicator/openrouter_inference_communicator.py`
+- Modify: `src/nexus/_internal/actors/__init__.py`
 
 - [ ] **Step 1: Implement the minimal production code**
 
@@ -48,5 +50,5 @@ Expected: PASS
 
 - [ ] **Step 2: Run project checks for touched areas**
 
-Run: `uv run ruff check --fix && uv run ruff format && uv run basedpyright && uv run pytest -q --tb=line -r f tests/test_openrouter_inference_communicator.py tests/test_openrouter_config.py tests/test_openrouter_client_provider.py`
+Run: `uvx nox -vs lint && uvx nox -vs test-3.14 -- tests/test_openrouter_inference_communicator.py tests/test_openrouter_config.py tests/test_openrouter_client_provider.py`
 Expected: PASS

@@ -35,9 +35,8 @@ cp .env.facilitator.example .env
 | `FACI_VALIDATORS` | *(required)* | JSON map of known validators: `{"hotkey": "http://host:port/cat-images"}` |
 | `FACI_PORT` | `8080` | Port the facilitator listens on |
 | `FACI_HOST` | `0.0.0.0` | Bind address |
-| `FACI_PUBLIC_BASE_URL` | `http://localhost:{port}` | Base URL for callback URLs sent to validators |
 | `FACI_SUBMIT_MAX_RETRIES` | `3` | Max retries when submitting a job to a validator |
-| `FACI_SUBMIT_TIMEOUT_SECONDS` | `10.0` | Timeout per submission attempt |
+| `FACI_SUBMIT_TIMEOUT_SECONDS` | `30.0` | Timeout per submission attempt |
 
 ### Running
 
@@ -65,6 +64,26 @@ Validators push status updates to `POST /api/jobs/{job_id}/status`. The payload 
 
 ## Validator
 
+### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `VALIDATOR_NETUID` | *(required)* | Subnet UID to validate and set weights on |
+| `VALIDATOR_EXTERNAL_IP` | *(required)* | Address miners use to reach validator callbacks |
+| `VALIDATOR_REST_ENTRY_POINT_PORT` | `8081` | Port for user/facilitator requests |
+| `VALIDATOR_MINER_CALLBACK_PORT` | `9091` | Port for miner result callbacks |
+| `VALIDATOR_PYLON_SERVICE_ADDRESS` | *(required)* | Pylon service URL |
+| `VALIDATOR_PYLON_OPEN_ACCESS_TOKEN` | *(required)* | Pylon open-access token |
+| `VALIDATOR_PYLON_IDENTITY_NAME` | *(optional)* | Pylon identity name for weight writes |
+| `VALIDATOR_PYLON_IDENTITY_TOKEN` | *(optional)* | Pylon identity token for weight writes |
+| `VALIDATOR_OPENROUTER_API_KEY` | *(required)* | OpenRouter API key used by validation inference |
+| `VALIDATOR_OPENROUTER_URL` | `https://openrouter.ai/api/v1/chat/completions` | OpenRouter API endpoint |
+| `VALIDATOR_OPENROUTER_MODEL` | `google/gemini-2.5-flash-image` | OpenRouter model for validation scoring |
+| `VALIDATOR_OPENROUTER_TIMEOUT_SECONDS` | `120.0` | OpenRouter request timeout |
+| `VALIDATOR_OPENROUTER_TEMPERATURE` | `0.0` | OpenRouter sampling temperature |
+| `VALIDATOR_VALIDATION_PROMPT` | *(built in)* | Prompt used to score generated images |
+| `VALIDATOR_S3_BUCKET` | `my-cat-images-bucket` | Bucket used for generated-image presigned URLs |
+
 ```bash
 uv run -m cat_images.validator
 ```
@@ -88,6 +107,18 @@ Returns JSON:
 
 For facilitator UI testing with `test_scripts/fake_validator.py`, the fake endpoint still listens on `/submit` and
 returns `{"result_image_url":"...", "image_hash":"fake-hash"}`.
+
+### Current graph
+
+- `RestEntryPoint("/cat-images")` accepts `UserImageInput` and feeds `NexusTask("add-cat-to-image")`.
+- The mining task creates a PUT presigned URL, routes to miners with `RoundRobinNeuronRouter(miners_only)`, sends work to
+  miner `/process` endpoints with `AsyncHttpNeuronCommunicator`, and converts the miner upload key into a GET presigned
+  URL.
+- Successful mining results flow through `EveryTaskResultSampler` into `NexusTask("validation-task")`.
+- The validation task builds a multimodal OpenRouter request with `MultiOpenRouterPayloadCreator`, runs it locally
+  through `OpenRouterInferenceCommunicator`, and stores structured `TaskScores`.
+- `EpochBeatNode(delay=BlockCount(20))` triggers `WeightSetterNode`, which calculates and writes miner weights through
+  pylon.
 
 ## Miner
 

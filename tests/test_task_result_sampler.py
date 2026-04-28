@@ -1,6 +1,5 @@
 # pyright: basic
 
-from nexus.v1 import EveryTaskResultSampler, NexusTaskName, SuccessfulTaskResult
 from transform_test_utils import TransformActorTestSetupFactory
 from utils import (
     InMemoryTestTaskResultStoreProvider,
@@ -9,6 +8,8 @@ from utils import (
     store_successful_task_result,
     wait_until,
 )
+
+from nexus.v1 import EveryTaskResultSampler, NexusTaskName, SuccessfulTaskResult
 
 type DummyExecutorPayload = str
 type DummyExecutorOutput = int
