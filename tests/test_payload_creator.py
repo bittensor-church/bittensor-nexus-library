@@ -213,6 +213,7 @@ def test_presigned_url_creator_put_uses_existing_context_key_when_load_s3_key_se
     assert uploaded["Body"].read() == upload_data
 
 
+@pytest.mark.usefixtures("default_s3_storage_client")
 def test_presigned_url_creator_does_not_create_new_key_when_load_s3_key_set(
     default_test_s3_bucket: str,
     transform_actor_test_setup_factory: TransformActorTestSetupFactory,
