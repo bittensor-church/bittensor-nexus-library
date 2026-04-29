@@ -8,7 +8,23 @@ from nexus._internal.core.runtime.task_result_store import ExecutorFailureTaskRe
 
 
 class TaskResultDispatcher[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput](Node, ActorBuilder):
-    """Dispatch typed stored task-result branches with the required context semantics."""
+    """
+    Re-emits persisted task-result records on fresh child contexts so downstream secondary
+    consumers (samplers, validation, weighing) run on their own context tree, decoupled from
+    the input's context.
+
+    On success, the persisted record is re-emitted on a child context, and the converted
+    public output is re-emitted on the parent context via `executor_output`.
+
+    On failure, only the child-context emission happens; `executor_output` does not fire.
+
+    sink successful_task_result_input: persisted success record from the success storer
+    sink executor_failure_input: persisted failure record from the failure storer
+    source successful_task_result: success record on a child context
+    source executor_failure: failure record on a child context
+    source executor_output: success-only public output; emitted on the parent context so it
+        can be correlated with whatever triggered the pipeline
+    """
 
     successful_task_result_input: Sink[SuccessfulTaskResult[ExecutorPayload, ExecutorOutput, ExecutorPublicOutput]]
     executor_failure_input: Sink[ExecutorFailureTaskResult[ExecutorPayload]]

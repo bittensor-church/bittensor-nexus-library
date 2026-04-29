@@ -19,7 +19,22 @@ from nexus._internal.utils.exceptions import NexusException
 
 
 class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput = ExecutorOutput]:
-    """Reusable task pipeline with typed task-result branches and success-only executor output."""
+    """
+    Reusable task pipeline with typed task-result branches and success-only executor output.
+
+    Runs `Input` through payload creation, routing, executor communication, and result
+    conversion, with timing and retry. Every retry re-emits the original input, so the router
+    picks freshly each attempt. Successful runs and reported executor failures are persisted
+    under `name`; framework-side failures are not. Once retries are exhausted, `error` fires
+    and none of the result sources emit.
+
+    sink input: the unit of work to execute
+    sink block_beat: timestamping clock
+    source successful_task_result: persisted success branch, emitted with a new child context
+    source executor_failure: persisted executor-failure branch, emitted with a new child context
+    source executor_output: converted executor result for downstream consumers; success-only
+    source error: framework-side failures — retries exhausted, or preparation/conversion failed
+    """
 
     name: NexusTaskName
     input: Sink[Input]
