@@ -55,6 +55,17 @@ exclude = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/nexus"]
 
+
+# Include the docs so that they are distributed with the package for LLMs to read.
+# Makes the docs readable from `.venv/lib/python-3.*/site-packages/nexus`
+
+[tool.hatch.build.targets.wheel.force-include]
+"docs" = "nexus/docs"  # puts docs/ into nexus/docs/ inside the wheel
+
+[tool.hatch.build.targets.sdist]
+include = ["src/nexus", "docs"]  # sdist includes docs next to nexus sources
+
+
 [dependency-groups]
 format = [
     "ruff",

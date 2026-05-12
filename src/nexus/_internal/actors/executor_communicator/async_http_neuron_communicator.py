@@ -63,6 +63,8 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
     """
     ExecutorCommunicator that forwards routed input payloads to a target neuron's HTTP axon
     and asynchronously resolves responses via a local callback endpoint.
+    Response to the request is required to arrive relatively fast, as it only serves as an acknowledgement signal.
+    The actual result is expected to be delivered to the callback endpoint at a later time.
     For each input, it serializes the payload as JSON, sends it to the neuron's address on
     `target_path`, and stores a pending request keyed by request id. The communicator binds
     a callback HTTP server on `callback_bind_ip:callback_port` and advertises callbacks
