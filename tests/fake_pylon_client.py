@@ -5,8 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import override
 
-from pylon_client.artanis import BlockHash, BlockNumber, NetUid, Timestamp
-from pylon_client.artanis.v1 import Block, GetLatestBlockInfoResponse, GetNeuronsResponse, Neuron, SetWeightsResponse
+from pylon_client.artanis import BlockHash, BlockNumber, MechanismId, NetUid, Timestamp
+from pylon_client.artanis.v1 import (
+    Block,
+    GetLatestBlockInfoResponse,
+    GetNeuronsResponse,
+    GetWeightsStatusResponse,
+    Neuron,
+    SetWeightsResponse,
+)
 
 from nexus.v1 import (
     Hotkey,
@@ -49,6 +56,13 @@ class FakeOpenAccessApi(OpenAccessPylonApiLike):
 class FakeIdentityApi(IdentityPylonApiLike):
     def put_weights(self, weights: dict[Hotkey, Weight]) -> SetWeightsResponse:
         return SetWeightsResponse()
+
+    def get_weights_status(
+        self,
+        block_number: BlockNumber,
+        mechanism_id: MechanismId = MechanismId(0),
+    ) -> GetWeightsStatusResponse:
+        return GetWeightsStatusResponse(weights_set=False)
 
 
 class FakePylonClient(SyncPylonClientLike):

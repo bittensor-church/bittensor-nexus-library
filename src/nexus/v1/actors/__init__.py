@@ -4,6 +4,11 @@
 from nexus._internal.actors import Neuron
 from nexus._internal.actors.chain_beat.block_beat import BlockBeat, BlockBeatActor, BlockBeatNode
 from nexus._internal.actors.chain_beat.epoch_beat import EpochBeat, EpochBeatActor, EpochBeatNode
+from nexus._internal.actors.chain_beat.set_weights_beat import (
+    SetWeightsBeat,
+    SetWeightsBeatActor,
+    SetWeightsBeatNode,
+)
 from nexus._internal.actors.metagraph_source import MetagraphSource, NeuronMap, TriggeredMetagraph
 from nexus._internal.actors.neuron_router import (
     NeuronFilter,
@@ -200,6 +205,9 @@ __all__ = [
     "S3PresignedUrl",
     "SafeInvokeWrappedException",
     "ScalarField",
+    "SetWeightsBeat",
+    "SetWeightsBeatActor",
+    "SetWeightsBeatNode",
     "Stringify",
     "StringifyActor",
     "SubnetMisconfiguredException",

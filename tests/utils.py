@@ -22,6 +22,7 @@ from nexus.v1 import (
     ExecutorFailureException,
     ExecutorFailureTaskResult,
     ExecutorFailureTaskResultToPersist,
+    IdentityPylonApiLike,
     InMemoryContextStorePersistence,
     InMemoryTaskResultStore,
     MessagesToSend,
@@ -258,6 +259,7 @@ class MockPylonClientProvider(PylonClientProvider):
         client = create_autospec(SyncPylonClientLike, instance=True)
         # autospec doesn't recurse into Protocol property return types
         client.open_access = create_autospec(OpenAccessPylonApiLike, instance=True)
+        client.identity = create_autospec(IdentityPylonApiLike, instance=True)
         # autospec creates dunder methods as lazy descriptors; seal() blocks lazy creation.
         # Force-realize them before sealing.
         client.__enter__.return_value = client
