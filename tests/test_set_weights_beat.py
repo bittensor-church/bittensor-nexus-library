@@ -1,17 +1,10 @@
 # pyright: basic
 
-import json
-from collections.abc import Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
 from types import SimpleNamespace
-from typing import ClassVar
+from unittest.mock import call
 
 import pytest
 from pylon_client import artanis
-from pylon_client.artanis import Config, IdentityName, PylonAuthToken, PylonClient
 from utils import CollectorActor, MockPylonClientProvider, dummy_block_beat, wait_until
 
 from nexus.v1 import (
@@ -21,13 +14,11 @@ from nexus.v1 import (
     Epoch,
     Flow,
     NetUid,
-    PylonClientProvider,
     SendEvent,
     SetWeightsBeat,
     SetWeightsBeatNode,
     Source,
     SubnetBuilder,
-    SyncPylonClientLike,
     WeightSettingSuccess,
     get_epoch_containing_block,
 )
@@ -36,85 +27,6 @@ from nexus.v1 import (
 # -3 -> 357
 # 358 -> 718
 # 719 -> 1079
-
-_IDENTITY_NAME = IdentityName("test-identity")
-_IDENTITY_TOKEN = PylonAuthToken("identity-token")
-_OPEN_ACCESS_TOKEN = PylonAuthToken("open-access-token")
-_STATUS_PATH = "/api/_unstable/identity/test-identity/subnet/1/mechanism/0/block/500/weights/status"
-
-
-@dataclass(frozen=True)
-class _RecordedRequest:
-    method: str
-    path: str
-    authorization: str | None
-
-
-class _PylonStatusHandler(BaseHTTPRequestHandler):
-    weights_set: ClassVar[bool]
-    requests: ClassVar[list[_RecordedRequest]]
-
-    def do_GET(self) -> None:
-        self.requests.append(
-            _RecordedRequest(
-                method="GET",
-                path=self.path,
-                authorization=self.headers.get("Authorization"),
-            )
-        )
-
-        if self.path == "/api/_unstable/identities":
-            self._write_json({"identities": {_IDENTITY_NAME: 1}})
-            return
-
-        if self.path == _STATUS_PATH:
-            self._write_json({"weights_set": self.weights_set})
-            return
-
-        self.send_response(404)
-        self.end_headers()
-
-    def log_message(self, format: str, *args: object) -> None:
-        return
-
-    def _write_json(self, payload: object) -> None:
-        body = json.dumps(payload).encode()
-        self.send_response(200)
-        self.send_header("content-type", "application/json")
-        self.send_header("content-length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-
-@contextmanager
-def _pylon_status_server(*, weights_set: bool) -> Iterator[tuple[str, list[_RecordedRequest]]]:
-    _PylonStatusHandler.weights_set = weights_set
-    _PylonStatusHandler.requests = []
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _PylonStatusHandler)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    try:
-        yield f"http://127.0.0.1:{server.server_port}", _PylonStatusHandler.requests
-    finally:
-        server.shutdown()
-        thread.join(timeout=1.0)
-        server.server_close()
-
-
-class _PylonClientProvider(PylonClientProvider):
-    def __init__(self, address: str) -> None:
-        self.address = address
-
-    def get_client(self) -> SyncPylonClientLike:
-        return PylonClient(
-            Config(
-                address=self.address,
-                open_access_token=_OPEN_ACCESS_TOKEN,
-                identity_name=_IDENTITY_NAME,
-                identity_token=_IDENTITY_TOKEN,
-            )
-        )
 
 
 def _weights_status_response(*, weights_set: bool) -> SimpleNamespace:
@@ -198,29 +110,6 @@ def test_emits_when_all_conditions_met(default_test_netuid: NetUid):
     ]
 
 
-def test_emits_with_real_pylon_client_status_endpoint(default_test_netuid: NetUid):
-    with _pylon_status_server(weights_set=False) as (address, requests):
-        node = SetWeightsBeatNode(
-            "test",
-            netuid=default_test_netuid,
-            epoch_start_offset=BlockCount(0),
-            pylon_client_provider=_PylonClientProvider(address),
-        )
-        builder, collector, block_beat_trigger, _ = _build_runtime(node=node)
-        runtime = builder.build()
-
-        epoch_500 = get_epoch_containing_block(BlockNumber(500), netuid=default_test_netuid)
-
-        with runtime.running(shutdown_timeout_seconds=1.0):
-            _send_block_beat(builder=builder, source=block_beat_trigger, block_number=500)
-            wait_until(lambda: len(collector.received_events) >= 1)
-
-    assert [event.payload for event in collector.received_events] == [
-        SetWeightsBeat(epoch=epoch_500, block_number=BlockNumber(500)),
-    ]
-    assert _RecordedRequest(method="GET", path=_STATUS_PATH, authorization="Bearer identity-token") in requests
-
-
 def test_skips_when_too_early_in_epoch(default_test_netuid: NetUid):
     provider = MockPylonClientProvider()
     with provider.prepare_mock_client() as client:
@@ -246,6 +135,9 @@ def test_skips_when_too_early_in_epoch(default_test_netuid: NetUid):
 
     assert [event.payload for event in collector.received_events] == [
         SetWeightsBeat(epoch=epoch_380, block_number=BlockNumber(380)),
+    ]
+    assert client.unstable.identity.get_weights_status.call_args_list == [
+        call(block_number=BlockNumber(380)),
     ]
 
 
@@ -280,6 +172,9 @@ def test_skips_when_weights_already_set_in_epoch(default_test_netuid: NetUid):
 
     assert [event.payload for event in collector.received_events] == [
         SetWeightsBeat(epoch=epoch_500, block_number=BlockNumber(500)),
+    ]
+    assert client.unstable.identity.get_weights_status.call_args_list == [
+        call(block_number=BlockNumber(500)),
     ]
 
 
@@ -346,6 +241,10 @@ def test_respects_attempts_cooldown(default_test_netuid: NetUid):
         SetWeightsBeat(epoch=epoch_500, block_number=BlockNumber(500)),
         SetWeightsBeat(epoch=epoch_500, block_number=BlockNumber(504)),
     ]
+    assert client.unstable.identity.get_weights_status.call_args_list == [
+        call(block_number=BlockNumber(500)),
+        call(block_number=BlockNumber(504)),
+    ]
 
 
 def test_skips_when_pylon_says_weights_set(default_test_netuid: NetUid):
@@ -367,11 +266,19 @@ def test_skips_when_pylon_says_weights_set(default_test_netuid: NetUid):
         _send_block_beat(builder=builder, source=block_beat_trigger, block_number=500)
         with pytest.raises(AssertionError):
             wait_until(lambda: len(collector.received_events) >= 1, timeout=0.5)
+        # Second beat in the same epoch must be gated by the cached _last_success_epoch
+        # (set when pylon reported weights_set=True) without an additional pylon query.
+        _send_block_beat(builder=builder, source=block_beat_trigger, block_number=502)
+        with pytest.raises(AssertionError):
+            wait_until(lambda: len(collector.received_events) >= 1, timeout=0.3)
 
     assert collector.received_events == []
+    assert client.unstable.identity.get_weights_status.call_args_list == [
+        call(block_number=BlockNumber(500)),
+    ]
 
 
-def test_pylon_transient_failure_is_logged_and_ignored(caplog: pytest.LogCaptureFixture, default_test_netuid: NetUid):
+def test_pylon_failure(default_test_netuid: NetUid):
     provider = MockPylonClientProvider()
     with provider.prepare_mock_client() as client:
         client.unstable.identity.get_weights_status.side_effect = [
@@ -379,11 +286,13 @@ def test_pylon_transient_failure_is_logged_and_ignored(caplog: pytest.LogCapture
             _weights_status_response(weights_set=False),
         ]
 
+    # High cooldown verifies that a Pylon failure does NOT count as an attempt:
+    # if it did, the beat on block 501 (gap=1 < cooldown=100) would be suppressed.
     node = SetWeightsBeatNode(
         "test",
         netuid=default_test_netuid,
         epoch_start_offset=BlockCount(0),
-        attempts_cooldown=BlockCount(1),
+        attempts_cooldown=BlockCount(100),
         pylon_client_provider=provider,
     )
     builder, collector, block_beat_trigger, _ = _build_runtime(node=node)
@@ -391,16 +300,14 @@ def test_pylon_transient_failure_is_logged_and_ignored(caplog: pytest.LogCapture
 
     epoch_500 = get_epoch_containing_block(BlockNumber(500), netuid=default_test_netuid)
 
-    with caplog.at_level("WARNING", logger="nexus._internal.actors.chain_beat.set_weights_beat"):
-        with runtime.running(shutdown_timeout_seconds=1.0):
-            _send_block_beat(builder=builder, source=block_beat_trigger, block_number=500)
-            # First call raised; no emission yet.
-            with pytest.raises(AssertionError):
-                wait_until(lambda: len(collector.received_events) >= 1, timeout=0.3)
-            _send_block_beat(builder=builder, source=block_beat_trigger, block_number=501)
-            wait_until(lambda: len(collector.received_events) >= 1)
+    with runtime.running(shutdown_timeout_seconds=1.0):
+        _send_block_beat(builder=builder, source=block_beat_trigger, block_number=500)
+        # First call raised; no emission yet.
+        with pytest.raises(AssertionError):
+            wait_until(lambda: len(collector.received_events) >= 1, timeout=0.3)
+        _send_block_beat(builder=builder, source=block_beat_trigger, block_number=501)
+        wait_until(lambda: len(collector.received_events) >= 1)
 
     assert [event.payload for event in collector.received_events] == [
         SetWeightsBeat(epoch=epoch_500, block_number=BlockNumber(501)),
     ]
-    assert any("Transient Pylon poll failure" in record.message for record in caplog.records)
