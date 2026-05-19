@@ -140,6 +140,9 @@ ignore-words-list = "datas"
 [tool.uv]
 exclude-newer = "14 days"
 
+[tool.uv.sources]
+bittensor-pylon-client = { git = "https://github.com/bittensor-church/bittensor-pylon.git", subdirectory = "pylon_client", rev = "feature/robust-weight-setting" }
+
 [tool.basedpyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"

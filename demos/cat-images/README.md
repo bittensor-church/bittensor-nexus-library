@@ -117,8 +117,11 @@ returns `{"result_image_url":"...", "image_hash":"fake-hash"}`.
 - Successful mining results flow through `EveryTaskResultSampler` into `NexusTask("validation-task")`.
 - The validation task builds a multimodal OpenRouter request with `MultiOpenRouterPayloadCreator`, runs it locally
   through `OpenRouterInferenceCommunicator`, and stores structured `TaskScores`.
-- `EpochBeatNode(delay=BlockCount(20))` triggers `WeightSetterNode`, which calculates and writes miner weights through
-  pylon.
+- The validator's built-in `subnet_clock` (a `BlockBeatNode`) feeds `SetWeightsBeatNode(epoch_start_offset=BlockCount(20))`,
+  which gates weight-setting attempts per epoch (using `pylon.unstable.identity.get_weights_status` plus an in-memory
+  cooldown and success flag). When all gates pass, it emits `SetWeightsBeat` to `WeightSetterNode`, which calculates
+  and writes miner weights through pylon; `WeightSettingSuccess` is fed back into `SetWeightsBeatNode` to silence the
+  epoch.
 
 ## Miner
 

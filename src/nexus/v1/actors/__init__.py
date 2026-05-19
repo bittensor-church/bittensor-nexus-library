@@ -4,6 +4,11 @@
 from nexus._internal.actors import Neuron
 from nexus._internal.actors.chain_beat.block_beat import BlockBeat, BlockBeatActor, BlockBeatNode
 from nexus._internal.actors.chain_beat.epoch_beat import EpochBeat, EpochBeatActor, EpochBeatNode
+from nexus._internal.actors.chain_beat.set_weights_beat import (
+    SetWeightsBeat,
+    SetWeightsBeatActor,
+    SetWeightsBeatNode,
+)
 from nexus._internal.actors.metagraph_source import MetagraphSource, NeuronMap, TriggeredMetagraph
 from nexus._internal.actors.neuron_router import (
     NeuronFilter,
@@ -46,6 +51,9 @@ from nexus._internal.actors.pylon_client_provider import (
     OpenAccessPylonApiLike,
     PylonClientProvider,
     SyncPylonClientLike,
+    UnstableIdentityPylonApiLike,
+    UnstablePylonNamespaceLike,
+    WeightsStatusResponseLike,
 )
 from nexus._internal.actors.rest_entry_point import RestEntryPoint, RestEntryPointActor
 from nexus._internal.actors.retry_strategy import RetriesExhaustedException, RetryStrategy
@@ -200,6 +208,9 @@ __all__ = [
     "S3PresignedUrl",
     "SafeInvokeWrappedException",
     "ScalarField",
+    "SetWeightsBeat",
+    "SetWeightsBeatActor",
+    "SetWeightsBeatNode",
     "Stringify",
     "StringifyActor",
     "SubnetMisconfiguredException",
@@ -214,6 +225,8 @@ __all__ = [
     "TimestamperActor",
     "TimestamperNode",
     "TriggeredMetagraph",
+    "UnstableIdentityPylonApiLike",
+    "UnstablePylonNamespaceLike",
     "UnsupportedAxonProtocolException",
     "UppercaseOrError",
     "UppercaseOrErrorActor",
@@ -224,6 +237,7 @@ __all__ = [
     "WeightSettingException",
     "WeightSettingSuccess",
     "WeightsCalculationBundle",
+    "WeightsStatusResponseLike",
     "WithPresignedUrl",
     "format_host_for_url",
     "keep_all_neurons",

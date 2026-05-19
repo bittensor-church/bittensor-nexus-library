@@ -6,7 +6,6 @@ from datetime import timedelta
 from nexus.v1 import (
     AsyncHttpNeuronCommunicator,
     BlockCount,
-    EpochBeatNode,
     EveryTaskResultSampler,
     ImageUrlField,
     MultiOpenRouterPayloadCreator,
@@ -22,6 +21,7 @@ from nexus.v1 import (
     RetryStrategy,
     RoundRobinNeuronRouter,
     ScalarField,
+    SetWeightsBeatNode,
     SuccessfulTaskResult,
     WeightSetterNode,
     miners_only,
@@ -118,10 +118,10 @@ class Validator(NexusValidator):
             executor_result_converter=NoopPayloadCreator[TaskScores]("validation-result-converter"),
         )
 
-        self.epoch_beat = EpochBeatNode(
+        self.set_weights_beat = SetWeightsBeatNode(
             "weight-setting-trigger",
             netuid=settings.netuid,
-            delay=BlockCount(20),
+            epoch_start_offset=BlockCount(20),
         )
 
         self.weight_setter = WeightSetterNode(
@@ -141,4 +141,6 @@ class Validator(NexusValidator):
         self.connect(self.miner_result_sampler.sampled_batch, self.validation_task.input)
 
         # weight setting
-        self.connect(self.epoch_beat.source, self.weight_setter.sink)
+        self.connect(self.subnet_clock.source, self.set_weights_beat.block_beat)
+        self.connect(self.weight_setter.ok, self.set_weights_beat.weights_set)
+        self.connect(self.set_weights_beat.source, self.weight_setter.sink)

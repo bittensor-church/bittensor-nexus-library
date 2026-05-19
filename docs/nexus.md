@@ -104,7 +104,11 @@ Synchronizes weighing and weight setting with subnet's epoch boundaries.
 Recipe:
 
 - Chain synchronization actor emits timing signals, "beats" - new block, epochs boundary.
-- Weight setter actor responds, calls a developer-provided weighing function, passes in weighing bundle
+- Set weights beat actor gates weight-setting attempts until the configured epoch offset, checks pylon's
+  unstable weights status endpoint for the current block, and emits a SetWeightsBeat only when weights still need
+  to be set.
+- Weight setter actor responds to SetWeightsBeat, calls a developer-provided weighing function, passes in weighing
+  bundle
 - Weighing function gets the epoch and task result store from bundle, queries store for relevant task results
 - Aggregates scores into weights, returns them to let the actor handle setting on chain
 

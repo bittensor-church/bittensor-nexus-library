@@ -70,6 +70,7 @@ documentation = "https://github.com/bittensor-church/nexus-poc#readme"
 
 [tool.uv.sources]
 bittensor-nexus-library = { path = "../..", editable = true }
+bittensor-pylon-client = { git = "https://github.com/bittensor-church/bittensor-pylon.git", subdirectory = "pylon_client", rev = "feature/robust-weight-setting" }
 
 [tool.basedpyright]
 pythonVersion = "3.14"

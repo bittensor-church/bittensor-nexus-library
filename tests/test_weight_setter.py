@@ -15,7 +15,6 @@ from utils import (
 
 from nexus.v1 import (
     BlockNumber,
-    EpochBeat,
     Flow,
     Hotkey,
     IdentityPylonApiLike,
@@ -24,6 +23,7 @@ from nexus.v1 import (
     NexusTaskName,
     PylonClientProvider,
     SendEvent,
+    SetWeightsBeat,
     Source,
     SubnetBuilder,
     SyncPylonClientLike,
@@ -102,7 +102,7 @@ def _build_and_run(
     provider.get_client.return_value = pylon_client
     seal(provider)
 
-    trigger = Source[EpochBeat]("test-trigger")
+    trigger = Source[SetWeightsBeat]("test-trigger")
     node = WeightSetterNode(
         "test-weight-setter",
         weighing_func=weighing_func,
@@ -129,7 +129,13 @@ def _build_and_run(
     with runtime.running(shutdown_timeout_seconds=1.0):
         with builder.context_store.create_context() as ctx:
             pass
-        builder.pipe_to_bus.put(SendEvent(ctx_id=ctx.id, source=trigger, payload=EpochBeat(epoch=EPOCH)))
+        builder.pipe_to_bus.put(
+            SendEvent(
+                ctx_id=ctx.id,
+                source=trigger,
+                payload=SetWeightsBeat(epoch=EPOCH, block_number=BlockNumber(500)),
+            )
+        )
         wait_until(lambda: len(ok_collector.received_events) + len(error_collector.received_events) >= 1)
 
     return (
@@ -162,7 +168,7 @@ def test_happy_path_sets_weights_and_emits_success(mock_pylon_client):
     )
 
     assert errors == []
-    assert ok == [WeightSettingSuccess()]
+    assert ok == [WeightSettingSuccess(epoch=EPOCH)]
     mock_pylon_client.identity.put_weights.assert_called_once_with(
         {
             Hotkey("hk1"): Weight(3.0),
