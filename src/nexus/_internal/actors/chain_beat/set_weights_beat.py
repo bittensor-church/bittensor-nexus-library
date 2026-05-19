@@ -48,7 +48,7 @@ class SetWeightsBeatNode(Node, ActorBuilder):
       1. Current block is at least `epoch_start_offset` blocks past the epoch start.
       2. No WeightSettingSuccess has been received yet in the current epoch (in-memory flag).
       3. The last emitted SetWeightsBeat was at least `attempts_cooldown` blocks ago.
-      4. pylon.identity.get_weights_status returns weights_set=False for the current block.
+      4. pylon.unstable.identity.get_weights_status returns weights_set=False for the current block.
 
     sink block_beat: BlockBeat triggering condition evaluation
     sink weights_set: WeightSettingSuccess marking the epoch as satisfied
@@ -160,10 +160,10 @@ class SetWeightsBeatActor(Actor):
         pylon = self.spec.pylon_client_provider.get_client()
         try:
             with pylon:
-                status = pylon.identity.get_weights_status(block_number=block_number)
+                status = pylon.unstable.identity.get_weights_status(block_number=block_number)
         except BasePylonException as exc:
             logger.warning(
-                "Pylon related failure; will retry on the next block. error_type=%s error=%s",
+                "Transient Pylon poll failure; will retry on the next block. error_type=%s error=%s",
                 type(exc).__name__,
                 exc,
             )

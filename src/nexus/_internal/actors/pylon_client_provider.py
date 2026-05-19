@@ -17,7 +17,6 @@ from pylon_client.artanis import (
 from pylon_client.artanis.v1 import (
     GetLatestBlockInfoResponse,
     GetNeuronsResponse,
-    GetWeightsStatusResponse,
     SetWeightsResponse,
 )
 
@@ -34,11 +33,23 @@ class OpenAccessPylonApiLike(Protocol):
 class IdentityPylonApiLike(Protocol):
     def put_weights(self, weights: dict[Hotkey, Weight]) -> SetWeightsResponse: ...
 
+
+class WeightsStatusResponseLike(Protocol):
+    @property
+    def weights_set(self) -> bool: ...
+
+
+class UnstableIdentityPylonApiLike(Protocol):
     def get_weights_status(
         self,
         block_number: BlockNumber,
         mechanism_id: MechanismId = MechanismId(0),  # noqa: B008
-    ) -> GetWeightsStatusResponse: ...
+    ) -> WeightsStatusResponseLike: ...
+
+
+class UnstablePylonNamespaceLike(Protocol):
+    @property
+    def identity(self) -> UnstableIdentityPylonApiLike: ...
 
 
 class SyncPylonClientLike(Protocol):
@@ -56,6 +67,9 @@ class SyncPylonClientLike(Protocol):
 
     @property
     def identity(self) -> IdentityPylonApiLike: ...
+
+    @property
+    def unstable(self) -> UnstablePylonNamespaceLike: ...
 
     def __enter__(self) -> SyncPylonClientLike: ...
 
