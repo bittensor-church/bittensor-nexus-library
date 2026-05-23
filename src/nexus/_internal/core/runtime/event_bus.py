@@ -92,7 +92,7 @@ class EventBus:
         """
         events_passed_downstream = 0
         for sink in self.connections[event.source]:
-            logger.info(
+            logger.debug(
                 "Sending event from %s to %s with payload: %s",
                 event.source.id,
                 sink.id,
