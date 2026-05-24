@@ -121,6 +121,12 @@ class NeuronAddressInvalidException(AsyncHttpNeuronCommunicatorException):
     pass
 
 
+class MinerMtlsVerificationException(AsyncHttpNeuronCommunicatorException):
+    """Raised when a miner's TLS certificate cannot be verified against the Pylon registry."""
+
+    pass
+
+
 class RemoteRequestFailedException(AsyncHttpNeuronCommunicatorException):
     """Raised when sending the outbound HTTP request fails due to network/transport issues."""
 
