@@ -11,6 +11,7 @@ WORKDIR /app/demos/cat-images
 # Local path dependency at ../.. from the cat-images project.
 COPY --from=nexus-lib pyproject.toml README.md /app/
 COPY --from=nexus-lib src/ /app/src/
+COPY --from=nexus-lib docs/ /app/docs/
 
 # Deps only — source changes don't bust this layer
 # adding --no-install-project otherwise the project source ends up in .venv

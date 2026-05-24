@@ -1,8 +1,11 @@
 # pyright: basic
 
 import logging
+import os
 from datetime import timedelta
 
+from botocore.config import Config
+from nexus._internal.actors.s3_client_provider import DefaultS3ClientProvider
 from nexus.v1 import (
     AsyncHttpNeuronCommunicator,
     BlockCount,
@@ -41,6 +44,13 @@ from .validator_settings import CatValidatorSettings
 MINING_TASK_NAME = NexusTaskName("add-cat-to-image")
 VALIDATION_TASK_NAME = NexusTaskName("validation-task")
 
+# TEMP STUB (mTLS smoke test): DefaultS3ClientProvider hardcodes virtual-hosted-style addressing,
+# which only resolves against real AWS S3 (bucket.host). MinIO (used here for local testing,
+# detected via boto3's own AWS_ENDPOINT_URL) has no wildcard DNS for per-bucket subdomains and
+# needs path-style (host/bucket) instead, or the miner's presigned PUT fails with a DNS error.
+_addressing_style = "path" if os.environ.get("AWS_ENDPOINT_URL") else "virtual"
+_MINER_UPLOAD_S3_CLIENT_PROVIDER = DefaultS3ClientProvider(config=Config(s3={"addressing_style": _addressing_style}))
+
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-7s %(message)s", datefmt="%H:%M:%S", level=logging.INFO
 )
@@ -63,7 +73,12 @@ class Validator(NexusValidator):
         self.mining_task = NexusTask(
             name=MINING_TASK_NAME,
             retry=RetryStrategy("mining-task-retry", max_attempts=6, delay=timedelta(seconds=1.0)),
-            payload_creator=PresignedUrlCreator("miner-upload-url", bucket=settings.s3_bucket, method="PUT"),
+            payload_creator=PresignedUrlCreator(
+                "miner-upload-url",
+                bucket=settings.s3_bucket,
+                method="PUT",
+                s3_client_provider=_MINER_UPLOAD_S3_CLIENT_PROVIDER,
+            ),
             router=RoundRobinNeuronRouter(
                 "mining-router",
                 netuid=settings.netuid,
@@ -85,6 +100,7 @@ class Validator(NexusValidator):
                 method="GET",
                 load_s3_key="miner-upload-url",
                 bucket=settings.s3_bucket,
+                s3_client_provider=_MINER_UPLOAD_S3_CLIENT_PROVIDER,
             ),
         )
 

@@ -11,13 +11,14 @@ _PRESIGNED_URL_EXPIRY = 7 * 24 * 3600
 
 class S3Client:
     def __init__(self, settings: FacilitatorSettings) -> None:
+        addressing_style = "path" if settings.s3_endpoint_url else "virtual"
         self._client = boto3.client(
             "s3",
             endpoint_url=settings.s3_endpoint_url,
             aws_access_key_id=settings.s3_access_key,
             aws_secret_access_key=settings.s3_secret_key,
             region_name=settings.s3_region or None,
-            config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
+            config=Config(signature_version="s3v4", s3={"addressing_style": addressing_style}),
         )
         self._bucket = settings.s3_bucket
 
