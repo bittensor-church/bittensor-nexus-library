@@ -11,6 +11,7 @@ from pylon_client.artanis import Port
 from pylon_client.artanis.v1 import AxonProtocol, Neuron
 
 from nexus._internal.actors.neuron_router import Routed
+from nexus._internal.actors.pylon_client_provider import DEFAULT_ASYNC_PYLON_CLIENT_PROVIDER, AsyncPylonClientProvider
 from nexus._internal.core.runtime.actor import Actor, ActorBuilder
 from nexus._internal.core.runtime.context_store import Context, ContextStore
 from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
@@ -84,6 +85,7 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
     response_path: NormalizedHttpPath
     callback_base_url: AnyHttpUrl
     pending_request_store: PendingAsyncHttpRequestStore
+    async_pylon_client_provider: AsyncPylonClientProvider
 
     def __init__(
         self,
@@ -100,9 +102,13 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
         input_model: type[InputModel],
         output_model: type[OutputModel],
         pending_request_store: PendingAsyncHttpRequestStore | None = None,
+        async_pylon_client_provider: AsyncPylonClientProvider | None = None,
     ) -> None:
         """
         Initialize an async HTTP communicator instance.
+
+        mTLS is enabled by setting the ``VALIDATOR_MTLS_CERT_PATH`` and
+        ``VALIDATOR_MTLS_KEY_PATH`` environment variables. Without them, requests use plain HTTP.
 
         Args:
             _id: Unique node/actor identifier used in runtime wiring and logging.
@@ -126,6 +132,8 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
             output_model: Pydantic model used to validate callback response payloads.
             pending_request_store: Backing store for in-flight request state. When
                 omitted, the default store is created automatically.
+            async_pylon_client_provider: Provider for the async Pylon client used to
+                send requests to miners. Defaults to ``EnvAsyncPylonClientProvider``.
 
         Raises:
             ActorMisconfiguredException: If timeouts are non-positive, max_in_flight
@@ -156,6 +164,7 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
         self.response_path = normalize_http_path(callback_path)
         self.callback_base_url = parsed_callback_base_url
         self.pending_request_store = pending_request_store or InMemoryPendingAsyncHttpRequestStore()
+        self.async_pylon_client_provider = async_pylon_client_provider or DEFAULT_ASYNC_PYLON_CLIENT_PROVIDER
 
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
@@ -221,6 +230,7 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
         error_callback = CommunicatorErrorCallback(
             emit_executor_error=lambda ctx_id, error: self._emit(self._executor_error_event(ctx_id, error)),
         )
+
         self._sender = SenderLoopRuntime.start(
             config=SenderLoopRuntimeConfig(
                 communicator_id=self.spec.id,
@@ -232,6 +242,7 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
                 callback_base_url=self.spec.callback_base_url,
                 response_path=self.spec.response_path,
                 input_model=self.spec.input_model,
+                pylon_client=self.spec.async_pylon_client_provider.get_client(),
             ),
             dependencies=SenderLoopRuntimeDependencies(
                 pending_request_store=self.spec.pending_request_store,
@@ -321,6 +332,7 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
             sender.dispatch(
                 ctx_id=event.ctx_id,
                 target_url=target_url,
+                target_neuron=event.payload.target,
                 payload=event.payload.input,
             )
         except NexusException as exc:

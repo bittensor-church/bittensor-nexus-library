@@ -10,12 +10,15 @@ from dataclasses import dataclass
 
 import httpx
 from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
+from pylon_client.artanis import AsyncPylonClient, MtlsVerificationError
+from pylon_client.artanis.v1 import Neuron
 
 from nexus._internal.core.runtime.context_store_types import ContextId
 from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.exceptions import (
     AsyncHttpNeuronCommunicatorException,
     InternalFrameworkException,
+    MinerMtlsVerificationException,
     NexusException,
     RemoteRequestFailedException,
     RemoteRequestRejectedException,
@@ -35,6 +38,7 @@ class PendingSendRequest[InputModel: BaseModel]:
     request_id: RequestId
     ctx_id: ContextId
     target_url: AnyHttpUrl
+    target_neuron: Neuron
     payload: InputModel
 
 
@@ -60,6 +64,7 @@ class SenderLoopRuntimeConfig[InputModel: BaseModel]:
     callback_base_url: AnyHttpUrl
     response_path: NormalizedHttpPath
     input_model: type[InputModel]
+    pylon_client: AsyncPylonClient
 
 
 @dataclass(frozen=True)
@@ -108,6 +113,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
     input_model: type[InputModel]
     pending_request_store: PendingAsyncHttpRequestStore
     error_callback: CommunicatorErrorCallback
+    pylon_client: AsyncPylonClient
 
     @staticmethod
     def start[InputModelT: BaseModel](
@@ -165,6 +171,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
             input_model=config.input_model,
             pending_request_store=dependencies.pending_request_store,
             error_callback=dependencies.error_callback,
+            pylon_client=config.pylon_client,
         )
 
     @staticmethod
@@ -197,6 +204,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
                     input_model=config.input_model,
                     pending_request_store=dependencies.pending_request_store,
                     error_callback=dependencies.error_callback,
+                    pylon_client=config.pylon_client,
                 )
             )
         except Exception as exc:
@@ -221,6 +229,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
         *,
         ctx_id: ContextId,
         target_url: AnyHttpUrl,
+        target_neuron: Neuron,
         payload: InputModel,
     ) -> None:
         """
@@ -246,6 +255,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
             request_id=request_id,
             ctx_id=ctx_id,
             target_url=target_url,
+            target_neuron=target_neuron,
             payload=payload,
         )
         self._enqueue_send_request(pending_send)
@@ -293,22 +303,23 @@ class SenderLoopRuntime[InputModel: BaseModel]:
         input_model: type[InputModelT],
         pending_request_store: PendingAsyncHttpRequestStore,
         error_callback: CommunicatorErrorCallback,
+        pylon_client: AsyncPylonClient,
     ) -> None:
-        """Run sender workers sharing a single `httpx.AsyncClient` instance."""
+        """Run sender workers until all receive a stop signal."""
 
-        sender_timeout = httpx.Timeout(timeout_seconds(send_timeout))
-        async with httpx.AsyncClient(timeout=sender_timeout) as sender_client:
+        async with pylon_client:
             workers = [
                 asyncio.create_task(
                     SenderLoopRuntime._sender_worker(
                         sender_queue=sender_queue,
                         communicator_id=communicator_id,
-                        sender_client=sender_client,
+                        send_timeout=send_timeout,
                         callback_base_url=callback_base_url,
                         response_path=response_path,
                         input_model=input_model,
                         pending_request_store=pending_request_store,
                         error_callback=error_callback,
+                        pylon_client=pylon_client,
                     ),
                     name=f"AsyncHttpSenderWorker-{communicator_id}-{index}",
                 )
@@ -327,12 +338,13 @@ class SenderLoopRuntime[InputModel: BaseModel]:
         *,
         sender_queue: asyncio.Queue[SenderLoopQueueItem[InputModelT]],
         communicator_id: str,
-        sender_client: httpx.AsyncClient,
+        send_timeout: datetime.timedelta,
         callback_base_url: AnyHttpUrl,
         response_path: NormalizedHttpPath,
         input_model: type[InputModelT],
         pending_request_store: PendingAsyncHttpRequestStore,
         error_callback: CommunicatorErrorCallback,
+        pylon_client: AsyncPylonClient,
     ) -> None:
         """Consume queued sends until a stop signal is received."""
 
@@ -344,11 +356,12 @@ class SenderLoopRuntime[InputModel: BaseModel]:
 
             try:
                 await SenderLoopRuntime._send_request(
-                    sender_client=sender_client,
                     pending_send=pending_send,
+                    send_timeout=send_timeout,
                     callback_base_url=callback_base_url,
                     response_path=response_path,
                     input_model=input_model,
+                    pylon_client=pylon_client,
                 )
             except AsyncHttpNeuronCommunicatorException as exc:
                 SenderLoopRuntime._fail_pending_request_static(
@@ -374,44 +387,56 @@ class SenderLoopRuntime[InputModel: BaseModel]:
     @staticmethod
     async def _send_request[InputModelT: BaseModel](
         *,
-        sender_client: httpx.AsyncClient,
         pending_send: PendingSendRequest[InputModelT],
+        send_timeout: datetime.timedelta,
         callback_base_url: AnyHttpUrl,
         response_path: NormalizedHttpPath,
         input_model: type[InputModelT],
+        pylon_client: AsyncPylonClient,
     ) -> None:
-        request_body = AsyncHttpNeuronRequestEnvelope(
-            request_id=pending_send.request_id,
-            callback_url=SenderLoopRuntime._callback_url(
-                callback_base_url=callback_base_url,
-                response_path=response_path,
-            ),
-            input=input_model.model_validate(pending_send.payload).model_dump(mode="json"),
-        ).model_dump_json()
-        payload_bytes = request_body.encode("utf-8")
-        target_url = str(pending_send.target_url)
+        body = (
+            AsyncHttpNeuronRequestEnvelope(
+                request_id=pending_send.request_id,
+                callback_url=SenderLoopRuntime._callback_url(
+                    callback_base_url=callback_base_url,
+                    response_path=response_path,
+                ),
+                input=input_model.model_validate(pending_send.payload).model_dump(mode="json"),
+            )
+            .model_dump_json()
+            .encode("utf-8")
+        )
+
+        extra_headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "Content-Length": str(len(body)),
+            "X-Nexus-Request-Id": str(pending_send.request_id),
+        }
+
+        timeout = timeout_seconds(send_timeout)
+        path = str(pending_send.target_url.path)
 
         try:
-            response = await sender_client.post(
-                target_url,
-                content=payload_bytes,
-                headers={
-                    "Content-Type": "application/json; charset=utf-8",
-                    "Content-Length": str(len(payload_bytes)),
-                    "X-Nexus-Request-Id": str(pending_send.request_id),
-                },
-            )
-            if response.status_code < 200 or response.status_code >= 300:
-                raise RemoteRequestRejectedException(
-                    f"Remote service rejected request {pending_send.request_id} with HTTP status={response.status_code}"
+            async with pylon_client.get_neuron_client(pending_send.target_neuron, timeout=timeout) as client:
+                resp = await client.post(
+                    path,
+                    content=body,
+                    headers=extra_headers,
+                    timeout=timeout,
                 )
+                if resp.status_code < 200 or resp.status_code >= 300:
+                    raise RemoteRequestRejectedException(
+                        f"Remote service rejected request {pending_send.request_id} with HTTP status={resp.status_code}"
+                    )
+        except MtlsVerificationError as exc:
+            raise MinerMtlsVerificationException(str(exc)) from exc
         except httpx.TimeoutException as exc:
             raise RemoteRequestFailedException(
-                f"Timeout while sending request {pending_send.request_id} to target URL {target_url!r}"
+                f"Timeout while sending request {pending_send.request_id} to {pending_send.target_url!r}"
             ) from exc
         except httpx.RequestError as exc:
             raise RemoteRequestFailedException(
-                f"Network error while sending request {pending_send.request_id} to target URL {target_url!r}: {exc!r}"
+                f"Network error while sending request {pending_send.request_id} to {pending_send.target_url!r}: {exc!r}"
             ) from exc
 
     @staticmethod

@@ -46,6 +46,8 @@ from nexus._internal.actors.payload_creator import (
     WithPresignedUrl,
 )
 from nexus._internal.actors.pylon_client_provider import (
+    AsyncPylonClientProvider,
+    EnvAsyncPylonClientProvider,
     EnvPylonClientProvider,
     IdentityPylonApiLike,
     OpenAccessPylonApiLike,
@@ -83,6 +85,7 @@ from nexus._internal.utils.exceptions import (
     FlowMisconfiguredException,
     InternalFrameworkException,
     InternalStateCorruptionException,
+    MinerMtlsVerificationException,
     NeuronAddressInvalidException,
     NexusException,
     NoRoutableNeuronsException,
@@ -129,11 +132,13 @@ from .executor_communicator import (
 __all__ = [
     "ActorMisconfiguredException",
     "AsyncHttpNeuronCommunicator",
+    "MinerMtlsVerificationException",
     "AsyncHttpNeuronCommunicatorActor",
     "AsyncHttpNeuronCommunicatorException",
     "AsyncHttpNeuronRequestEnvelope",
     "AsyncHttpNeuronResponseEnvelope",
     "AsyncHttpNeuronService",
+    "AsyncPylonClientProvider",
     "BatchedTaskInputOutput",
     "BlockBeat",
     "BlockBeatActor",
@@ -142,6 +147,7 @@ __all__ = [
     "EmbeddedExecutorCommunicator",
     "EmbeddedExecutorCommunicatorActor",
     "EmbeddedExecutorFailureException",
+    "EnvAsyncPylonClientProvider",
     "EnvPylonClientProvider",
     "EpochBeat",
     "EpochBeatActor",
