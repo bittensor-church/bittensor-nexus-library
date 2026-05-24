@@ -71,7 +71,7 @@ class FakeUnstableIdentityApi(UnstableIdentityPylonApiLike):
     def get_weights_status(
         self,
         block_number: BlockNumber,
-        mechanism_id: MechanismId = MechanismId(0),
+        mechanism_id: MechanismId = MechanismId(0),  # noqa: B008
     ) -> GetWeightsStatusResponse:
         return GetWeightsStatusResponse(weights_submitted=False)
 

@@ -14,12 +14,17 @@ services:
       PYLON_RECENT_OBJECTS_NETUIDS: "${PYLON_RECENT_OBJECTS_NETUIDS:-[2]}"
       # Open-access token used by validator's pylon client.
       PYLON_OPEN_ACCESS_TOKEN: ${PYLON_OPEN_ACCESS_TOKEN:-local-open-access-token}
-      # Identity used for write operations (weights).
+      # Identities for write operations (weights) and mTLS cert management.
+      # Add "miner" to PYLON_IDENTITIES and set PYLON_ID_MINER_* to enable mTLS.
       PYLON_IDENTITIES: "${PYLON_IDENTITIES:-[\"validator\"]}"
       PYLON_ID_VALIDATOR_WALLET_NAME: ${PYLON_ID_VALIDATOR_WALLET_NAME:-cat-images-validator-kuba}
       PYLON_ID_VALIDATOR_HOTKEY_NAME: ${PYLON_ID_VALIDATOR_HOTKEY_NAME:-default}
       PYLON_ID_VALIDATOR_NETUID: ${PYLON_ID_VALIDATOR_NETUID:-2}
       PYLON_ID_VALIDATOR_TOKEN: ${PYLON_ID_VALIDATOR_TOKEN:?set PYLON_ID_VALIDATOR_TOKEN}
+      PYLON_ID_MINER_WALLET_NAME: ${PYLON_ID_MINER_WALLET_NAME:-}
+      PYLON_ID_MINER_HOTKEY_NAME: ${PYLON_ID_MINER_HOTKEY_NAME:-default}
+      PYLON_ID_MINER_NETUID: ${PYLON_ID_MINER_NETUID:-2}
+      PYLON_ID_MINER_TOKEN: ${PYLON_ID_MINER_TOKEN:-}
     volumes:
       - ~/.bittensor/wallets:/root/.bittensor/wallets:ro
     extra_hosts:
@@ -30,6 +35,22 @@ services:
     # Optional host debug access; bound to localhost only.
     ports:
       - "127.0.0.1:${PYLON_HOST_PORT:-18000}:8000"
+
+  # Used for one-time validator cert generation only. Requires pylon to be running.
+  # Run: bash docker/generate_validator_certs.sh <SS58>
+  nexus_auth:
+    image: backenddevelopersltd/nexus-auth:latest
+    volumes:
+      - ./certs/validator:/app/certs
+    environment:
+      NEXUS_PYLON_ENDPOINT: http://pylon:8000
+      NEXUS_PYLON_NETUID: ${VALIDATOR_NETUID:-2}
+      NEXUS_PYLON_IDENTITY_NAME: ${VALIDATOR_PYLON_IDENTITY_NAME:-validator}
+      NEXUS_PYLON_IDENTITY_TOKEN: ${PYLON_ID_VALIDATOR_TOKEN:?set PYLON_ID_VALIDATOR_TOKEN}
+    depends_on:
+      - pylon
+    networks:
+      - validator_net
 
   validator:
     image: ${VALIDATOR_IMAGE:-cat-validator:compose}
@@ -58,12 +79,17 @@ services:
       VALIDATOR_OPENROUTER_TIMEOUT_SECONDS: ${VALIDATOR_OPENROUTER_TIMEOUT_SECONDS:-120.0}
       VALIDATOR_OPENROUTER_TEMPERATURE: ${VALIDATOR_OPENROUTER_TEMPERATURE:-0.0}
       VALIDATOR_S3_BUCKET: ${VALIDATOR_S3_BUCKET:-my-cat-images-bucket}
+      # mTLS: set these after running generate_validator_certs.sh
+      VALIDATOR_MTLS_CERT_PATH: ${VALIDATOR_MTLS_CERT_PATH:-}
+      VALIDATOR_MTLS_KEY_PATH: ${VALIDATOR_MTLS_KEY_PATH:-}
 
       # Required AWS/Boto credentials.
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?set AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?set AWS_SECRET_ACCESS_KEY}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+    volumes:
+      - ./certs/validator:/certs:ro
     networks:
       validator_net:
         ipv4_address: ${VALIDATOR_CONTAINER_IP:-172.30.0.10}

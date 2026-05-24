@@ -33,7 +33,13 @@ format = [
 ]
 
 [dependency-groups]
-miner = ["bittensor==9.12.*"]
+miner = [
+    "bittensor==9.12.*",
+    # bittensor pins scalecodec==1.2.12 directly but leaves async-substrate-interface
+    # unbounded; >=2.0.0 of it switched to `cyscale`, which conflicts with scalecodec at
+    # import time. Stay below 2.0 until bittensor itself drops its scalecodec dependency.
+    "async-substrate-interface<2",
+]
 facilitator = ["boto3", "httpx"]
 validator = []
 
@@ -65,8 +71,6 @@ pythonpath = ["."]
 homepage = "https://github.com/bittensor-church/nexus-poc"
 repository = "https://github.com/bittensor-church/nexus-poc"
 documentation = "https://github.com/bittensor-church/nexus-poc#readme"
-
-[tool.uv]
 
 [tool.uv.sources]
 bittensor-nexus-library = { path = "../..", editable = true }

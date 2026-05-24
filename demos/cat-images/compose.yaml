@@ -11,6 +11,8 @@ services:
     environment:
       PYLON_UVICORN_HOST: "0.0.0.0"
       PYLON_UVICORN_PORT: "8000"
+      PYLON_ID_VALIDATOR_NETUID: ${VALIDATOR_NETUID:-2}
+      PYLON_ID_MINER_NETUID: ${MINER_NETUID:-2}
     volumes:
       - ~/.bittensor/wallets:/root/.bittensor/wallets:ro
     extra_hosts:
@@ -18,6 +20,38 @@ services:
     networks:
       catnet:
         ipv4_address: 172.30.0.20
+
+  # Used for one-time validator cert generation only. Requires pylon to be running.
+  # Run: docker compose -f compose.yaml run --rm nexus_auth_validator generate -ss58-address <SS58>
+  nexus_auth_validator:
+    image: backenddevelopersltd/nexus-auth:latest
+    env_file: ${CAT_IMAGES_ENV_FILE:-.env}
+    environment:
+      NEXUS_PYLON_ENDPOINT: http://pylon:8000
+      NEXUS_PYLON_NETUID: ${VALIDATOR_NETUID:-2}
+      NEXUS_PYLON_IDENTITY_NAME: validator
+      NEXUS_PYLON_IDENTITY_TOKEN: ${PYLON_ID_VALIDATOR_TOKEN:?set PYLON_ID_VALIDATOR_TOKEN}
+    volumes:
+      - ./docker/certs/validator:/app/certs
+    depends_on:
+      - pylon
+    networks:
+      - catnet
+
+  # Validates incoming validator client certs via Pylon on every request.
+  nexus_auth_miner:
+    image: backenddevelopersltd/nexus-auth:latest
+    restart: unless-stopped
+    env_file: ${CAT_IMAGES_ENV_FILE:-.env}
+    environment:
+      NEXUS_PYLON_ENDPOINT: http://pylon:8000
+      NEXUS_PYLON_NETUID: ${MINER_NETUID:-2}
+      NEXUS_PYLON_IDENTITY_NAME: miner
+      NEXUS_PYLON_IDENTITY_TOKEN: ${PYLON_ID_MINER_TOKEN:?set PYLON_ID_MINER_TOKEN}
+    volumes:
+      - ./docker/certs/miner:/app/certs
+    networks:
+      - catnet
 
   validator:
     image: cat-validator:compose
@@ -34,9 +68,27 @@ services:
       # Wire to other services via static IPs.
       VALIDATOR_EXTERNAL_IP: "172.30.0.10"
       VALIDATOR_PYLON_SERVICE_ADDRESS: "http://172.30.0.20:8000"
+      VALIDATOR_MTLS_CERT_PATH: /certs/client.crt
+      VALIDATOR_MTLS_KEY_PATH: /certs/client.key
+    volumes:
+      - ./docker/certs/validator:/certs:ro
     networks:
       catnet:
         ipv4_address: 172.30.0.10
+
+  # TLS termination + client cert enforcement for the miner. Proxies to miner:9090.
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./docker/nginx/default.compose.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/certs/miner:/etc/nginx/ssl:ro
+    depends_on:
+      - miner
+      - nexus_auth_miner
+    networks:
+      catnet:
+        ipv4_address: 172.30.0.30
 
   miner:
     image: cat-miner:compose
@@ -50,16 +102,16 @@ services:
       - validator
     env_file: ${CAT_IMAGES_ENV_FILE:-.env}
     environment:
-      # Wire miner to the validator callback address.
+      # nginx (172.30.0.30:8443) is the public face; register that address on-chain.
       MINER_EXTERNAL_IP: "172.30.0.30"
+      MINER_EXTERNAL_PORT: "8443"
       MINER_WALLET_NAME: "${MINER_WALLET_NAME:-default}"
       MINER_NETUID: "${MINER_NETUID:-2}"
       MINER_SUBTENSOR_NETWORK: "${MINER_SUBTENSOR_NETWORK:-http://host.docker.internal:9944}"
     volumes:
       - ~/.bittensor/wallets:/root/.bittensor/wallets:ro
     networks:
-      catnet:
-        ipv4_address: 172.30.0.30
+      - catnet
 
   facilitator:
     image: cat-facilitator:compose

@@ -1,6 +1,36 @@
 name: cat-images-miner
 
 services:
+  # Validates incoming validator client certs via Pylon on every request.
+  nexus_auth_miner:
+    image: backenddevelopersltd/nexus-auth:latest
+    restart: unless-stopped
+    volumes:
+      - ./certs/miner:/app/certs
+    environment:
+      NEXUS_PYLON_ENDPOINT: ${MINER_PYLON_ENDPOINT:?set MINER_PYLON_ENDPOINT}
+      NEXUS_PYLON_NETUID: ${MINER_NETUID:?set MINER_NETUID}
+      NEXUS_PYLON_IDENTITY_NAME: ${MINER_PYLON_IDENTITY_NAME:-miner}
+      NEXUS_PYLON_IDENTITY_TOKEN: ${MINER_PYLON_IDENTITY_TOKEN:?set MINER_PYLON_IDENTITY_TOKEN}
+    networks:
+      - validator_net
+
+  # TLS termination + client cert enforcement. Proxies validated traffic to miner:9090.
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "${MINER_HOST_BIND_IP:-0.0.0.0}:${MINER_HOST_PORT:-8443}:8443"
+    volumes:
+      - ./nginx/default.compose.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs/miner:/etc/nginx/ssl:ro
+    depends_on:
+      - miner
+      - nexus_auth_miner
+    restart: unless-stopped
+    networks:
+      validator_net:
+        ipv4_address: ${MINER_CONTAINER_IP:-172.30.0.30}
+
   miner:
     image: ${MINER_IMAGE:-cat-miner:latest}
     build:
@@ -25,13 +55,10 @@ services:
       - MINER_EXTERNAL_IP
       - MINER_EXTERNAL_PORT
       - MINER_SERVE_INTERVAL
-    ports:
-      - "${MINER_HOST_BIND_IP:-127.0.0.1}:${MINER_HOST_PORT:-9090}:${MINER_PORT:-9090}"
     volumes:
       - "${MINER_WALLET_DIR:-${HOME}/.bittensor}:/root/.bittensor"
     networks:
-      validator_net:
-        ipv4_address: ${MINER_CONTAINER_IP:-172.30.0.30}
+      - validator_net
 
 networks:
   validator_net:
