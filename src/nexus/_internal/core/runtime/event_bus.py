@@ -1,6 +1,5 @@
 import logging
 from threading import Thread
-from traceback import format_exception
 from typing import Any
 
 from nexus._internal.logging_utils import get_logger
@@ -92,19 +91,12 @@ class EventBus:
         """
         events_passed_downstream = 0
         for sink in self.connections[event.source]:
-            logger.info(
+            logger.debug(
                 "Sending event from %s to %s with payload: %s",
                 event.source.id,
                 sink.id,
                 _payload_for_log(event.payload),
             )
-            if isinstance(event.payload, BaseException):
-                logger.info(
-                    "Exception payload traceback for %s -> %s:\n%s",
-                    event.source.id,
-                    sink.id,
-                    "".join(format_exception(type(event.payload), event.payload, event.payload.__traceback__)),
-                )
             self.sinks[sink].pipe_from_bus.put(ReceiveEvent(ctx_id=event.ctx_id, target=sink, payload=event.payload))
             events_passed_downstream += 1
 
