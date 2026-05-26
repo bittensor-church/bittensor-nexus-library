@@ -11,7 +11,6 @@ from nexus.v1 import (
     BlockBeat,
     BlockCount,
     BlockNumber,
-    Epoch,
     Flow,
     NetUid,
     SendEvent,
@@ -19,7 +18,6 @@ from nexus.v1 import (
     SetWeightsBeatNode,
     Source,
     SubnetBuilder,
-    WeightSettingSuccess,
     get_epoch_containing_block,
 )
 
@@ -47,29 +45,11 @@ def _send_block_beat(*, builder: SubnetBuilder, source: Source[BlockBeat], block
     )
 
 
-def _send_weights_set(
-    *,
-    builder: SubnetBuilder,
-    source: Source[WeightSettingSuccess],
-    epoch: Epoch,
-) -> None:
-    with builder.context_store.create_context() as ctx:
-        pass
-    builder.pipe_to_bus.put(
-        SendEvent(
-            ctx_id=ctx.id,
-            source=source,
-            payload=WeightSettingSuccess(epoch=epoch),
-        )
-    )
-
-
 def _build_runtime(
     *,
     node: SetWeightsBeatNode,
-) -> tuple[SubnetBuilder, CollectorActor[SetWeightsBeat], Source[BlockBeat], Source[WeightSettingSuccess]]:
+) -> tuple[SubnetBuilder, CollectorActor[SetWeightsBeat], Source[BlockBeat]]:
     block_beat_trigger = Source[BlockBeat]("test-block-beat-trigger")
-    weights_set_trigger = Source[WeightSettingSuccess]("test-weights-set-trigger")
 
     builder = SubnetBuilder(nodes=[node])
     collector = CollectorActor[SetWeightsBeat](
@@ -78,11 +58,10 @@ def _build_runtime(
     )
 
     flow_in = Flow.from_connectable(block_beat_trigger).then(node.block_beat)
-    flow_ws = Flow.from_connectable(weights_set_trigger).then(node.weights_set)
     flow_out = Flow.from_connectable(node.source).then(collector.sink)
 
-    builder.add_flows(flow_in, flow_ws, flow_out).add_actors(collector)
-    return builder, collector, block_beat_trigger, weights_set_trigger
+    builder.add_flows(flow_in, flow_out).add_actors(collector)
+    return builder, collector, block_beat_trigger
 
 
 def test_emits_when_all_conditions_met(default_test_netuid: NetUid):
@@ -96,7 +75,7 @@ def test_emits_when_all_conditions_met(default_test_netuid: NetUid):
         epoch_start_offset=BlockCount(0),
         pylon_client_provider=provider,
     )
-    builder, collector, block_beat_trigger, _ = _build_runtime(node=node)
+    builder, collector, block_beat_trigger = _build_runtime(node=node)
     runtime = builder.build()
 
     epoch_500 = get_epoch_containing_block(BlockNumber(500), netuid=default_test_netuid)
@@ -123,7 +102,7 @@ def test_skips_when_too_early_in_epoch(default_test_netuid: NetUid):
         attempts_cooldown=BlockCount(1),
         pylon_client_provider=provider,
     )
-    builder, collector, block_beat_trigger, _ = _build_runtime(node=node)
+    builder, collector, block_beat_trigger = _build_runtime(node=node)
     runtime = builder.build()
 
     epoch_380 = get_epoch_containing_block(BlockNumber(380), netuid=default_test_netuid)
@@ -141,10 +120,16 @@ def test_skips_when_too_early_in_epoch(default_test_netuid: NetUid):
     ]
 
 
-def test_skips_when_weights_already_set_in_epoch(default_test_netuid: NetUid):
+def test_resets_on_new_epoch_via_pylon(default_test_netuid: NetUid):
     provider = MockPylonClientProvider()
     with provider.prepare_mock_client() as client:
-        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_set=False)
+        # Epoch A (block 500) -> pylon reports weights already set -> no emission, flag cached.
+        # Same epoch (block 600) -> gated by the cached flag without consulting pylon.
+        # Epoch B (block 719) -> pylon reports weights not set -> emission expected.
+        client.unstable.identity.get_weights_status.side_effect = [
+            _weights_status_response(weights_set=True),
+            _weights_status_response(weights_set=False),
+        ]
 
     node = SetWeightsBeatNode(
         "test",
@@ -153,44 +138,7 @@ def test_skips_when_weights_already_set_in_epoch(default_test_netuid: NetUid):
         attempts_cooldown=BlockCount(1),
         pylon_client_provider=provider,
     )
-    builder, collector, block_beat_trigger, weights_set_trigger = _build_runtime(node=node)
-    runtime = builder.build()
-
-    epoch_500 = get_epoch_containing_block(BlockNumber(500), netuid=default_test_netuid)
-
-    with runtime.running(shutdown_timeout_seconds=1.0):
-        # First emit, then signal success, then another block beat in the same epoch — must NOT emit again.
-        _send_block_beat(builder=builder, source=block_beat_trigger, block_number=500)
-        wait_until(lambda: len(collector.received_events) >= 1)
-        _send_weights_set(builder=builder, source=weights_set_trigger, epoch=epoch_500)
-        # Give the actor a chance to process the weights_set event before the next block beat.
-        # The next block beat should be ignored due to the in-epoch success flag.
-        _send_block_beat(builder=builder, source=block_beat_trigger, block_number=600)
-        # Wait briefly to ensure no additional emissions happen.
-        with pytest.raises(AssertionError):
-            wait_until(lambda: len(collector.received_events) >= 2, timeout=0.5)
-
-    assert [event.payload for event in collector.received_events] == [
-        SetWeightsBeat(epoch=epoch_500, block_number=BlockNumber(500)),
-    ]
-    assert client.unstable.identity.get_weights_status.call_args_list == [
-        call(block_number=BlockNumber(500)),
-    ]
-
-
-def test_resets_on_new_epoch(default_test_netuid: NetUid):
-    provider = MockPylonClientProvider()
-    with provider.prepare_mock_client() as client:
-        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_set=False)
-
-    node = SetWeightsBeatNode(
-        "test",
-        netuid=default_test_netuid,
-        epoch_start_offset=BlockCount(0),
-        attempts_cooldown=BlockCount(1),
-        pylon_client_provider=provider,
-    )
-    builder, collector, block_beat_trigger, weights_set_trigger = _build_runtime(node=node)
+    builder, collector, block_beat_trigger = _build_runtime(node=node)
     runtime = builder.build()
 
     epoch_500 = get_epoch_containing_block(BlockNumber(500), netuid=default_test_netuid)
@@ -199,14 +147,20 @@ def test_resets_on_new_epoch(default_test_netuid: NetUid):
 
     with runtime.running(shutdown_timeout_seconds=1.0):
         _send_block_beat(builder=builder, source=block_beat_trigger, block_number=500)
-        wait_until(lambda: len(collector.received_events) >= 1)
-        _send_weights_set(builder=builder, source=weights_set_trigger, epoch=epoch_500)
+        with pytest.raises(AssertionError):
+            wait_until(lambda: len(collector.received_events) >= 1, timeout=0.3)
+        _send_block_beat(builder=builder, source=block_beat_trigger, block_number=600)
+        with pytest.raises(AssertionError):
+            wait_until(lambda: len(collector.received_events) >= 1, timeout=0.3)
         _send_block_beat(builder=builder, source=block_beat_trigger, block_number=719)
-        wait_until(lambda: len(collector.received_events) >= 2)
+        wait_until(lambda: len(collector.received_events) >= 1)
 
     assert [event.payload for event in collector.received_events] == [
-        SetWeightsBeat(epoch=epoch_500, block_number=BlockNumber(500)),
         SetWeightsBeat(epoch=epoch_719, block_number=BlockNumber(719)),
+    ]
+    assert client.unstable.identity.get_weights_status.call_args_list == [
+        call(block_number=BlockNumber(500)),
+        call(block_number=BlockNumber(719)),
     ]
 
 
@@ -222,7 +176,7 @@ def test_respects_attempts_cooldown(default_test_netuid: NetUid):
         attempts_cooldown=BlockCount(4),
         pylon_client_provider=provider,
     )
-    builder, collector, block_beat_trigger, _ = _build_runtime(node=node)
+    builder, collector, block_beat_trigger = _build_runtime(node=node)
     runtime = builder.build()
 
     epoch_500 = get_epoch_containing_block(BlockNumber(500), netuid=default_test_netuid)
@@ -259,7 +213,7 @@ def test_skips_when_pylon_says_weights_set(default_test_netuid: NetUid):
         attempts_cooldown=BlockCount(1),
         pylon_client_provider=provider,
     )
-    builder, collector, block_beat_trigger, _ = _build_runtime(node=node)
+    builder, collector, block_beat_trigger = _build_runtime(node=node)
     runtime = builder.build()
 
     with runtime.running(shutdown_timeout_seconds=1.0):
@@ -295,7 +249,7 @@ def test_pylon_failure(default_test_netuid: NetUid):
         attempts_cooldown=BlockCount(100),
         pylon_client_provider=provider,
     )
-    builder, collector, block_beat_trigger, _ = _build_runtime(node=node)
+    builder, collector, block_beat_trigger = _build_runtime(node=node)
     runtime = builder.build()
 
     epoch_500 = get_epoch_containing_block(BlockNumber(500), netuid=default_test_netuid)

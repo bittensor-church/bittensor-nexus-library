@@ -142,5 +142,4 @@ class Validator(NexusValidator):
 
         # weight setting
         self.connect(self.subnet_clock.source, self.set_weights_beat.block_beat)
-        self.connect(self.weight_setter.ok, self.set_weights_beat.weights_set)
         self.connect(self.set_weights_beat.source, self.weight_setter.sink)

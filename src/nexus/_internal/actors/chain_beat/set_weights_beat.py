@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, override
+from typing import Any, override
 
 from pylon_client.artanis import BasePylonException
 
@@ -25,9 +25,6 @@ from nexus._internal.utils.types import BlockCount, BlockNumber, Epoch, NetUid, 
 
 from .block_beat import BlockBeat
 
-if TYPE_CHECKING:
-    from nexus._internal.actors.weight_setter import WeightSettingSuccess
-
 logger: logging.Logger = get_logger(__name__)
 
 
@@ -43,20 +40,18 @@ class SetWeightsBeatNode(Node, ActorBuilder):
     """
     Gates attempts to set weights within an epoch.
 
-    Consumes BlockBeat (from BlockBeatNode) and WeightSettingSuccess (from WeightSetterNode).
-    Emits SetWeightsBeat only if all conditions are met:
+    Consumes BlockBeat (from BlockBeatNode). Emits SetWeightsBeat only if all conditions are met:
       1. Current block is at least `epoch_start_offset` blocks past the epoch start.
-      2. No WeightSettingSuccess has been received yet in the current epoch (in-memory flag).
+      2. The in-memory "weights already set in this epoch" flag is not set. The flag is
+         populated solely from pylon.unstable.identity.get_weights_status responses.
       3. The last emitted SetWeightsBeat was at least `attempts_cooldown` blocks ago.
       4. pylon.unstable.identity.get_weights_status returns weights_set=False for the current block.
 
     sink block_beat: BlockBeat triggering condition evaluation
-    sink weights_set: WeightSettingSuccess marking the epoch as satisfied
     source source: SetWeightsBeat when all conditions are met
     """
 
     block_beat: Sink[BlockBeat]
-    weights_set: Sink[WeightSettingSuccess]
     source: Source[SetWeightsBeat]
 
     netuid: NetUid
@@ -93,7 +88,6 @@ class SetWeightsBeatNode(Node, ActorBuilder):
         self.pylon_client_provider = pylon_client_provider or DEFAULT_PYLON_CLIENT_PROVIDER
 
         self.block_beat = Sink[BlockBeat](f"{_id}-block-beat-sink", owner_node=self)
-        self.weights_set = Sink(f"{_id}-weights-set-sink", owner_node=self)
         self.source = Source[SetWeightsBeat](f"{_id}-source", owner_node=self)
 
     @override
@@ -101,7 +95,6 @@ class SetWeightsBeatNode(Node, ActorBuilder):
         return NodeSinks(
             sinks={
                 SinkName("block_beat"): self.block_beat,
-                SinkName("weights_set"): self.weights_set,
             }
         )
 
@@ -131,13 +124,7 @@ class SetWeightsBeatActor(Actor):
     def handlers(self) -> dict[Sink[Any], EventHandler]:
         return {
             self.spec.block_beat: self._on_block_beat,
-            self.spec.weights_set: self._on_weights_set,
         }
-
-    def _on_weights_set(self, _ctx: Context, event: ReceiveEvent[Any]) -> MessagesToSend:
-        success: WeightSettingSuccess = event.payload
-        self._last_success_epoch = success.epoch
-        return ()
 
     def _on_block_beat(self, _ctx: Context, event: ReceiveEvent[BlockBeat]) -> MessagesToSend:
         block_number = event.payload.block_number
