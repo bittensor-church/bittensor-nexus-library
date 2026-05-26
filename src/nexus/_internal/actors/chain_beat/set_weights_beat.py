@@ -38,14 +38,12 @@ class SetWeightsBeat:
 
 class SetWeightsBeatNode(Node, ActorBuilder):
     """
-    Gates attempts to set weights within an epoch.
+    Emits when it's time to set weights on chain as long as the weights were not submitted yet.
 
-    Consumes BlockBeat (from BlockBeatNode). Emits SetWeightsBeat only if all conditions are met:
+    The conditions for emission are as follows:
       1. Current block is at least `epoch_start_offset` blocks past the epoch start.
-      2. The in-memory "weights already set in this epoch" flag is not set. The flag is
-         populated solely from pylon.unstable.identity.get_weights_status responses.
-      3. The last emitted SetWeightsBeat was at least `attempts_cooldown` blocks ago.
-      4. pylon.unstable.identity.get_weights_status returns weights_set=False for the current block.
+      2. The last emitted SetWeightsBeat was at least `attempts_cooldown` blocks ago.
+      3. Weights were not yet submitted for the current epoch.
 
     sink block_beat: BlockBeat triggering condition evaluation
     source source: SetWeightsBeat when all conditions are met
