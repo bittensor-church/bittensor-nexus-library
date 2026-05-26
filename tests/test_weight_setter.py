@@ -168,7 +168,7 @@ def test_happy_path_sets_weights_and_emits_success(mock_pylon_client):
     )
 
     assert errors == []
-    assert ok == [WeightSettingSuccess(epoch=EPOCH)]
+    assert ok == [WeightSettingSuccess()]
     mock_pylon_client.identity.put_weights.assert_called_once_with(
         {
             Hotkey("hk1"): Weight(3.0),

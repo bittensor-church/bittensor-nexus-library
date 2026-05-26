@@ -29,7 +29,7 @@ type WeighingFunc = Callable[[WeightsCalculationBundle], Mapping[Hotkey, Weight]
 
 @dataclass(frozen=True)
 class WeightSettingSuccess:
-    epoch: Epoch
+    pass
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,7 @@ class WeightSetterActor(TransformActor[SetWeightsBeat, WeightSettingSuccess]):
         except (PylonResponseException, PylonMisconfigured) as exc:
             raise WeightSettingException(f"Failed to set weights for epoch {payload.epoch}") from exc
 
-        return WeightSettingSuccess(epoch=payload.epoch)
+        return WeightSettingSuccess()
 
     def _prepare_calculation_bundle(self, beat: SetWeightsBeat) -> WeightsCalculationBundle:
         return WeightsCalculationBundle(

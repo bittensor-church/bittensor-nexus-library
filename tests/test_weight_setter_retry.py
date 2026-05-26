@@ -117,7 +117,7 @@ def _build_and_run(weighing_func: WeighingFunc, pylon_client: SyncPylonClientLik
 def test_happy_path_no_retries_needed(mock_pylon_client):
     ok, errors, weight_setter_errors = _build_and_run(weighing_func=lambda _: WEIGHTS, pylon_client=mock_pylon_client)
 
-    assert ok == [WeightSettingSuccess(epoch=EPOCH)]
+    assert ok == [WeightSettingSuccess()]
     assert errors == []
     assert weight_setter_errors == []
 
@@ -131,7 +131,7 @@ def test_succeeds_after_pylon_errors(mock_pylon_client):
 
     ok, errors, weight_setter_errors = _build_and_run(weighing_func=lambda _: WEIGHTS, pylon_client=mock_pylon_client)
 
-    assert ok == [WeightSettingSuccess(epoch=EPOCH)]
+    assert ok == [WeightSettingSuccess()]
     assert errors == []
     assert weight_setter_errors == [ANY, ANY]
 
@@ -150,7 +150,7 @@ def test_succeeds_after_weighing_errors(mock_pylon_client):
 
     assert weight_setter_errors == [ANY, ANY]
     assert errors == []
-    assert ok == [WeightSettingSuccess(epoch=EPOCH)]
+    assert ok == [WeightSettingSuccess()]
 
 
 def test_succeeds_after_mixed_errors(mock_pylon_client):
@@ -172,7 +172,7 @@ def test_succeeds_after_mixed_errors(mock_pylon_client):
 
     assert weight_setter_errors == [ANY, ANY]
     assert errors == []
-    assert ok == [WeightSettingSuccess(epoch=EPOCH)]
+    assert ok == [WeightSettingSuccess()]
 
 
 def test_fails_after_retries_exhausted(mock_pylon_client):
