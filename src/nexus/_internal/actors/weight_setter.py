@@ -17,7 +17,7 @@ from nexus._internal.logging_utils import get_logger
 from ..core.runtime.task_result_store import TaskResultStore
 from ..utils.exceptions import WeightSettingException
 from ..utils.types import Epoch, Hotkey, Weight
-from .chain_beat.epoch_beat import EpochBeat
+from .chain_beat.set_weights_beat import SetWeightsBeat
 from .pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
 from .task_result_store_provider import DEFAULT_TASK_RESULT_STORE_PROVIDER, TaskResultStoreProvider
 
@@ -42,13 +42,13 @@ class WeightsCalculationBundle:
     tasks_result_store: TaskResultStore[Any, Any, Any]
 
 
-class WeightSetterNode(Transform[EpochBeat, WeightSettingSuccess], ActorBuilder):
+class WeightSetterNode(Transform[SetWeightsBeat, WeightSettingSuccess], ActorBuilder):
     """
     Calculates neuron weights using the provided weighing function and sets them on-chain via pylon.
-    Triggered by epoch beats. Weights are arbitrary non-negative floats, set for all neurons in one go.
+    Triggered by SetWeightsBeat. Weights are arbitrary non-negative floats, set for all neurons in one go.
     No normalization needed. Note that subnet hyperparams may further influence the effective weights.
 
-    sink sink: EpochBeat triggering weight calculation
+    sink sink: SetWeightsBeat triggering weight calculation
     source ok: WeightSettingSuccess on successful commit
     source error: WeightSettingException on failure
     """
@@ -75,7 +75,7 @@ class WeightSetterNode(Transform[EpochBeat, WeightSettingSuccess], ActorBuilder)
         return WeightSetterActor(spec=self, pipe_to_bus=pipe_to_bus, context_store=context_store)
 
 
-class WeightSetterActor(TransformActor[EpochBeat, WeightSettingSuccess]):
+class WeightSetterActor(TransformActor[SetWeightsBeat, WeightSettingSuccess]):
     weight_setter_spec: WeightSetterNode
 
     def __init__(self, spec: WeightSetterNode, pipe_to_bus: PipeToBus, context_store: ContextStore) -> None:
@@ -83,7 +83,7 @@ class WeightSetterActor(TransformActor[EpochBeat, WeightSettingSuccess]):
         self.weight_setter_spec = spec
 
     @override
-    def _transform(self, ctx: Context, payload: EpochBeat) -> WeightSettingSuccess:
+    def _transform(self, ctx: Context, payload: SetWeightsBeat) -> WeightSettingSuccess:
         pylon = self.weight_setter_spec.pylon_client_provider.get_client()
         bundle = self._prepare_calculation_bundle(beat=payload)
 
@@ -102,7 +102,7 @@ class WeightSetterActor(TransformActor[EpochBeat, WeightSettingSuccess]):
 
         return WeightSettingSuccess()
 
-    def _prepare_calculation_bundle(self, beat: EpochBeat) -> WeightsCalculationBundle:
+    def _prepare_calculation_bundle(self, beat: SetWeightsBeat) -> WeightsCalculationBundle:
         return WeightsCalculationBundle(
             epoch=beat.epoch,
             tasks_result_store=self.weight_setter_spec.task_result_store_provider.get_task_result_store(),

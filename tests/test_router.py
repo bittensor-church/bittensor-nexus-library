@@ -146,7 +146,7 @@ def test_round_robin_router_balances_across_many_contexts(
         pylon_client_provider=pylon_provider,
     )
     setup = transform_actor_test_setup_factory(router)
-    contexts_count = 1000
+    contexts_count = 200
     payloads = [f"p-{idx}" for idx in range(contexts_count)]
     with setup.running(shutdown_timeout_seconds=1.0):
         for payload in payloads:

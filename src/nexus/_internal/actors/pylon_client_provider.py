@@ -3,8 +3,23 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Protocol, override
 
-from pylon_client.artanis import Config, Hotkey, IdentityName, NetUid, PylonAuthToken, PylonClient, Weight
-from pylon_client.artanis.v1 import GetLatestBlockInfoResponse, GetNeuronsResponse, SetWeightsResponse
+from pylon_client.artanis import (
+    BlockNumber,
+    Config,
+    Hotkey,
+    IdentityName,
+    MechanismId,
+    NetUid,
+    PylonAuthToken,
+    PylonClient,
+    Weight,
+)
+from pylon_client.artanis.unstable import GetWeightsStatusResponse
+from pylon_client.artanis.v1 import (
+    GetLatestBlockInfoResponse,
+    GetNeuronsResponse,
+    SetWeightsResponse,
+)
 
 from nexus._internal.utils.env import get_optional_env_var, get_required_env_var
 from nexus._internal.utils.exceptions import SubnetMisconfiguredException
@@ -18,6 +33,19 @@ class OpenAccessPylonApiLike(Protocol):
 
 class IdentityPylonApiLike(Protocol):
     def put_weights(self, weights: dict[Hotkey, Weight]) -> SetWeightsResponse: ...
+
+
+class UnstableIdentityPylonApiLike(Protocol):
+    def get_weights_status(
+        self,
+        block_number: BlockNumber,
+        mechanism_id: MechanismId = MechanismId(0),  # noqa: B008
+    ) -> GetWeightsStatusResponse: ...
+
+
+class UnstablePylonNamespaceLike(Protocol):
+    @property
+    def identity(self) -> UnstableIdentityPylonApiLike: ...
 
 
 class SyncPylonClientLike(Protocol):
@@ -35,6 +63,9 @@ class SyncPylonClientLike(Protocol):
 
     @property
     def identity(self) -> IdentityPylonApiLike: ...
+
+    @property
+    def unstable(self) -> UnstablePylonNamespaceLike: ...
 
     def __enter__(self) -> SyncPylonClientLike: ...
 

@@ -25,7 +25,7 @@ dependencies = [
     "litestar[standard,prometheus]",
     "sniffio",
     "deepdiff",
-    "bittensor-pylon-client",
+    "bittensor-pylon-client==2.1.0",
     "boto3",
     # FIXME(https://reeftechnologies.atlassian.net/browse/BACT-393): remove this runtime dependency.
     "polyfactory",

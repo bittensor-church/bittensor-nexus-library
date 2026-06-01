@@ -14,7 +14,6 @@ from utils import CollectorActor, InMemoryTestTaskResultStoreProvider, wait_unti
 
 from nexus.v1 import (
     BlockNumber,
-    EpochBeat,
     Flow,
     Hotkey,
     IdentityPylonApiLike,
@@ -23,6 +22,7 @@ from nexus.v1 import (
     PylonClientProvider,
     RetryStrategy,
     SendEvent,
+    SetWeightsBeat,
     Source,
     SubnetBuilder,
     SyncPylonClientLike,
@@ -62,8 +62,8 @@ def _build_and_run(weighing_func: WeighingFunc, pylon_client: SyncPylonClientLik
     provider.get_client.return_value = pylon_client
     seal(provider)
 
-    trigger = Source[EpochBeat]("test-trigger")
-    retry = RetryStrategy[EpochBeat]("retry", max_attempts=MAX_ATTEMPTS, delay=RETRY_DELAY)
+    trigger = Source[SetWeightsBeat]("test-trigger")
+    retry = RetryStrategy[SetWeightsBeat]("retry", max_attempts=MAX_ATTEMPTS, delay=RETRY_DELAY)
     weight_setter = WeightSetterNode(
         "weight-setter",
         weighing_func=weighing_func,
@@ -98,7 +98,13 @@ def _build_and_run(weighing_func: WeighingFunc, pylon_client: SyncPylonClientLik
     with runtime.running(shutdown_timeout_seconds=1.0):
         with builder.context_store.create_context() as ctx:
             pass
-        builder.pipe_to_bus.put(SendEvent(ctx_id=ctx.id, source=trigger, payload=EpochBeat(epoch=EPOCH)))
+        builder.pipe_to_bus.put(
+            SendEvent(
+                ctx_id=ctx.id,
+                source=trigger,
+                payload=SetWeightsBeat(epoch=EPOCH, block_number=BlockNumber(500)),
+            )
+        )
         wait_until(lambda: len(ok_collector.received_events) + len(error_collector.received_events) >= 1)
 
     return (
