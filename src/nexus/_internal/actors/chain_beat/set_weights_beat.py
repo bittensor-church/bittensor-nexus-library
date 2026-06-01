@@ -154,7 +154,7 @@ class SetWeightsBeatActor(Actor):
             )
             return ()
 
-        if status.weights_set:
+        if status.weights_submitted:
             self._last_success_epoch = epoch
             return ()
 

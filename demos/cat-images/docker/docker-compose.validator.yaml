@@ -2,7 +2,7 @@ name: cat-images-validator
 
 services:
   pylon:
-    image: backenddevelopersltd/bittensor-pylon:latest
+    image: backenddevelopersltd/bittensor-pylon:2.1.0
     restart: unless-stopped
     environment:
       # Pylon HTTP API server.

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import override
 
 from pylon_client.artanis import BlockHash, BlockNumber, MechanismId, NetUid, Timestamp
+from pylon_client.artanis.unstable import GetWeightsStatusResponse
 from pylon_client.artanis.v1 import (
     Block,
     GetLatestBlockInfoResponse,
@@ -22,7 +23,6 @@ from nexus.v1 import (
     SyncPylonClientLike,
     UnstableIdentityPylonApiLike,
     Weight,
-    WeightsStatusResponseLike,
 )
 
 
@@ -34,11 +34,6 @@ class FakeV1Namespace:
 @dataclass(frozen=True)
 class FakeUnstablePylonNamespace:
     identity: FakeUnstableIdentityApi
-
-
-@dataclass(frozen=True)
-class FakeWeightsStatusResponse:
-    weights_set: bool
 
 
 class FakeOpenAccessApi(OpenAccessPylonApiLike):
@@ -74,8 +69,8 @@ class FakeUnstableIdentityApi(UnstableIdentityPylonApiLike):
         self,
         block_number: BlockNumber,
         mechanism_id: MechanismId = MechanismId(0),
-    ) -> WeightsStatusResponseLike:
-        return FakeWeightsStatusResponse(weights_set=False)
+    ) -> GetWeightsStatusResponse:
+        return GetWeightsStatusResponse(weights_submitted=False)
 
 
 class FakePylonClient(SyncPylonClientLike):

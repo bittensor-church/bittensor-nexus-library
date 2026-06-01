@@ -5,7 +5,7 @@ name: cat-images
 
 services:
   pylon:
-    image: backenddevelopersltd/bittensor-pylon:latest
+    image: backenddevelopersltd/bittensor-pylon:2.1.0
     restart: unless-stopped
     env_file: ${CAT_IMAGES_ENV_FILE:-.env}
     environment:

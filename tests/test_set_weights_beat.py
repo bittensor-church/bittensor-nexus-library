@@ -1,10 +1,10 @@
 # pyright: basic
 
-from types import SimpleNamespace
 from unittest.mock import call
 
 import pytest
 from pylon_client import artanis
+from pylon_client.artanis.unstable import GetWeightsStatusResponse
 from utils import CollectorActor, MockPylonClientProvider, dummy_block_beat, wait_until
 
 from nexus.v1 import (
@@ -27,10 +27,8 @@ from nexus.v1 import (
 # 719 -> 1079
 
 
-def _weights_status_response(*, weights_set: bool) -> SimpleNamespace:
-    # The public pylon client does not export GetWeightsStatusResponse yet.
-    # SimpleNamespace.weights_set is the only attribute SetWeightsBeatActor reads.
-    return SimpleNamespace(weights_set=weights_set)
+def _weights_status_response(*, weights_submitted: bool) -> GetWeightsStatusResponse:
+    return GetWeightsStatusResponse(weights_submitted=weights_submitted)
 
 
 def _send_block_beat(*, builder: SubnetBuilder, source: Source[BlockBeat], block_number: int) -> None:
@@ -67,7 +65,7 @@ def _build_runtime(
 def test_emits_when_all_conditions_met(default_test_netuid: NetUid):
     provider = MockPylonClientProvider()
     with provider.prepare_mock_client() as client:
-        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_set=False)
+        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_submitted=False)
 
     node = SetWeightsBeatNode(
         "test",
@@ -92,7 +90,7 @@ def test_emits_when_all_conditions_met(default_test_netuid: NetUid):
 def test_skips_when_too_early_in_epoch(default_test_netuid: NetUid):
     provider = MockPylonClientProvider()
     with provider.prepare_mock_client() as client:
-        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_set=False)
+        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_submitted=False)
 
     # Epoch 358..718; offset 20 means first eligible block is 378. 360 must be skipped, 380 must emit.
     node = SetWeightsBeatNode(
@@ -127,8 +125,8 @@ def test_resets_on_new_epoch_via_pylon(default_test_netuid: NetUid):
         # Same epoch (block 600) -> gated by the cached flag without consulting pylon.
         # Epoch B (block 719) -> pylon reports weights not set -> emission expected.
         client.unstable.identity.get_weights_status.side_effect = [
-            _weights_status_response(weights_set=True),
-            _weights_status_response(weights_set=False),
+            _weights_status_response(weights_submitted=True),
+            _weights_status_response(weights_submitted=False),
         ]
 
     node = SetWeightsBeatNode(
@@ -167,7 +165,7 @@ def test_resets_on_new_epoch_via_pylon(default_test_netuid: NetUid):
 def test_respects_attempts_cooldown(default_test_netuid: NetUid):
     provider = MockPylonClientProvider()
     with provider.prepare_mock_client() as client:
-        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_set=False)
+        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_submitted=False)
 
     node = SetWeightsBeatNode(
         "test",
@@ -201,10 +199,10 @@ def test_respects_attempts_cooldown(default_test_netuid: NetUid):
     ]
 
 
-def test_skips_when_pylon_says_weights_set(default_test_netuid: NetUid):
+def test_skips_when_pylon_says_weights_submitted(default_test_netuid: NetUid):
     provider = MockPylonClientProvider()
     with provider.prepare_mock_client() as client:
-        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_set=True)
+        client.unstable.identity.get_weights_status.return_value = _weights_status_response(weights_submitted=True)
 
     node = SetWeightsBeatNode(
         "test",
@@ -221,7 +219,7 @@ def test_skips_when_pylon_says_weights_set(default_test_netuid: NetUid):
         with pytest.raises(AssertionError):
             wait_until(lambda: len(collector.received_events) >= 1, timeout=0.5)
         # Second beat in the same epoch must be gated by the cached _last_success_epoch
-        # (set when pylon reported weights_set=True) without an additional pylon query.
+        # (set when pylon reported weights_submitted=True) without an additional pylon query.
         _send_block_beat(builder=builder, source=block_beat_trigger, block_number=502)
         with pytest.raises(AssertionError):
             wait_until(lambda: len(collector.received_events) >= 1, timeout=0.3)
@@ -237,7 +235,7 @@ def test_pylon_failure(default_test_netuid: NetUid):
     with provider.prepare_mock_client() as client:
         client.unstable.identity.get_weights_status.side_effect = [
             artanis.PylonRequestException("temporarily unavailable"),
-            _weights_status_response(weights_set=False),
+            _weights_status_response(weights_submitted=False),
         ]
 
     # High cooldown verifies that a Pylon failure does NOT count as an attempt:
