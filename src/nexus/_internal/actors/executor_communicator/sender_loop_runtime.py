@@ -10,9 +10,10 @@ from dataclasses import dataclass
 
 import httpx
 from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
-from pylon_client.artanis import AsyncPylonClient, MtlsVerificationError
+from pylon_client.artanis import MtlsVerificationError
 from pylon_client.artanis.v1 import Neuron
 
+from nexus._internal.actors.pylon_client_provider import AsyncPylonClientLike
 from nexus._internal.core.runtime.context_store_types import ContextId
 from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.exceptions import (
@@ -64,7 +65,7 @@ class SenderLoopRuntimeConfig[InputModel: BaseModel]:
     callback_base_url: AnyHttpUrl
     response_path: NormalizedHttpPath
     input_model: type[InputModel]
-    pylon_client: AsyncPylonClient
+    pylon_client: AsyncPylonClientLike
 
 
 @dataclass(frozen=True)
@@ -113,7 +114,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
     input_model: type[InputModel]
     pending_request_store: PendingAsyncHttpRequestStore
     error_callback: CommunicatorErrorCallback
-    pylon_client: AsyncPylonClient
+    pylon_client: AsyncPylonClientLike
 
     @staticmethod
     def start[InputModelT: BaseModel](
@@ -303,7 +304,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
         input_model: type[InputModelT],
         pending_request_store: PendingAsyncHttpRequestStore,
         error_callback: CommunicatorErrorCallback,
-        pylon_client: AsyncPylonClient,
+        pylon_client: AsyncPylonClientLike,
     ) -> None:
         """Run sender workers until all receive a stop signal."""
 
@@ -344,7 +345,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
         input_model: type[InputModelT],
         pending_request_store: PendingAsyncHttpRequestStore,
         error_callback: CommunicatorErrorCallback,
-        pylon_client: AsyncPylonClient,
+        pylon_client: AsyncPylonClientLike,
     ) -> None:
         """Consume queued sends until a stop signal is received."""
 
@@ -392,7 +393,7 @@ class SenderLoopRuntime[InputModel: BaseModel]:
         callback_base_url: AnyHttpUrl,
         response_path: NormalizedHttpPath,
         input_model: type[InputModelT],
-        pylon_client: AsyncPylonClient,
+        pylon_client: AsyncPylonClientLike,
     ) -> None:
         body = (
             AsyncHttpNeuronRequestEnvelope(
