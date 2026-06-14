@@ -46,6 +46,7 @@ from nexus._internal.actors.payload_creator import (
     WithPresignedUrl,
 )
 from nexus._internal.actors.pylon_client_provider import (
+    AsyncPylonClientLike,
     AsyncPylonClientProvider,
     EnvAsyncPylonClientProvider,
     EnvPylonClientProvider,
@@ -138,6 +139,7 @@ __all__ = [
     "AsyncHttpNeuronRequestEnvelope",
     "AsyncHttpNeuronResponseEnvelope",
     "AsyncHttpNeuronService",
+    "AsyncPylonClientLike",
     "AsyncPylonClientProvider",
     "BatchedTaskInputOutput",
     "BlockBeat",

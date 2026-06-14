@@ -1,6 +1,6 @@
 from typing import Self
 
-from nexus.v1 import NetUid, OpenRouterSettingsMixin, Port
+from nexus.v1 import NetUid, OpenRouterSettingsMixin, Port, PylonClientSettingsMixin
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,7 +23,7 @@ DEFAULT_VALIDATION_PROMPT = (
 )
 
 
-class CatValidatorSettings(OpenRouterSettingsMixin, BaseSettings):
+class CatValidatorSettings(OpenRouterSettingsMixin, PylonClientSettingsMixin, BaseSettings):
     model_config = SettingsConfigDict(env_prefix="VALIDATOR_", env_file=".env", extra="ignore")
 
     rest_entry_point_port: Port = DEFAULT_INGRESS_PORT
@@ -49,8 +49,6 @@ class CatValidatorSettings(OpenRouterSettingsMixin, BaseSettings):
 
     netuid: NetUid
     external_ip: str
-    pylon_service_address: str
-    pylon_open_access_token: str
     s3_bucket: str = DEFAULT_S3_BUCKET
 
     @model_validator(mode="after")

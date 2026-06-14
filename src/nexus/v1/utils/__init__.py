@@ -33,6 +33,7 @@ from nexus._internal.utils.immutable_map import ImmutableMap
 from nexus._internal.utils.netuid import load_required_netuid_from_env, validate_netuid
 from nexus._internal.utils.openrouter_client import OpenRouterClient
 from nexus._internal.utils.openrouter_config import OpenRouterSettingsMixin
+from nexus._internal.utils.pylon_client_settings import PylonClientSettingsMixin
 from nexus._internal.utils.subnet_settings import (
     get_subnet_settings_as,
     initialize_subnet_settings,
@@ -76,6 +77,7 @@ __all__ = [
     "OpenRouterClient",
     "OpenRouterSettingsMixin",
     "Port",
+    "PylonClientSettingsMixin",
     "RemoteExecutionException",
     "RemoteRequestFailedException",
     "RemoteRequestRejectedException",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import override
@@ -18,6 +19,7 @@ from pylon_client.artanis.v1 import (
 )
 
 from nexus.v1 import (
+    AsyncPylonClientLike,
     AsyncPylonClientProvider,
     Hotkey,
     IdentityPylonApiLike,
@@ -126,11 +128,11 @@ class FakeAsyncPylonClient:
     async def __aenter__(self) -> FakeAsyncPylonClient:
         return self
 
-    async def __aexit__(self, *args: object) -> None:
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         pass
 
     @asynccontextmanager
-    async def get_neuron_client(self, neuron: Neuron, timeout: float = 30.0):  # noqa: ANN201
+    async def get_neuron_client(self, neuron: Neuron, timeout: float = 30.0) -> AsyncIterator[httpx.AsyncClient]:
         base_url = f"http://{neuron.axon_info.ip}:{neuron.axon_info.port}"
         async with httpx.AsyncClient(base_url=base_url) as client:
             yield client
@@ -142,11 +144,11 @@ class FailingMtlsFakeAsyncPylonClient:
     async def __aenter__(self) -> FailingMtlsFakeAsyncPylonClient:
         return self
 
-    async def __aexit__(self, *args: object) -> None:
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         pass
 
     @asynccontextmanager
-    async def get_neuron_client(self, neuron: Neuron, timeout: float = 30.0):  # noqa: ANN201
+    async def get_neuron_client(self, neuron: Neuron, timeout: float = 30.0) -> AsyncIterator[httpx.AsyncClient]:
         raise MtlsVerificationError("cert verification failed")
         yield  # unreachable — required by asynccontextmanager
 
@@ -155,7 +157,7 @@ class FakeAsyncPylonClientProvider(AsyncPylonClientProvider):
     """Provides a plain-HTTP fake pylon client for tests (no mTLS)."""
 
     @override
-    def get_client(self) -> FakeAsyncPylonClient:  # type: ignore[override]
+    def get_client(self) -> AsyncPylonClientLike:
         return FakeAsyncPylonClient()
 
 
@@ -163,5 +165,5 @@ class FailingMtlsAsyncPylonClientProvider(AsyncPylonClientProvider):
     """Provides a fake pylon client that simulates mTLS verification failure."""
 
     @override
-    def get_client(self) -> FailingMtlsFakeAsyncPylonClient:  # type: ignore[override]
+    def get_client(self) -> AsyncPylonClientLike:
         return FailingMtlsFakeAsyncPylonClient()
