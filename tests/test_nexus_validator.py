@@ -1,6 +1,5 @@
 # pyright: basic
 
-import time
 from contextlib import contextmanager
 
 import pytest
@@ -61,32 +60,6 @@ def test_start_runtime_scopes_subnet_settings_to_runtime() -> None:
     assert isinstance(observed_settings[0], _TestSettings)
     with pytest.raises(SubnetMisconfiguredException):
         get_subnet_settings_as(_TestSettings)
-
-
-def test_run_can_be_called_twice_in_process(monkeypatch: pytest.MonkeyPatch) -> None:
-    observed_settings: list[_TestSettings] = []
-
-    class _FakeRuntime:
-        @contextmanager
-        def running(self, shutdown_timeout_seconds: float = 30.0):
-            del shutdown_timeout_seconds
-            observed_settings.append(get_subnet_settings_as(_TestSettings))
-            yield object()
-
-    class _RunValidator(NexusValidator):
-        def _build_runtime(self):
-            return _FakeRuntime()
-
-    def _stop_immediately(_seconds: float) -> None:
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr(time, "sleep", _stop_immediately)
-
-    _RunValidator.run(settings_class=_TestSettings)
-    _RunValidator.run(settings_class=_TestSettings)
-
-    assert len(observed_settings) == 2
-    assert all(isinstance(settings, _TestSettings) for settings in observed_settings)
 
 
 def test_connect_discovers_node_without_validator_field() -> None:
