@@ -14,7 +14,7 @@ from nexus._internal.core.dsl.flow import Flow
 from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, Source, SourceName
 from nexus._internal.core.runtime.nexus_task import NexusTask
 from nexus._internal.core.runtime.subnet_runtime import SubnetBuilder, SubnetRuntime
-from nexus._internal.utils.subnet_settings import subnet_settings
+from nexus._internal.utils.subnet_settings import initialize_subnet_settings, subnet_settings
 
 log = logging.getLogger("validator")
 
@@ -64,6 +64,7 @@ class NexusValidator:
         logging.getLogger("httpx").setLevel(logging.WARN)
 
         settings = cls._load_settings_or_exit(settings_class)
+        initialize_subnet_settings(settings)
         validator = cls(settings)
 
         with validator.start_runtime(shutdown_timeout_seconds=shutdown_timeout_seconds):
