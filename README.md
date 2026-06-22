@@ -47,6 +47,7 @@ communication. mTLS is enabled when both cert env vars are present; plain HTTP i
 | `VALIDATOR_MTLS_CERT_PATH` | Path to the validator TLS certificate |
 | `VALIDATOR_MTLS_KEY_PATH` | Path to the validator TLS private key |
 | `VALIDATOR_NEURONS_FILE` | Path to a local neurons JSON file — bypasses chain lookup, disables mTLS; intended for local dev only |
+| `VALIDATOR_NEURON_CONNECTION_KEEPALIVE_EXPIRY` | Seconds an idle connection to a neuron stays pooled before being closed (default 60) |
 
 ## Validator wiring
 
