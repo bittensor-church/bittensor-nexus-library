@@ -123,6 +123,7 @@ class EnvPylonClientProvider(PylonClientProvider):
                 mtls_cert_path=settings.mtls_cert_path,
                 mtls_key_path=settings.mtls_key_path,
                 neurons_file=settings.neurons_file,
+                neuron_keepalive_expiry=settings.neuron_keepalive_expiry,
             )
         )
 
@@ -162,6 +163,7 @@ class EnvAsyncPylonClientProvider(AsyncPylonClientProvider):
                 mtls_cert_path=settings.mtls_cert_path,
                 mtls_key_path=settings.mtls_key_path,
                 neurons_file=settings.neurons_file,
+                neuron_keepalive_expiry=settings.neuron_keepalive_expiry,
             )
         )
 

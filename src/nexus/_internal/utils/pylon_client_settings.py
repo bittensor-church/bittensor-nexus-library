@@ -15,6 +15,10 @@ class PylonClientSettingsMixin(BaseModel):
     mtls_cert_path: str | None = Field(validation_alias="VALIDATOR_MTLS_CERT_PATH", default=None)
     mtls_key_path: str | None = Field(validation_alias="VALIDATOR_MTLS_KEY_PATH", default=None)
     neurons_file: str | None = Field(validation_alias="VALIDATOR_NEURONS_FILE", default=None)
+    # Seconds an idle connection to a neuron stays pooled before being closed; reused across get_neuron_client calls.
+    neuron_keepalive_expiry: float = Field(
+        validation_alias="VALIDATOR_NEURON_CONNECTION_KEEPALIVE_EXPIRY", default=60.0
+    )
 
     @model_validator(mode="after")
     def check_identity_fields(self) -> PylonClientSettingsMixin:
