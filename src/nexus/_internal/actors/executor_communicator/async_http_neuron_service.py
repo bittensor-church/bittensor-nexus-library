@@ -14,7 +14,7 @@ from litestar.response import Response
 from pydantic import AnyHttpUrl, BaseModel, ValidationError
 from pylon_client.artanis import Port
 
-from nexus._internal.logging_utils import get_logger
+from nexus._internal.logging_utils import get_logger, host_friendly_logging_config
 from nexus._internal.utils.exceptions import ActorMisconfiguredException, RemoteRequestFailedException
 
 from .async_http_protocol import (
@@ -142,7 +142,7 @@ class AsyncHttpNeuronService[InputModel: BaseModel, OutputModel: BaseModel]:
             del request_path
             return self._text_response(status=405, body="Method Not Allowed\n")
 
-        return Litestar(route_handlers=[handle_post, handle_get])
+        return Litestar(route_handlers=[handle_post, handle_get], logging_config=host_friendly_logging_config())
 
     async def _handle_post(self, *, request: Any) -> Response[str]:
         content_length_header = request.headers.get("content-length")
