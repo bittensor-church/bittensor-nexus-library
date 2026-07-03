@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import TYPE_CHECKING, TextIO
+from typing import TextIO
 
-if TYPE_CHECKING:
-    from litestar.logging.config import LoggingConfig
+from litestar.logging.config import LoggingConfig
 
 _LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(filename)s:%(lineno)d | %(message)s"
 
@@ -25,8 +24,6 @@ def host_friendly_logging_config() -> LoggingConfig:
     scoped to its own ``litestar`` logger and leaves the root logger — and therefore the host's chosen
     log format — alone.
     """
-    from litestar.logging.config import LoggingConfig
-
     return LoggingConfig(configure_root_logger=False)
 
 
