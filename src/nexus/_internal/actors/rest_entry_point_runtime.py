@@ -20,7 +20,7 @@ from nexus._internal.core.dsl.nodes import Source
 from nexus._internal.core.runtime.context_store import ContextStore
 from nexus._internal.core.runtime.context_store_types import ContextId
 from nexus._internal.core.runtime.events import PipeToBus, SendEvent
-from nexus._internal.logging_utils import get_logger
+from nexus._internal.logging_utils import get_logger, host_friendly_logging_config
 from nexus._internal.utils.exceptions import InternalFrameworkException
 
 from .executor_communicator.common import NormalizedHttpPath
@@ -267,7 +267,7 @@ class RestEntryPointRuntime[Model: BaseModel]:
                     elapsed_ms,
                 )
 
-        return Litestar(route_handlers=[handle_request])
+        return Litestar(route_handlers=[handle_request], logging_config=host_friendly_logging_config())
 
     @staticmethod
     async def _dispatch_request[ModelT: BaseModel](

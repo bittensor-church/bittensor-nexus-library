@@ -23,7 +23,7 @@ from litestar.response import Response
 from pydantic import BaseModel, ValidationError
 from pylon_client.artanis import Port
 
-from nexus._internal.logging_utils import get_logger
+from nexus._internal.logging_utils import get_logger, host_friendly_logging_config
 from nexus._internal.utils.exceptions import (
     RemoteExecutionException,
     ResponseInvalidException,
@@ -187,7 +187,7 @@ class CallbackHttpServerRuntime[OutputModel: BaseModel]:
                 )
                 return Response(content="Internal callback error\n", status_code=500, media_type=MediaType.TEXT)
 
-        return Litestar(route_handlers=[callback])
+        return Litestar(route_handlers=[callback], logging_config=host_friendly_logging_config())
 
     @staticmethod
     def _process_callback[OutputModelT: BaseModel](
