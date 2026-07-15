@@ -6,6 +6,7 @@ from ipaddress import IPv4Address
 from typing import cast
 
 import pytest
+from fake_pylon_client import FailingMtlsAsyncPylonClientProvider, FakeAsyncPylonClientProvider
 from pydantic import BaseModel
 from pylon_client.artanis import Port
 from pylon_client.artanis.v1 import AxonInfo, AxonProtocol, Neuron
@@ -19,6 +20,7 @@ from nexus.v1 import (
     EmbeddedExecutorFailureException,
     ExecutorFailureException,
     HttpBindEndpoint,
+    MinerMtlsVerificationException,
     ProcessedInput,
     RemoteExecutionException,
     RemoteRequestFailedException,
@@ -120,6 +122,7 @@ def communicator_factory(
             callback_base_url=callback_url_override or callback_base_url,
             input_model=CommunicatorInput,
             output_model=CommunicatorOutput,
+            async_pylon_client_provider=FakeAsyncPylonClientProvider(),
         )
 
     return _build
@@ -303,3 +306,38 @@ def test_embedded_executor_communicator_actor_emits_executor_failure_on_executio
     assert isinstance(failure.output, ExecutorFailureException)
     assert isinstance(failure.output.executor_error, EmbeddedExecutorFailureException)
     assert isinstance(failure.output.executor_error.__cause__, RuntimeError)
+
+
+def test_async_http_neuron_communicator_emits_error_on_mtls_verification_failure(
+    unused_local_port: Callable[[], Port],
+    response_listener: ResponseListener,
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    response_bind, callback_base_url = response_listener
+    callback_bind_ip = cast(IPv4Address, response_bind.host)
+
+    communicator = AsyncHttpNeuronCommunicator[CommunicatorInput, CommunicatorOutput](
+        "communicator-mtls-failure",
+        target_path=DEFAULT_SERVICE_PATH,
+        send_timeout=DEFAULT_SEND_TIMEOUT,
+        total_processing_timeout=DEFAULT_TOTAL_PROCESSING_TIMEOUT,
+        callback_bind_ip=callback_bind_ip,
+        callback_port=response_bind.port,
+        callback_path=DEFAULT_RESPONSE_PATH,
+        callback_base_url=callback_base_url,
+        input_model=CommunicatorInput,
+        output_model=CommunicatorOutput,
+        async_pylon_client_provider=FailingMtlsAsyncPylonClientProvider(),
+    )
+    setup = transform_actor_test_setup_factory(communicator)
+    neuron = build_test_neuron(port=unused_local_port())
+    routed_input = Routed(input=CommunicatorInput(text="hello"), target=neuron)
+
+    with setup.running():
+        setup.send(input_payload=routed_input)
+        wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
+
+    assert len(setup.error_collector.received_events) == 0
+    failure = setup.processed_collector.received_events[0].payload
+    assert isinstance(failure.output, ExecutorFailureException)
+    assert isinstance(failure.output.executor_error, MinerMtlsVerificationException)
