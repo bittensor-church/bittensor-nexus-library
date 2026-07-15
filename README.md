@@ -33,6 +33,21 @@ uvx nox -vs cat-images-lint
 uvx nox -vs cat-images-test
 ```
 
+## mTLS configuration
+
+The default `EnvAsyncPylonClientProvider` builds the async Pylon client used for validator→miner HTTP
+communication. mTLS is enabled when both cert env vars are present; plain HTTP is used otherwise.
+
+> **Note:** mTLS requires the validator to be a registered neuron with its public key on-chain. Cert
+> generation and verification are tied to the validator's Pylon identity (`VALIDATOR_PYLON_IDENTITY_NAME`
+> and `VALIDATOR_PYLON_IDENTITY_TOKEN`), so mTLS will not work without valid on-chain registration.
+
+| Variable | Description |
+|---|---|
+| `VALIDATOR_MTLS_CERT_PATH` | Path to the validator TLS certificate |
+| `VALIDATOR_MTLS_KEY_PATH` | Path to the validator TLS private key |
+| `VALIDATOR_NEURONS_FILE` | Path to a local neurons JSON file — bypasses chain lookup, disables mTLS; intended for local dev only |
+
 ## Validator wiring
 
 `NexusValidator` discovers runtime components from `connect(source, sink)` calls.
