@@ -23,7 +23,13 @@ DEFAULT_VALIDATION_PROMPT = (
 )
 
 
-class CatValidatorSettings(OpenRouterSettingsMixin, PylonClientSettingsMixin, BaseSettings):
+# The mixins type model_config as ConfigDict (they're plain BaseModel classes), while BaseSettings
+# types it as SettingsConfigDict. basedpyright flags that as a mismatch, but it's harmless: every
+# ConfigDict field is also a valid SettingsConfigDict field, and pydantic merges all of them into one
+# dict at runtime regardless of which type each base declared.
+class CatValidatorSettings(  # pyright: ignore[reportIncompatibleVariableOverride]
+    OpenRouterSettingsMixin, PylonClientSettingsMixin, BaseSettings
+):
     model_config = SettingsConfigDict(env_prefix="VALIDATOR_", env_file=".env", extra="ignore")
 
     rest_entry_point_port: Port = DEFAULT_INGRESS_PORT
