@@ -4,7 +4,7 @@ import logging
 import threading
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Iterator
+from collections.abc import Generator, Iterable
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from typing import Any, cast, override
@@ -96,7 +96,7 @@ class ThreadContextStoreLocks(ContextStoreLocks):
 
     @override
     @contextmanager
-    def lock_context(self, ctx: ContextId) -> Iterator[None]:
+    def lock_context(self, ctx: ContextId) -> Generator[None]:
         with self.__registry_lock:
             context_lock = self.__locks.get(ctx, None)
         if context_lock is None:
@@ -386,7 +386,7 @@ class ContextStore:
             raise InternalFrameworkException("ContextStore should be initialized using factory methods, not directly.")
 
     @contextmanager
-    def create_context(self, *, parents: tuple[ContextId, ...] = ()) -> Iterator[Context]:
+    def create_context(self, *, parents: tuple[ContextId, ...] = ()) -> Generator[Context]:
         """
         Creates a new Context with the given parent contexts, and yields it with a context manager
         that ensures mutual exclusion on the new context.
@@ -419,7 +419,7 @@ class ContextStore:
             yield context
 
     @contextmanager
-    def get_context(self, ctx: ContextId) -> Iterator[Context]:
+    def get_context(self, ctx: ContextId) -> Generator[Context]:
         with self.__locks.lock_context(ctx):
             if ctx not in self.__contexts:
                 raise InvalidContextIdException(f"Context {ctx} not found")
@@ -462,7 +462,7 @@ class ContextStore:
         self.__persistence.append_entry(ctx, entry)
 
     @contextmanager
-    def _lock_contexts(self, context_ids: Iterable[ContextId]) -> Iterator[None]:
+    def _lock_contexts(self, context_ids: Iterable[ContextId]) -> Generator[None]:
         with ExitStack() as stack:
             for context_id in sorted(set(context_ids)):
                 stack.enter_context(self.__locks.lock_context(context_id))
