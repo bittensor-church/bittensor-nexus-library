@@ -106,7 +106,9 @@ def test_block_beat(blocks: list[BlockNumber], beats: list[BlockNumber], nth: Bl
         context_store=builder.context_store,
     )
 
-    runtime = builder.add_flows(Flow.from_connectable(beat.source).then(collector.sink)).add_actors(collector).build()
+    runtime = (
+        builder.add_flows(Flow.from_connectable(beat.source).then(taps=[collector.sink])).add_actors(collector).build()
+    )
 
     with runtime.running(shutdown_timeout_seconds=1.0):
         wait_until(lambda: len(collector.received_events) >= len(expected_beats))
@@ -138,7 +140,9 @@ def test_block_beat_retries_after_transient_pylon_failure(caplog: pytest.LogCapt
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
     )
-    runtime = builder.add_flows(Flow.from_connectable(beat.source).then(collector.sink)).add_actors(collector).build()
+    runtime = (
+        builder.add_flows(Flow.from_connectable(beat.source).then(taps=[collector.sink])).add_actors(collector).build()
+    )
 
     with caplog.at_level("WARNING", logger="nexus._internal.actors.chain_beat.block_beat"):
         with runtime.running(shutdown_timeout_seconds=1.0):
@@ -181,7 +185,7 @@ def test_block_beat_fans_out_to_concurrent_actors():
     )
 
     runtime = (
-        builder.add_flows(Flow.from_connectable(beat.source).then(worker_a.sink, worker_b.sink))
+        builder.add_flows(Flow.from_connectable(beat.source).then(taps=[worker_a.sink, worker_b.sink]))
         .add_actors(worker_a, worker_b)
         .build()
     )
