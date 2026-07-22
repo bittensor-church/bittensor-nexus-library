@@ -32,7 +32,8 @@ from .context_store_types import (
 from .serialization import unsafe_pickle_load
 
 type LastMessages = dict[ContextId, MessageSent]
-
+type AnyPayload = Any
+type AnyUserData = Any
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -181,13 +182,13 @@ class Context:
     def id(self) -> ContextId:
         return self._id
 
-    def copy_payload(self) -> Any:
+    def copy_payload(self) -> AnyPayload:
         """
         Return a deep copy of the context's current payload.
         """
         return copy.deepcopy(self._payload)
 
-    def copy_user_data(self) -> dict[str, Any]:
+    def copy_user_data(self) -> dict[str, AnyUserData]:
         """
         Return a deep copy of the context's current user data.
         """
@@ -207,7 +208,7 @@ class Context:
         self,
         _id: ContextId,
         payload: Any,
-        user_data: dict[str, Any],
+        user_data: dict[str, AnyUserData],
         parent_contexts: tuple[ParentContextSnapshot, ...],
         context_store: ContextStore,
     ) -> None:
@@ -429,6 +430,11 @@ class ContextStore:
 
         Parents get locked for the duration of the context creation to ensure that no new log entries
         are appended to them during the creation process
+
+        There is an important distinction between two cases - a single parent child and multiparent child:
+        A single parent child context contains a deep copy of the parent context's payload and user data
+        Multiparent child context has empty payload and user data.
+        In both cases the snapshots of parent contexts' contents are available through copy_parent_context_snapshots()
 
         Raises:
             InvalidContextIdException: if one of the provided parent context ids does not exist.
