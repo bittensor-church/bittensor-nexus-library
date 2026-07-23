@@ -113,19 +113,19 @@ class Flow:
 
             self.exit_sources = NodeSources(sources={})
             return self
+         else:
+            if default_targets.primary is None and not default_targets.taps:
+                raise FlowMisconfiguredException("expected continuation of the flow as either a primary or tap target")
 
-        if default_targets.primary is None and not default_targets.taps:
-            raise FlowMisconfiguredException("expected continuation of the flow as either a primary or tap target")
+            source = self.exit_sources.default_source
+            if source is None:
+                raise FlowMisconfiguredException(
+                    "No default exit source to connect the continuation to the provided sinks: "
+                    f"exit_sources={self.exit_sources}"
+                )
 
-        source = self.exit_sources.default_source
-        if source is None:
-            raise FlowMisconfiguredException(
-                "No default exit source to connect the continuation to the provided sinks: "
-                f"exit_sources={self.exit_sources}"
-            )
-
-        self.exit_sources = self._connect_targets(source, default_targets)
-        return self
+            self.exit_sources = self._connect_targets(source, default_targets)
+            return self
 
     def _connect[T](
         self,
@@ -193,4 +193,5 @@ class Flow:
     def _as_flow(component: Connectable | Flow) -> Flow:
         if isinstance(component, Flow):
             return component
-        return Flow.from_connectable(component)
+        else:
+            return Flow.from_connectable(component)

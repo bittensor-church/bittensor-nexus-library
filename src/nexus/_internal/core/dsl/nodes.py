@@ -345,33 +345,36 @@ class Pipes(Mapping[Source[Any], Targets[Sink[Any]]]):
         taps: Iterable[Sink[T]] = (),
     ) -> None:
         """Add targets for ``source``, merging repeated declarations safely."""
-        incoming = Targets[Sink[T]](primary=primary, taps=taps)
-        if incoming.primary is None and not incoming.taps:
+        targets = Targets[Sink[T]](primary=primary, taps=taps)
+        if targets.primary is None and not targets.taps:
             raise FlowMisconfiguredException(f"Expected at least one target for source {source.id!r}.")
 
         existing = self._targets.get(source)
-        if existing is None:
-            self._validate_roles(source, incoming)
-            self._targets[source] = incoming
-            return
+        if existing is not None:
+            targets = self._merge_targets(source, existing, targets)
 
+        self._validate_roles(source, targets)
+        self._targets[source] = targets
+
+    def merge(self, other: Pipes) -> None:
+        """Merge another connection graph while preserving target roles."""
+        for source, targets in other.items():
+            self.connect(source, targets.primary, taps=targets.taps)
+
+    @staticmethod
+    def _merge_targets[T](
+        source: Source[T], existing: Targets[Sink[T]], incoming: Targets[Sink[T]]
+    ) -> Targets[Sink[T]]:
         if existing.primary is not None and incoming.primary is not None and existing.primary != incoming.primary:
             raise FlowMisconfiguredException(
                 f"Source {source.id!r} cannot have multiple primary targets: "
                 f"{existing.primary.id!r} and {incoming.primary.id!r}."
             )
 
-        merged = Targets(
+        return Targets(
             primary=existing.primary if existing.primary is not None else incoming.primary,
             taps=existing.taps | incoming.taps,
         )
-        self._validate_roles(source, merged)
-        self._targets[source] = merged
-
-    def merge(self, other: Pipes) -> None:
-        """Merge another connection graph while preserving target roles."""
-        for source, targets in other.items():
-            self.connect(source, targets.primary, taps=targets.taps)
 
     @staticmethod
     def _validate_roles(source: Source[Any], targets: Targets[Sink[Any]]) -> None:
