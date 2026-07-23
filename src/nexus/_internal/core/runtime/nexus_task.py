@@ -33,7 +33,7 @@ class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput = E
     source successful_task_result: persisted success branch, emitted with a new child context
     source executor_failure: persisted executor-failure branch, emitted with a new child context
     source executor_output: converted executor result for downstream consumers; success-only
-    source error: framework-side failures — retries exhausted, or preparation/conversion failed
+    source error: framework-side failures — retries exhausted, or task result preparation failed
     """
 
     name: NexusTaskName
@@ -154,9 +154,9 @@ class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput = E
         self.internal_flow.sources.add(self.executor_output)
 
         def connect[T](source: Source[T], sink: Sink[T]) -> None:
+            self.internal_flow.pipes.connect(source, sink)
             self.internal_flow.sources.add(source)
             self.internal_flow.sinks.add(sink)
-            self.internal_flow.pipes[source].add(sink)
 
         connect(self.retry.next_attempt, self.payload_creator.input)
         connect(self.payload_creator.created_payload, self.router.input)
@@ -190,7 +190,6 @@ class NexusTask[Input, ExecutorPayload, ExecutorOutput, ExecutorPublicOutput = E
         connect(self.retry.error, self.error_mux.left)
         connect(self.task_result_preparer.error, self.error_mux.right)
         connect(self.executor_result_converter.error, self.task_result_preparer.conversion_failed)
-        connect(self.executor_result_converter.error, self.error_mux.right)
 
     def internal_nodes(self) -> tuple[Node, ...]:
         """Return all internal nodes in build order for `SubnetBuilder(nodes=...)`."""

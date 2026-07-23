@@ -34,17 +34,20 @@ from nexus.v1 import (
     ExecutorFailureException,
     ExecutorFailureTaskResult,
     Flow,
+    MessagesToSend,
     NexusException,
     NexusTask,
     NexusTaskName,
     PayloadCreator,
     PipeToBus,
+    ReceiveEvent,
     RetriesExhaustedException,
     RetryStrategy,
     SendEvent,
     Source,
     SubnetBuilder,
     SuccessfulTaskResult,
+    Timestamped,
     TransformActor,
 )
 
@@ -66,19 +69,59 @@ class PrefixingExecutorResultConverterActor(TransformActor[DummyExecutorOutput, 
 
 
 class FailingExecutorResultConverter(PayloadCreator[DummyExecutorOutput, str], ActorBuilder):
+    user_data_before_failure: list[dict[str, object]]
+
+    def __init__(self, _id: str) -> None:
+        super().__init__(_id)
+        self.user_data_before_failure = []
+
     @override
     def build_actor(self, *, pipe_to_bus: PipeToBus, context_store: ContextStore) -> Actor:
         return FailingExecutorResultConverterActor(
             spec=self,
             pipe_to_bus=pipe_to_bus,
             context_store=context_store,
+            user_data_before_failure=self.user_data_before_failure,
         )
 
 
 class FailingExecutorResultConverterActor(TransformActor[DummyExecutorOutput, str]):
+    user_data_before_failure: list[dict[str, object]]
+
+    def __init__(
+        self,
+        *,
+        spec: FailingExecutorResultConverter,
+        pipe_to_bus: PipeToBus,
+        context_store: ContextStore,
+        user_data_before_failure: list[dict[str, object]],
+    ) -> None:
+        super().__init__(spec=spec, pipe_to_bus=pipe_to_bus, context_store=context_store)
+        self.user_data_before_failure = user_data_before_failure
+
     @override
     def _transform(self, ctx: Context, payload: DummyExecutorOutput) -> str:
+        self.user_data_before_failure.append(ctx.copy_user_data())
         raise NexusException("forced converter failure")
+
+
+class UserDataErrorCollector(CollectorActor[NexusException]):
+    user_data_on_error: list[dict[str, object]]
+
+    def __init__(
+        self,
+        *,
+        pipe_to_bus: PipeToBus,
+        context_store: ContextStore,
+        name: str = "user-data-error-collector",
+    ) -> None:
+        super().__init__(pipe_to_bus=pipe_to_bus, context_store=context_store, name=name)
+        self.user_data_on_error = []
+
+    @override
+    def _handle(self, ctx: Context, event: ReceiveEvent[NexusException]) -> MessagesToSend:
+        self.user_data_on_error.append(ctx.copy_user_data())
+        return super()._handle(ctx, event)
 
 
 def assert_stored_task_result(
@@ -295,7 +338,7 @@ def test_nexus_task_applies_non_trivial_executor_result_converter() -> None:
         builder.add_flows(
             task.internal_flow,
             Flow.from_connectable(input_source).then(task.input),
-            Flow.from_connectable(block_beat_source.source).then(task.block_beat),
+            Flow.from_connectable(block_beat_source.source).then(taps=[task.block_beat]),
             Flow.from_connectable(task.successful_task_result).then(successful_task_result_collector.sink),
             Flow.from_connectable(task.executor_failure).then(executor_failure_collector.sink),
             Flow.from_connectable(task.executor_output).then(executor_output_collector.sink),
@@ -410,7 +453,7 @@ def test_nexus_task_emits_error_when_executor_result_converter_fails_without_ret
         context_store=builder.context_store,
         name="nexus-task-executor-output-collector",
     )
-    error_collector = CollectorActor[NexusException](
+    error_collector = UserDataErrorCollector(
         pipe_to_bus=builder.pipe_to_bus,
         context_store=builder.context_store,
         name="nexus-task-error-collector",
@@ -422,7 +465,7 @@ def test_nexus_task_emits_error_when_executor_result_converter_fails_without_ret
         builder.add_flows(
             task.internal_flow,
             Flow.from_connectable(input_source).then(task.input),
-            Flow.from_connectable(block_beat_source.source).then(task.block_beat),
+            Flow.from_connectable(block_beat_source.source).then(taps=[task.block_beat]),
             Flow.from_connectable(task.successful_task_result).then(successful_task_result_collector.sink),
             Flow.from_connectable(task.executor_failure).then(executor_failure_collector.sink),
             Flow.from_connectable(task.executor_output).then(executor_output_collector.sink),
@@ -465,6 +508,17 @@ def test_nexus_task_emits_error_when_executor_result_converter_fails_without_ret
     assert len(successful_task_result_collector.received_events) == 0
     assert len(executor_failure_collector.received_events) == 0
     assert len(executor_output_collector.received_events) == 0
+    assert len(error_collector.received_events) == 1
+    assert len(executor_result_converter.user_data_before_failure) == 1
+    user_data_before_failure = executor_result_converter.user_data_before_failure[0]
+    timestamped_keys = [key for key, value in user_data_before_failure.items() if isinstance(value, Timestamped)]
+    assert len(timestamped_keys) == 1
+    pending_result_key = timestamped_keys[0]
+
+    assert len(error_collector.user_data_on_error) == 1
+    user_data_on_error = error_collector.user_data_on_error[0]
+    assert pending_result_key in user_data_on_error
+    assert user_data_on_error[pending_result_key] is None
     assert payload_creator.attempts_by_ctx[input_ctx_id] == 1
     assert executor_communicator.attempts_by_ctx[input_ctx_id] == 1
 

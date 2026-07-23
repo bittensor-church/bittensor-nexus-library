@@ -38,7 +38,7 @@ def test_timestamper_input_sets_start_timestamp_and_forwards_input() -> None:
 
     assert input_collector.received_events[0].payload == payload
     with runtime.context_store.get_context(ctx_id) as context:
-        saved_start_time = context.user_data[timestamper.processing_started_at_user_data_key]
+        saved_start_time = context.copy_user_data()[timestamper.processing_started_at_user_data_key]
     assert isinstance(saved_start_time, datetime)
     assert saved_start_time.tzinfo == UTC
     assert datetime.now(tz=UTC) - saved_start_time <= timedelta(minutes=1)
@@ -67,7 +67,7 @@ def test_timestamper_queues_output_until_first_block_beat() -> None:
         builder.add_flows(
             Flow.from_connectable(upstream_input).then(timestamper.input),
             Flow.from_connectable(upstream_output).then(timestamper.executor_output),
-            Flow.from_connectable(upstream_block_beat).then(timestamper.block_beat),
+            Flow.from_connectable(upstream_block_beat).then(taps=[timestamper.block_beat]),
             Flow.from_connectable(timestamper.forwarded_input).then(input_collector.sink),
             Flow.from_connectable(timestamper.timestamped_output).then(output_collector.sink),
         )
@@ -95,7 +95,7 @@ def test_timestamper_queues_output_until_first_block_beat() -> None:
 
     timestamped = output_collector.received_events[0].payload
     with runtime.context_store.get_context(ctx_id) as context:
-        saved_start_time = context.user_data[timestamper.processing_started_at_user_data_key]
+        saved_start_time = context.copy_user_data()[timestamper.processing_started_at_user_data_key]
 
     assert timestamped.executor_output == output_payload
     assert timestamped.block_at_finish == block_beat
@@ -124,7 +124,7 @@ def test_timestamper_uses_most_recent_block_beat_for_output() -> None:
         builder.add_flows(
             Flow.from_connectable(upstream_input).then(timestamper.input),
             Flow.from_connectable(upstream_output).then(timestamper.executor_output),
-            Flow.from_connectable(upstream_block_beat).then(timestamper.block_beat),
+            Flow.from_connectable(upstream_block_beat).then(taps=[timestamper.block_beat]),
             Flow.from_connectable(timestamper.timestamped_output).then(output_collector.sink),
         )
         .add_actors(output_collector)
@@ -167,7 +167,7 @@ def test_timestamper_drops_entries_older_than_five_minutes_when_logging_error(ca
     runtime = (
         builder.add_flows(
             Flow.from_connectable(upstream_output).then(timestamper.executor_output),
-            Flow.from_connectable(upstream_block_beat).then(timestamper.block_beat),
+            Flow.from_connectable(upstream_block_beat).then(taps=[timestamper.block_beat]),
             Flow.from_connectable(timestamper.timestamped_output).then(output_collector.sink),
         )
         .add_actors(output_collector)

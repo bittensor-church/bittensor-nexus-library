@@ -13,16 +13,19 @@ import deepdiff
 
 from ... import get_logger
 from ...utils.exceptions import InternalFrameworkException, InternalStateCorruptionException
+from ...utils.immutable_map import ImmutableMap
 from ..dsl.nodes import Source
 from .context_store_types import (
     ChildContextCreated,
     ContextCompleted,
     ContextCreated,
+    ContextDataInitialized,
     ContextId,
     InvalidContextIdException,
     LogEntry,
     LogEntryData,
     MessageSent,
+    ParentContextSnapshot,
     StepIdx,
     UserDataChange,
     UserNote,
@@ -30,7 +33,8 @@ from .context_store_types import (
 from .serialization import unsafe_pickle_load
 
 type LastMessages = dict[ContextId, MessageSent]
-
+type AnyPayload = Any
+type AnyUserData = Any
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -170,21 +174,36 @@ class Context:
     _id: ContextId
     _payload: Any
     _user_data: dict[str, Any]
+    _parent_contexts: tuple[ParentContextSnapshot, ...]
     _is_completed: bool
 
     _context_store: ContextStore
 
     @property
-    def id(self):
+    def id(self) -> ContextId:
         return self._id
 
-    @property
-    def payload(self):
+    def copy_payload(self) -> AnyPayload:
+        """
+        Return a deep copy of the context's current payload.
+        """
         return copy.deepcopy(self._payload)
 
-    @property
-    def user_data(self):
+    def copy_user_data(self) -> dict[str, AnyUserData]:
+        """
+        Return a deep copy of the context's current user data.
+        """
         return copy.deepcopy(self._user_data)
+
+    def copy_parent_context_snapshots(self) -> ImmutableMap[ContextId, ParentContextSnapshot]:
+        """
+        Return parent snapshots keyed by parent context ID.
+
+        The snapshots and their contents are deep copies of the state captured when this context was created.
+        Mapping iteration order is not part of the API; access snapshots by their parent context ID.
+        """
+        parent_contexts = copy.deepcopy(self._parent_contexts)
+        return ImmutableMap((snapshot.ctx_id, snapshot) for snapshot in parent_contexts)
 
     @property
     def is_completed(self) -> bool:
@@ -194,12 +213,14 @@ class Context:
         self,
         _id: ContextId,
         payload: Any,
-        user_data: dict[str, Any],
+        user_data: dict[str, AnyUserData],
+        parent_contexts: tuple[ParentContextSnapshot, ...],
         context_store: ContextStore,
     ) -> None:
         self._id = _id
         self._payload = payload
         self._user_data = user_data
+        self._parent_contexts = parent_contexts
         self._is_completed = False
         self._context_store = context_store
 
@@ -250,14 +271,17 @@ class ContextStore:
     A context log always starts with a ContextCreated entry and ends with a ContextCompleted entry.
 
     A context can scatter processing across multiple contexts by creating child contexts (e.g. consider
-    a use case where a child context is created to execute validation, and another child context continues
-    to return a response to the user;
+    a use case where one child context is created to execute validation, and another child context continues
+    to return a response to the user). Single-parent children inherit their parent's current payload and user data.
 
     Multiple parent context can be gathered together to create a child context that represents
     the combined processing of all parent contexts. E.g. consider a use case where multiple
     user requests are batched together to be processed as a single unit, and a child context
     is created to represent the processing of the batch. Later on, the child context can
-    be scattered again to return individual responses to each individual user request.
+    be scattered again to return individual responses to each individual user request. Multi-parent children
+    keep empty payload/user data and expose creation-time parent snapshots through
+    Context.copy_parent_context_snapshots(), keyed by parent context ID. Snapshot iteration order is not part
+    of the API. Repeated parent IDs produce one parent-child relationship and one snapshot.
 
     The scatter-gather operations are realized by contexts having parent-children relationships.
     When a context is created with parent contexts, a log entry is appended to each parent
@@ -338,8 +362,27 @@ class ContextStore:
                 case ContextCreated():
                     if ctx in contexts:
                         raise InternalStateCorruptionException(f"Context {ctx} already exists during recovery.")
-                    context = Context(_id=ctx, payload=None, user_data={}, context_store=context_store)
+                    context = Context(
+                        _id=ctx,
+                        payload=None,
+                        user_data={},
+                        parent_contexts=(),
+                        context_store=context_store,
+                    )
                     contexts[ctx] = context
+                case ContextDataInitialized(
+                    payload=payload,
+                    user_data=user_data,
+                    parent_contexts=parent_contexts,
+                ):
+                    context = contexts.get(ctx, None)
+                    if context is None:
+                        raise InternalStateCorruptionException(
+                            f"ContextDataInitialized for missing context {ctx} during recovery."
+                        )
+                    context._payload = copy.deepcopy(payload)  # pyright: ignore[reportPrivateUsage]
+                    context._user_data = copy.deepcopy(user_data)  # pyright: ignore[reportPrivateUsage]
+                    context._parent_contexts = copy.deepcopy(parent_contexts)  # pyright: ignore[reportPrivateUsage]
                 case ChildContextCreated():
                     pass
                 case MessageSent(payload_delta=payload_delta) as message:
@@ -394,6 +437,13 @@ class ContextStore:
         Parents get locked for the duration of the context creation to ensure that no new log entries
         are appended to them during the creation process
 
+        There is an important distinction between two cases - a single parent child and multiparent child:
+        A single parent child context contains a deep copy of the parent context's payload and user data
+        Multiparent child context has empty payload and user data.
+        In both cases the snapshots of parent contexts' contents are available through
+        copy_parent_context_snapshots(), keyed by parent context ID. Duplicate parent IDs are collapsed before
+        deciding whether the child has one or multiple parents. Snapshot iteration order is not part of the API.
+
         Raises:
             InvalidContextIdException: if one of the provided parent context ids does not exist.
             ContextCompletedException: if one of the provided parent contexts is already completed.
@@ -401,6 +451,7 @@ class ContextStore:
         """
         parent_ids = tuple(dict.fromkeys(parents))
         with self._lock_contexts(parent_ids):
+            parent_snapshots: list[ParentContextSnapshot] = []
             for parent_id in parent_ids:
                 parent_context = self.__contexts.get(parent_id, None)
                 if parent_context is None:
@@ -409,11 +460,41 @@ class ContextStore:
                     raise ContextCompletedException(
                         f"Parent context {parent_id} is completed and cannot create child contexts."
                     )
+                parent_snapshots.append(
+                    ParentContextSnapshot(
+                        ctx_id=parent_context.id,
+                        payload=parent_context.copy_payload(),
+                        user_data=parent_context.copy_user_data(),
+                    )
+                )
+
+            parent_contexts = tuple(parent_snapshots)
+            if len(parent_contexts) == 1:
+                initial_payload = copy.deepcopy(parent_contexts[0].payload)
+                initial_user_data = copy.deepcopy(parent_contexts[0].user_data)
+            else:
+                initial_payload = None
+                initial_user_data = {}
 
             new_context_id = self.__persistence.create_context(parent_ids)
-            context = Context(_id=new_context_id, payload=None, user_data={}, context_store=self)
+            context = Context(
+                _id=new_context_id,
+                payload=initial_payload,
+                user_data=initial_user_data,
+                parent_contexts=copy.deepcopy(parent_contexts),
+                context_store=self,
+            )
             self.__contexts[new_context_id] = context
             self.__locks.register_context(new_context_id)
+            if parent_contexts:
+                self._append_entry(
+                    new_context_id,
+                    ContextDataInitialized(
+                        payload=copy.deepcopy(initial_payload),
+                        user_data=copy.deepcopy(initial_user_data),
+                        parent_contexts=copy.deepcopy(parent_contexts),
+                    ),
+                )
 
         with self.__locks.lock_context(new_context_id):
             yield context
@@ -442,7 +523,7 @@ class ContextStore:
 
         """
         with self.get_context(ctx_id) as context:
-            value = context.user_data.get(key)
+            value = context.copy_user_data().get(key)
 
         if value is None:
             raise InternalStateCorruptionException(f"Missing context user_data for ctx={ctx_id}, key={key!r}.")
