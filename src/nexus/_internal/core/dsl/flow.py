@@ -113,7 +113,7 @@ class Flow:
 
             self.exit_sources = NodeSources(sources={})
             return self
-         else:
+        else:
             if default_targets.primary is None and not default_targets.taps:
                 raise FlowMisconfiguredException("expected continuation of the flow as either a primary or tap target")
 

@@ -13,6 +13,7 @@ import deepdiff
 
 from ... import get_logger
 from ...utils.exceptions import InternalFrameworkException, InternalStateCorruptionException
+from ...utils.immutable_map import ImmutableMap
 from ..dsl.nodes import Source
 from .context_store_types import (
     ChildContextCreated,
@@ -194,11 +195,15 @@ class Context:
         """
         return copy.deepcopy(self._user_data)
 
-    def copy_parent_context_snapshots(self) -> tuple[ParentContextSnapshot, ...]:
+    def copy_parent_context_snapshots(self) -> ImmutableMap[ContextId, ParentContextSnapshot]:
         """
-        Return deep copies of the parent snapshots captured when this context was created.
+        Return parent snapshots keyed by parent context ID.
+
+        The snapshots and their contents are deep copies of the state captured when this context was created.
+        Mapping iteration order is not part of the API; access snapshots by their parent context ID.
         """
-        return copy.deepcopy(self._parent_contexts)
+        parent_contexts = copy.deepcopy(self._parent_contexts)
+        return ImmutableMap((snapshot.ctx_id, snapshot) for snapshot in parent_contexts)
 
     @property
     def is_completed(self) -> bool:
@@ -275,7 +280,8 @@ class ContextStore:
     is created to represent the processing of the batch. Later on, the child context can
     be scattered again to return individual responses to each individual user request. Multi-parent children
     keep empty payload/user data and expose creation-time parent snapshots through
-    Context.copy_parent_context_snapshots().
+    Context.copy_parent_context_snapshots(), keyed by parent context ID. Snapshot iteration order is not part
+    of the API. Repeated parent IDs produce one parent-child relationship and one snapshot.
 
     The scatter-gather operations are realized by contexts having parent-children relationships.
     When a context is created with parent contexts, a log entry is appended to each parent
@@ -434,7 +440,9 @@ class ContextStore:
         There is an important distinction between two cases - a single parent child and multiparent child:
         A single parent child context contains a deep copy of the parent context's payload and user data
         Multiparent child context has empty payload and user data.
-        In both cases the snapshots of parent contexts' contents are available through copy_parent_context_snapshots()
+        In both cases the snapshots of parent contexts' contents are available through
+        copy_parent_context_snapshots(), keyed by parent context ID. Duplicate parent IDs are collapsed before
+        deciding whether the child has one or multiple parents. Snapshot iteration order is not part of the API.
 
         Raises:
             InvalidContextIdException: if one of the provided parent context ids does not exist.

@@ -10,6 +10,9 @@
 - `Flow.then(a, b)` and iterable named routes such as `then(ok=[a, b])` are no longer accepted. Migrate them to
   `then(a, taps=[b])`, `then(taps=[a, b])`, or `then(ok=Targets(primary=a, taps=[b]))` according to the intended roles.
 - `Pipes[source]` now returns `Targets[Sink]` instead of a raw sink set. Read `.primary` and `.taps` explicitly.
+- `Context.copy_parent_context_snapshots()` now returns an
+  `ImmutableMap[ContextId, ParentContextSnapshot]` instead of a tuple. Select snapshots by parent context ID rather
+  than position; mapping iteration order is unspecified. Duplicate parent IDs produce one relationship and snapshot.
 
 ### Changed
 

@@ -106,8 +106,11 @@ reflect the same emission state, even if the primary immediately mutates its par
 the parent is retained as the children's snapshot source but is not dispatched to a sink.
 
 Conversely, when there's a gather point, a new context with multiple parents should be created. Multi-parent
-contexts do not implicitly merge payloads or user data. Instead, they expose ordered parent snapshots through
-`context.copy_parent_context_snapshots()`; the gather actor should build any aggregate payload or user data explicitly.
+contexts do not implicitly merge payloads or user data. Instead, `context.copy_parent_context_snapshots()` exposes an
+immutable mapping from parent context ID to snapshot; the gather actor should select snapshots by ID and build any
+aggregate payload or user data explicitly. Mapping iteration order is not part of the API. Duplicate IDs passed to
+`ContextStore.create_context()` produce one parent relationship and snapshot, and are collapsed before determining
+single- versus multi-parent inheritance.
 
 ### Nexus Task
 
