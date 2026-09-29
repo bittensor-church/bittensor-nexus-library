@@ -16,7 +16,6 @@ from nexus.v1 import (
     BlockNumber,
     Flow,
     Hotkey,
-    IdentityPylonApiLike,
     NetUid,
     NexusException,
     PylonClientProvider,
@@ -26,6 +25,8 @@ from nexus.v1 import (
     Source,
     SubnetBuilder,
     SyncPylonClientLike,
+    UnstableIdentityPylonApiLike,
+    UnstablePylonNamespaceLike,
     WeighingFunc,
     Weight,
     WeightSetterNode,
@@ -50,7 +51,8 @@ type _PipelineResult = tuple[
 @pytest.fixture
 def mock_pylon_client():
     client = create_autospec(spec=SyncPylonClientLike, instance=True)
-    client.identity = create_autospec(spec=IdentityPylonApiLike, instance=True)
+    client.unstable = create_autospec(spec=UnstablePylonNamespaceLike, instance=True)
+    client.unstable.identity = create_autospec(spec=UnstableIdentityPylonApiLike, instance=True)
     client.__enter__.return_value = client
     client.__exit__.return_value = None
     seal(client)
@@ -126,7 +128,7 @@ def test_happy_path_no_retries_needed(mock_pylon_client):
 
 
 def test_succeeds_after_pylon_errors(mock_pylon_client):
-    mock_pylon_client.identity.put_weights.side_effect = [
+    mock_pylon_client.unstable.identity.put_weights.side_effect = [
         PylonResponseException("nope"),
         PylonResponseException("still nope"),
         SetWeightsResponse(),
@@ -166,7 +168,7 @@ def test_succeeds_after_mixed_errors(mock_pylon_client):
     )
     seal(flaky_weighing)
 
-    mock_pylon_client.identity.put_weights.side_effect = [
+    mock_pylon_client.unstable.identity.put_weights.side_effect = [
         PylonResponseException("nope"),
         SetWeightsResponse(),
     ]
@@ -179,7 +181,7 @@ def test_succeeds_after_mixed_errors(mock_pylon_client):
 
 
 def test_fails_after_retries_exhausted(mock_pylon_client):
-    mock_pylon_client.identity.put_weights.side_effect = PylonResponseException("nope forever")
+    mock_pylon_client.unstable.identity.put_weights.side_effect = PylonResponseException("nope forever")
 
     ok, errors, weight_setter_errors = _build_and_run(weighing_func=lambda _: WEIGHTS, pylon_client=mock_pylon_client)
 

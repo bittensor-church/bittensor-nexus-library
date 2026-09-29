@@ -21,7 +21,8 @@ from nexus._internal.core.runtime.context_store import Context, ContextStore
 from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.chain import DEFAULT_TEMPO, get_epoch_containing_block
-from nexus._internal.utils.types import BlockCount, BlockNumber, Epoch, NetUid, Tempo
+from nexus._internal.utils.exceptions import ActorMisconfiguredException
+from nexus._internal.utils.types import BlockCount, BlockNumber, Epoch, MechanismId, NetUid, Tempo
 
 from .block_beat import BlockBeat
 
@@ -43,7 +44,7 @@ class SetWeightsBeatNode(Node, ActorBuilder):
     The conditions for emission are as follows:
       1. Current block is at least `epoch_start_offset` blocks past the epoch start.
       2. The last emitted SetWeightsBeat was at least `attempts_cooldown` blocks ago.
-      3. Weights were not yet submitted for the current epoch.
+      3. Weights were not yet submitted for the current epoch and configured mechanism.
 
     sink block_beat: BlockBeat triggering condition evaluation
     source source: SetWeightsBeat when all conditions are met
@@ -53,6 +54,7 @@ class SetWeightsBeatNode(Node, ActorBuilder):
     source: Source[SetWeightsBeat]
 
     netuid: NetUid
+    mechanism_id: MechanismId
     epoch_start_offset: BlockCount
     attempts_cooldown: BlockCount
     tempo: Tempo
@@ -64,6 +66,7 @@ class SetWeightsBeatNode(Node, ActorBuilder):
         *,
         netuid: NetUid,
         epoch_start_offset: BlockCount,
+        mechanism_id: MechanismId = MechanismId(0),  # noqa: B008
         attempts_cooldown: BlockCount = BlockCount(4),  # noqa: B008
         tempo: Tempo = DEFAULT_TEMPO,
         pylon_client_provider: PylonClientProvider | None = None,
@@ -73,13 +76,17 @@ class SetWeightsBeatNode(Node, ActorBuilder):
             _id: Node ID / name.
             netuid: Subnet number for epoch derivation and weights status queries.
             epoch_start_offset: Minimum blocks since epoch start before the first beat.
+            mechanism_id: Mechanism ID, default 0; must match the weight setter.
             attempts_cooldown: Minimum blocks between consecutive emitted beats.
             tempo: Subnet tempo used when deriving the epoch from a block number.
             pylon_client_provider: Provider for pylon client instances.
 
         """
         super().__init__(_id)
+        if mechanism_id < 0:
+            raise ActorMisconfiguredException("mechanism_id must be >= 0")
         self.netuid = netuid
+        self.mechanism_id = mechanism_id
         self.epoch_start_offset = epoch_start_offset
         self.attempts_cooldown = attempts_cooldown
         self.tempo = tempo
@@ -145,7 +152,9 @@ class SetWeightsBeatActor(Actor):
         pylon = self.spec.pylon_client_provider.get_client()
         try:
             with pylon:
-                status = pylon.unstable.identity.get_weights_status(block_number=block_number)
+                status = pylon.unstable.identity.get_weights_status(
+                    block_number=block_number, mechanism_id=self.spec.mechanism_id
+                )
         except BasePylonException as exc:
             logger.warning(
                 "Transient Pylon poll failure; will retry on the next block. error_type=%s error=%s",

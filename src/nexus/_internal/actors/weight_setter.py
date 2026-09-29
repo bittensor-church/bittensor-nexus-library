@@ -16,7 +16,7 @@ from nexus._internal.logging_utils import get_logger
 
 from ..core.runtime.task_result_store import TaskResultStore
 from ..utils.exceptions import WeightSettingException
-from ..utils.types import Epoch, Hotkey, Weight
+from ..utils.types import Epoch, Hotkey, MechanismId, Weight
 from .chain_beat.set_weights_beat import SetWeightsBeat
 from .pylon_client_provider import DEFAULT_PYLON_CLIENT_PROVIDER, PylonClientProvider
 from .task_result_store_provider import DEFAULT_TASK_RESULT_STORE_PROVIDER, TaskResultStoreProvider
@@ -53,6 +53,7 @@ class WeightSetterNode(Transform[SetWeightsBeat, WeightSettingSuccess], ActorBui
     source error: WeightSettingException on failure
     """
 
+    mechanism_id: MechanismId
     weighing_func: WeighingFunc
     pylon_client_provider: PylonClientProvider
     task_result_store_provider: TaskResultStoreProvider[Any, Any, Any]
@@ -62,10 +63,12 @@ class WeightSetterNode(Transform[SetWeightsBeat, WeightSettingSuccess], ActorBui
         _id: str,
         *,
         weighing_func: WeighingFunc,
+        mechanism_id: MechanismId = MechanismId(0),  # noqa: B008
         pylon_client_provider: PylonClientProvider | None = None,
         task_result_store_provider: TaskResultStoreProvider[Any, Any, Any] | None = None,
     ) -> None:
         super().__init__(_id)
+        self.mechanism_id = mechanism_id
         self.weighing_func = weighing_func
         self.pylon_client_provider = pylon_client_provider or DEFAULT_PYLON_CLIENT_PROVIDER
         self.task_result_store_provider = task_result_store_provider or DEFAULT_TASK_RESULT_STORE_PROVIDER
@@ -96,7 +99,7 @@ class WeightSetterActor(TransformActor[SetWeightsBeat, WeightSettingSuccess]):
 
         try:
             with pylon:
-                pylon.identity.put_weights({**weights})
+                pylon.unstable.identity.put_weights({**weights}, mechanism_id=self.weight_setter_spec.mechanism_id)
         except (PylonResponseException, PylonMisconfigured) as exc:
             raise WeightSettingException(f"Failed to set weights for epoch {payload.epoch}") from exc
 

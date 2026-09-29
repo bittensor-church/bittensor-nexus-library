@@ -123,6 +123,7 @@ returns `{"result_image_url":"...", "image_hash":"fake-hash"}`.
   in-memory cooldown. The "weights already set this epoch" flag is populated solely from pylon's response, so the
   epoch is silenced on the next block beat after pylon reports `weights_submitted=True`. When all gates pass, the node
   emits `SetWeightsBeat` to `WeightSetterNode`, which calculates and writes miner weights through pylon.
+  Both use `settings.mechanism_id`, configured by `VALIDATOR_MECHANISM_ID` (default 0).
 
 ## Miner
 

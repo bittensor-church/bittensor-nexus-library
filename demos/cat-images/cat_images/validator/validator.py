@@ -137,11 +137,13 @@ class Validator(NexusValidator):
         self.set_weights_beat = SetWeightsBeatNode(
             "weight-setting-trigger",
             netuid=settings.netuid,
+            mechanism_id=settings.mechanism_id,
             epoch_start_offset=BlockCount(20),
         )
 
         self.weight_setter = WeightSetterNode(
             "cat-images-weight-setter",
+            mechanism_id=settings.mechanism_id,
             weighing_func=lambda task_results_bundle: weighing_algorithm.weighing_func(
                 MINING_TASK_NAME, VALIDATION_TASK_NAME, task_results_bundle
             ),
