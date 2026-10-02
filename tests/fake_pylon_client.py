@@ -70,6 +70,13 @@ class FakeIdentityApi(IdentityPylonApiLike):
 
 
 class FakeUnstableIdentityApi(UnstableIdentityPylonApiLike):
+    def put_weights(
+        self,
+        weights: dict[Hotkey, Weight],
+        mechanism_id: MechanismId = MechanismId(0),  # noqa: B008
+    ) -> SetWeightsResponse:
+        return SetWeightsResponse()
+
     def get_weights_status(
         self,
         block_number: BlockNumber,

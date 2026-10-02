@@ -12,6 +12,7 @@ from nexus.v1 import (
     BlockCount,
     BlockNumber,
     Flow,
+    MechanismId,
     NetUid,
     SendEvent,
     SetWeightsBeat,
@@ -114,7 +115,7 @@ def test_skips_when_too_early_in_epoch(default_test_netuid: NetUid):
         SetWeightsBeat(epoch=epoch_380, block_number=BlockNumber(380)),
     ]
     assert client.unstable.identity.get_weights_status.call_args_list == [
-        call(block_number=BlockNumber(380)),
+        call(block_number=BlockNumber(380), mechanism_id=MechanismId(0)),
     ]
 
 
@@ -157,8 +158,8 @@ def test_resets_on_new_epoch_via_pylon(default_test_netuid: NetUid):
         SetWeightsBeat(epoch=epoch_719, block_number=BlockNumber(719)),
     ]
     assert client.unstable.identity.get_weights_status.call_args_list == [
-        call(block_number=BlockNumber(500)),
-        call(block_number=BlockNumber(719)),
+        call(block_number=BlockNumber(500), mechanism_id=MechanismId(0)),
+        call(block_number=BlockNumber(719), mechanism_id=MechanismId(0)),
     ]
 
 
@@ -194,8 +195,8 @@ def test_respects_attempts_cooldown(default_test_netuid: NetUid):
         SetWeightsBeat(epoch=epoch_500, block_number=BlockNumber(504)),
     ]
     assert client.unstable.identity.get_weights_status.call_args_list == [
-        call(block_number=BlockNumber(500)),
-        call(block_number=BlockNumber(504)),
+        call(block_number=BlockNumber(500), mechanism_id=MechanismId(0)),
+        call(block_number=BlockNumber(504), mechanism_id=MechanismId(0)),
     ]
 
 
@@ -226,7 +227,7 @@ def test_skips_when_pylon_says_weights_submitted(default_test_netuid: NetUid):
 
     assert collector.received_events == []
     assert client.unstable.identity.get_weights_status.call_args_list == [
-        call(block_number=BlockNumber(500)),
+        call(block_number=BlockNumber(500), mechanism_id=MechanismId(0)),
     ]
 
 

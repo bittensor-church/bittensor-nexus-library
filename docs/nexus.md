@@ -161,6 +161,8 @@ Recipe:
   bundle
 - Weighing function gets the epoch and task result store from bundle, queries store for relevant task results
 - Aggregates scores into weights, returns them to let the actor handle setting on chain
+- Select one weight mechanism for the validator and pass the same `MechanismId` to
+  `SetWeightsBeatNode` and `WeightSetterNode`. Both default to `MechanismId(0)` when omitted.
 
 ### Miner Nexus Task
 

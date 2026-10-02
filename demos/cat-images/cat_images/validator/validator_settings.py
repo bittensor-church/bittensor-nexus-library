@@ -1,6 +1,6 @@
 from typing import Self
 
-from nexus.v1 import NetUid, OpenRouterSettingsMixin, Port, PylonClientSettingsMixin
+from nexus.v1 import MechanismId, NetUid, OpenRouterSettingsMixin, Port, PylonClientSettingsMixin
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -54,6 +54,7 @@ class CatValidatorSettings(  # pyright: ignore[reportIncompatibleVariableOverrid
     validation_prompt: str = DEFAULT_VALIDATION_PROMPT
 
     netuid: NetUid
+    mechanism_id: MechanismId = Field(default=MechanismId(0))
     external_ip: str
     s3_bucket: str = DEFAULT_S3_BUCKET
 

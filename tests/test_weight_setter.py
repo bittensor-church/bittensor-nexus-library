@@ -17,7 +17,7 @@ from nexus.v1 import (
     BlockNumber,
     Flow,
     Hotkey,
-    IdentityPylonApiLike,
+    MechanismId,
     NetUid,
     NexusException,
     NexusTaskName,
@@ -27,6 +27,8 @@ from nexus.v1 import (
     Source,
     SubnetBuilder,
     SyncPylonClientLike,
+    UnstableIdentityPylonApiLike,
+    UnstablePylonNamespaceLike,
     WeighingFunc,
     Weight,
     WeightsCalculationBundle,
@@ -85,7 +87,8 @@ def _seed_results_across_epochs(
 @pytest.fixture
 def mock_pylon_client():
     client = create_autospec(spec=SyncPylonClientLike, instance=True)
-    client.identity = create_autospec(spec=IdentityPylonApiLike, instance=True)
+    client.unstable = create_autospec(spec=UnstablePylonNamespaceLike, instance=True)
+    client.unstable.identity = create_autospec(spec=UnstableIdentityPylonApiLike, instance=True)
     client.__enter__.return_value = client
     client.__exit__.return_value = None
     seal(client)
@@ -96,6 +99,7 @@ def _build_and_run(
     *,
     weighing_func: WeighingFunc,
     pylon_client: SyncPylonClientLike,
+    mechanism_id: MechanismId | None = None,
     task_result_store_provider: InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput, str],
 ) -> tuple[list[WeightSettingSuccess], list[NexusException]]:
     provider = create_autospec(spec=PylonClientProvider, instance=True)
@@ -106,6 +110,7 @@ def _build_and_run(
     node = WeightSetterNode(
         "test-weight-setter",
         weighing_func=weighing_func,
+        mechanism_id=mechanism_id or MechanismId(0),
         pylon_client_provider=provider,
         task_result_store_provider=task_result_store_provider,
     )
@@ -144,7 +149,8 @@ def _build_and_run(
     )
 
 
-def test_happy_path_sets_weights_and_emits_success(mock_pylon_client):
+@pytest.mark.parametrize("mechanism_id", [None, MechanismId(0), MechanismId(1)])
+def test_happy_path_sets_weights_and_emits_success(mock_pylon_client, mechanism_id):
     store_provider = InMemoryTestTaskResultStoreProvider[DummyExecutorPayload, DummyExecutorOutput, str]()
 
     # EPOCH for block=500 and netuid=1 is 358..718. Only these should be counted.
@@ -163,17 +169,19 @@ def test_happy_path_sets_weights_and_emits_success(mock_pylon_client):
 
     ok, errors = _build_and_run(
         weighing_func=_weigh_by_task_result_count(TASK_NAME),
+        mechanism_id=mechanism_id,
         pylon_client=mock_pylon_client,
         task_result_store_provider=store_provider,
     )
 
     assert errors == []
     assert ok == [WeightSettingSuccess()]
-    mock_pylon_client.identity.put_weights.assert_called_once_with(
+    mock_pylon_client.unstable.identity.put_weights.assert_called_once_with(
         {
             Hotkey("hk1"): Weight(3.0),
             Hotkey("hk2"): Weight(2.0),
-        }
+        },
+        mechanism_id=mechanism_id or MechanismId(0),
     )
 
 
@@ -186,7 +194,7 @@ def test_weighing_failure_emits_error(mock_pylon_client):
     )
     assert [type(e) for e in errors] == [WeightSettingException]
     assert ok == []
-    mock_pylon_client.identity.put_weights.assert_not_called()
+    mock_pylon_client.unstable.identity.put_weights.assert_not_called()
 
 
 def test_pylon_failure_emits_error(mock_pylon_client):
@@ -202,7 +210,7 @@ def test_pylon_failure_emits_error(mock_pylon_client):
     )
     _seed_results_across_epochs(store_provider, entries)
 
-    mock_pylon_client.identity.put_weights.side_effect = PylonResponseException("pylon is not cooperating")
+    mock_pylon_client.unstable.identity.put_weights.side_effect = PylonResponseException("pylon is not cooperating")
     ok, errors = _build_and_run(
         weighing_func=_weigh_by_task_result_count(TASK_NAME),
         pylon_client=mock_pylon_client,
@@ -219,7 +227,7 @@ def test_pylon_identity_misconfigured_emits_error(mock_pylon_client):
         entries=((400, "hk1"),),
     )
 
-    mock_pylon_client.identity.put_weights.side_effect = PylonMisconfigured(
+    mock_pylon_client.unstable.identity.put_weights.side_effect = PylonMisconfigured(
         "Can not use identity api - no identity name or token provided in config."
     )
     ok, errors = _build_and_run(
