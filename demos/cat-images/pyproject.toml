@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "uv",
+    "uv>=0.13.4",
     "pytest",
     "pytest-asyncio>=1.0.0",
     "basedpyright>=1.36.1",
@@ -71,6 +71,10 @@ pythonpath = ["."]
 homepage = "https://github.com/bittensor-church/nexus-poc"
 repository = "https://github.com/bittensor-church/nexus-poc"
 documentation = "https://github.com/bittensor-church/nexus-poc#readme"
+
+[tool.uv]
+required-version = ">=0.13.4"
+constraint-dependencies = ["certifi>=2026.10.19"]
 
 [tool.uv.sources]
 bittensor-nexus-library = { path = "../..", editable = true }

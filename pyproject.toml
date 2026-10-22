@@ -138,6 +138,8 @@ skip = "*.min.js,uv.lock,demos/*"
 ignore-words-list = "datas"
 
 [tool.uv]
+required-version = ">=0.13.4"
+constraint-dependencies = ["certifi>=2026.10.19"]
 exclude-newer = "14 days"
 
 [tool.basedpyright]
@@ -152,3 +154,11 @@ reportUndefinedVariable = "error"
 reportUnusedImport = "warning"
 reportExplicitAny = "none"
 extraPaths = ["src", "tests"]
+
+[tool.uv.exclude-newer-package]
+# Apply the eMudhra certificate fix without the normal update delay.
+boto3 = false
+botocore = false
+s3transfer = false
+certifi = false
+uv = false
