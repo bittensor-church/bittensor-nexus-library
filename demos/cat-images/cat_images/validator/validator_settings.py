@@ -24,7 +24,7 @@ DEFAULT_VALIDATION_PROMPT = (
 
 
 # The mixins type model_config as ConfigDict (they're plain BaseModel classes), while BaseSettings
-# types it as SettingsConfigDict. basedpyright flags that as a mismatch, but it's harmless: every
+# types it as SettingsConfigDict. pyright flags that as a mismatch, but it's harmless: every
 # ConfigDict field is also a valid SettingsConfigDict field, and pydantic merges all of them into one
 # dict at runtime regardless of which type each base declared.
 class CatValidatorSettings(  # pyright: ignore[reportIncompatibleVariableOverride]

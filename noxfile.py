@@ -137,11 +137,14 @@ def format_(session):
 @nox.session(tags=["check"])
 def lint(session):
     """Run linters in readonly mode."""
-    # "test" group is required for basedpyright to resolve test dependencies.
+    # "test" group is required for pyright to resolve test dependencies.
     install(session, "lint", "test")
     session.run("ruff", "check", "--diff", "--unsafe-fixes", ".")
     session.run("ruff", "format", "--diff", ".")
-    session.run("basedpyright")
+    session.run(
+        "pyright",
+        env={"PYRIGHT_PYTHON_NODEJS_WHEEL": "0", "PYRIGHT_PYTHON_GLOBAL_NODE": "1"},
+    )
     session.run("codespell", ".")
     run_shellcheck(session, mode="check")
     run_readable(session, mode="check")
@@ -159,7 +162,10 @@ def cat_images_lint(session):
     install_cat_images(session)
     session.run("ruff", "check", ".")
     session.run("ruff", "format", "--check", ".")
-    session.run("basedpyright")
+    session.run(
+        "pyright",
+        env={"PYRIGHT_PYTHON_NODEJS_WHEEL": "0", "PYRIGHT_PYTHON_GLOBAL_NODE": "1"},
+    )
 
 
 @nox.session(name="cat-images-test", tags=["check"])

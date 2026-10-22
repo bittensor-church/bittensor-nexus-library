@@ -6,6 +6,7 @@ Opinionated event-driven actor framework for building Bittensor subnets. Thread-
 
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/) 0.13.4 or newer
+- Node.js 24.22.1 (see `.node-version`), or patched Node 22.23.4+ / 26.12.1+
 
 The eMudhra certificate fix requires certifi 2026.10.19 or newer. The lockfiles include
 updated certificate bundles, and security-sensitive packages bypass the normal dependency
@@ -23,6 +24,19 @@ uv sync --all-groups
 ## Development
 
 Full-project QA is run from the repository root through nox.
+
+Type checks use Pyright with an external Node.js runtime. CI installs Node 24.22.1
+from `.node-version`. Before running Nox locally, install that version with your
+Node version manager and make sure it is selected on `PATH`:
+
+```sh
+node --version  # expected: v24.22.1
+```
+
+Patched Node 22.23.4+ or 26.12.1+ also work. Nox disables Pyright's bundled Node
+wheel preference but does not enforce a local version. Keep a patched Node on
+`PATH` to avoid Pyright's automatic Node download fallback when no runtime is
+found. Local runtime updates are the developer's responsibility.
 
 ```sh
 # Root lint, formatting check, type check, docs/shell checks
