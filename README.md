@@ -5,7 +5,12 @@ Opinionated event-driven actor framework for building Bittensor subnets. Thread-
 ## Prerequisites
 
 - Python 3.14+
-- [uv](https://docs.astral.sh/uv/)
+- [uv](https://docs.astral.sh/uv/) 0.13.4 or newer
+
+The eMudhra certificate fix requires certifi 2026.10.19 or newer. The lockfiles include
+updated certificate bundles, and security-sensitive packages bypass the normal dependency
+update delay. Upgrade uv before syncing and refresh existing nox environments so they do
+not keep an older uv executable. CI and demo images use uv 0.13.5.
 
 ## Setup
 
