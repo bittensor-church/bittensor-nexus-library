@@ -20,14 +20,14 @@ dev = [
     "uv>=0.13.4",
     "pytest",
     "pytest-asyncio>=1.0.0",
-    "basedpyright>=1.36.1",
+    "pyright==1.1.411",
     "ruff>=0.14.8",
     "ty>=0.0.1a32",
 ]
 format = [
     "ruff",
     "ty",
-    "pyright",
+    "pyright==1.1.411",
     "freezegun",
     "sentry-sdk[litestar]",
 ]
@@ -79,7 +79,7 @@ constraint-dependencies = ["certifi>=2026.10.19"]
 [tool.uv.sources]
 bittensor-nexus-library = { path = "../..", editable = true }
 
-[tool.basedpyright]
+[tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
 include = ["cat_images"]

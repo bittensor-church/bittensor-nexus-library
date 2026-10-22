@@ -85,7 +85,7 @@ test = [
     "pytest-xdist==3.8.0",
 ]
 lint = [
-    "basedpyright",
+    "pyright==1.1.411",
     "codespell[toml]==2.4.2",
     "ruff==0.15.8",
     "types-freezegun==1.1.10",
@@ -93,7 +93,7 @@ lint = [
     "types-requests==2.33.0.20260327",
 ]
 dev = [
-    "basedpyright>=1.36.1",
+    "pyright==1.1.411",
     "boto3-stubs[s3]",
     "ruff==0.15.8",
 ]
@@ -142,7 +142,7 @@ required-version = ">=0.13.4"
 constraint-dependencies = ["certifi>=2026.10.19"]
 exclude-newer = "14 days"
 
-[tool.basedpyright]
+[tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
 include = ["src/nexus", "tests"]
@@ -152,7 +152,6 @@ useLibraryCodeForTypes = true
 reportMissingTypeStubs = "warning"
 reportUndefinedVariable = "error"
 reportUnusedImport = "warning"
-reportExplicitAny = "none"
 extraPaths = ["src", "tests"]
 
 [tool.uv.exclude-newer-package]

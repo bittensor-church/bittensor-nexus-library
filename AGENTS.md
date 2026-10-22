@@ -14,7 +14,7 @@ The knowledge base is tailored both towards the developers and users of the Nexu
 
 - Python 3.14
 - uv as package manager (no pip)
-- pytest, basedpyright
+- pytest, pyright
 - ruff for linting and formatting
 - litestar for HTTP endpoints (https://docs.litestar.dev/latest/)
 - pylon for subtensor communication (https://github.com/bittensor-church/bittensor-pylon) - no `bittensor` dependency
