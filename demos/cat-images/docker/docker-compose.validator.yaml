@@ -2,14 +2,15 @@ name: cat-images-validator
 
 services:
   pylon:
-    image: backenddevelopersltd/bittensor-pylon:2.1.0
+    image: backenddevelopersltd/bittensor-pylon:2.3.4
     restart: unless-stopped
     environment:
       # Pylon HTTP API server.
       PYLON_UVICORN_HOST: "0.0.0.0"
       PYLON_UVICORN_PORT: "8000"
-      # Chain config (override in .env if needed).
+      # Main and archive networks must be overridden together.
       PYLON_BITTENSOR_NETWORK: ${PYLON_BITTENSOR_NETWORK:-http://host.docker.internal:9944}
+      PYLON_BITTENSOR_ARCHIVE_NETWORK: ${PYLON_BITTENSOR_ARCHIVE_NETWORK:-http://host.docker.internal:9944}
       # Open-access recent-object cache configuration for subnet routing.
       PYLON_RECENT_OBJECTS_NETUIDS: "${PYLON_RECENT_OBJECTS_NETUIDS:-[2]}"
       # Open-access token used by validator's pylon client.

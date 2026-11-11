@@ -81,6 +81,8 @@ Compose environment variables (typically defined in ${DOCKER_DIR}/.env.validator
   Optional pylon runtime:
     PYLON_BITTENSOR_NETWORK        Bittensor network or endpoint
                                   (default: http://host.docker.internal:9944)
+    PYLON_BITTENSOR_ARCHIVE_NETWORK Archive endpoint (set together with main network)
+                                  (default: http://host.docker.internal:9944)
     PYLON_RECENT_OBJECTS_NETUIDS   JSON list of cached netuids for open-access routing
                                    (default: [2])
     PYLON_OPEN_ACCESS_TOKEN        Pylon open-access token

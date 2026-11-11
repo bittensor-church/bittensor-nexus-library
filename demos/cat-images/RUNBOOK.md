@@ -27,7 +27,7 @@ Then edit `.env` and fill real values. Facilitator-specific examples are in `.en
 
 Required variables:
 
-- Pylon (open access): `PYLON_BITTENSOR_NETWORK`, `PYLON_OPEN_ACCESS_TOKEN`, `PYLON_RECENT_OBJECTS_NETUIDS`
+- Pylon (open access): `PYLON_BITTENSOR_NETWORK`, `PYLON_BITTENSOR_ARCHIVE_NETWORK`, `PYLON_OPEN_ACCESS_TOKEN`, `PYLON_RECENT_OBJECTS_NETUIDS`
 - Pylon (validator identity for weight writes): `PYLON_IDENTITIES`, `PYLON_ID_VALIDATOR_WALLET_NAME`, `PYLON_ID_VALIDATOR_HOTKEY_NAME`, `PYLON_ID_VALIDATOR_NETUID`, `PYLON_ID_VALIDATOR_TOKEN`
 - Pylon (miner identity for mTLS cert management): `PYLON_ID_MINER_WALLET_NAME`, `PYLON_ID_MINER_HOTKEY_NAME`, `PYLON_ID_MINER_NETUID`, `PYLON_ID_MINER_TOKEN`
 - Validator: `VALIDATOR_NETUID`, `VALIDATOR_OPENROUTER_API_KEY`, `VALIDATOR_PYLON_OPEN_ACCESS_TOKEN`, `VALIDATOR_PYLON_IDENTITY_NAME`, `VALIDATOR_PYLON_IDENTITY_TOKEN`, `VALIDATOR_S3_BUCKET`
@@ -36,9 +36,14 @@ Required variables:
 - AWS/S3: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`
 - Facilitator: `FACI_S3_BUCKET`, `FACI_S3_ACCESS_KEY`, `FACI_S3_SECRET_KEY` (optional `FACI_S3_REGION`, `FACI_S3_ENDPOINT_URL`)
 
+Pylon service 2.3.4 requires main and archive network overrides together. Set both
+`PYLON_BITTENSOR_NETWORK` and `PYLON_BITTENSOR_ARCHIVE_NETWORK` for the same chain in existing `.env` files.
+For localnet, both can use the local node; for mainnet, use `finney` and `archive`, respectively.
+
 Localnet defaults:
 
 - `PYLON_BITTENSOR_NETWORK=http://host.docker.internal:9944`
+- `PYLON_BITTENSOR_ARCHIVE_NETWORK=http://host.docker.internal:9944`
 - `PYLON_RECENT_OBJECTS_NETUIDS=[2]`
 - `PYLON_ID_VALIDATOR_NETUID=2`
 - `PYLON_ID_MINER_NETUID=2`
@@ -53,6 +58,7 @@ Notes:
 
 - For testnet subnet `278` with `cat-images-validator-kuba` + `default` hotkey, override the localnet defaults:
   - `PYLON_BITTENSOR_NETWORK=test`
+  - `PYLON_BITTENSOR_ARCHIVE_NETWORK=test`
   - `PYLON_RECENT_OBJECTS_NETUIDS=[278]`
   - `PYLON_IDENTITIES=["validator","miner"]`
   - `PYLON_ID_VALIDATOR_WALLET_NAME=cat-images-validator-kuba`
