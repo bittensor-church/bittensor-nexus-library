@@ -69,11 +69,13 @@ def test_localnet_defaults_target_subnet_two() -> None:
     for env_file in LOCALNET_ENV_FILES:
         text = env_file.read_text(encoding="utf-8")
         assert "PYLON_BITTENSOR_NETWORK=http://host.docker.internal:9944" in text
+        assert "PYLON_BITTENSOR_ARCHIVE_NETWORK=http://host.docker.internal:9944" in text
         assert "PYLON_RECENT_OBJECTS_NETUIDS=[2]" in text
         assert "PYLON_ID_VALIDATOR_NETUID=2" in text
         assert "VALIDATOR_NETUID=2" in text
 
     validator_compose = (DOCKER_DIR / "docker-compose.validator.yaml").read_text(encoding="utf-8")
+    assert "PYLON_BITTENSOR_ARCHIVE_NETWORK:-http://host.docker.internal:9944" in validator_compose
     assert "PYLON_RECENT_OBJECTS_NETUIDS:-[2]" in validator_compose
     assert "PYLON_ID_VALIDATOR_NETUID:-2" in validator_compose
     assert "VALIDATOR_NETUID:-2" in validator_compose

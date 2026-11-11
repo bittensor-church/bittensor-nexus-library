@@ -16,6 +16,9 @@
 
 ### Changed
 
+- Updated `bittensor-pylon-client` to 2.3.1 and the cat-images Pylon service images to 2.3.4.
+  When overriding `PYLON_BITTENSOR_NETWORK`, also set `PYLON_BITTENSOR_ARCHIVE_NETWORK` for the same chain;
+  the demo localnet examples configure both endpoints.
 - `NexusValidator.connect` now accepts `connect(source, primary=None, *, taps=...)`. Existing two-argument calls remain
   primary connections. Subnet-clock consumers, including Nexus Tasks and the cat-images weight-setting trigger, are
   connected as taps.

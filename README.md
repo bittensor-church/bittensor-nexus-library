@@ -8,6 +8,9 @@ Opinionated event-driven actor framework for building Bittensor subnets. Thread-
 - [uv](https://docs.astral.sh/uv/) 0.13.4 or newer
 - Node.js 24.22.1 (see `.node-version`), or patched Node 22.23.4+ / 26.12.1+
 
+Nexus pins `bittensor-pylon-client` 2.3.1. The cat-images demo uses Pylon service 2.3.4;
+see its [runbook](demos/cat-images/RUNBOOK.md) for main and archive network configuration.
+
 The eMudhra certificate fix requires certifi 2026.10.19 or newer. The lockfiles include
 updated certificate bundles, and security-sensitive packages bypass the normal dependency
 update delay. Upgrade uv before syncing and refresh existing nox environments so they do
