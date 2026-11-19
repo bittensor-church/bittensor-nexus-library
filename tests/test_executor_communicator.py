@@ -1,6 +1,8 @@
 # pyright: basic
 
 import datetime
+import queue
+import threading
 from collections.abc import Callable
 from ipaddress import IPv4Address
 from typing import cast
@@ -11,16 +13,22 @@ from pydantic import BaseModel
 from pylon_client.artanis import Port
 from pylon_client.artanis.v1 import AxonInfo, AxonProtocol, Neuron
 from transform_test_utils import TransformActorTestSetupFactory
-from utils import build_neuron, wait_until
+from utils import build_neuron, empty_context_store, wait_until
 
+from nexus._internal.actors.executor_communicator.async_http_neuron_communicator import (
+    AsyncHttpNeuronCommunicatorActor,
+)
 from nexus.v1 import (
     AsyncHttpNeuronCommunicator,
     AsyncHttpNeuronService,
+    ContextId,
     EmbeddedExecutorCommunicator,
     EmbeddedExecutorFailureException,
     ExecutorFailureException,
     HttpBindEndpoint,
+    InternalStateCorruptionException,
     MinerMtlsVerificationException,
+    PipeToBus,
     ProcessedInput,
     RemoteExecutionException,
     RemoteRequestFailedException,
@@ -245,6 +253,60 @@ def test_async_http_neuron_communicator_emits_timeout_on_error_source_when_store
         assert len(setup.processed_collector.received_events) == 0
         assert setup.error_collector.received_events[0].ctx_id == ctx_id
         assert isinstance(setup.error_collector.received_events[0].payload, RemoteResponseTimeoutException)
+
+
+def test_async_http_neuron_communicator_emits_error_when_stored_input_is_lost_before_response(
+    async_http_neuron_service_factory: ServiceFactory,
+    communicator_factory: CommunicatorFactory,
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    processing_started = threading.Event()
+    input_removed = threading.Event()
+
+    def processor(payload: CommunicatorInput) -> CommunicatorOutput:
+        processing_started.set()
+        input_removed.wait(timeout=2.0)
+        return CommunicatorOutput(text=payload.text.upper())
+
+    service = async_http_neuron_service_factory(processor=processor)
+
+    with service.running():
+        communicator = communicator_factory(communicator_id="communicator-lost-input-response")
+        setup = transform_actor_test_setup_factory(communicator)
+        neuron = build_test_neuron(port=service.bound_port)
+
+        with setup.running():
+            ctx_id = setup.send(input_payload=Routed(input=CommunicatorInput(text="hello"), target=neuron))
+            assert processing_started.wait(timeout=2.0)
+            with setup.runtime.context_store.get_context(ctx_id) as context:
+                context.set_user_data("communicator-lost-input-response-saved-input", None)
+            input_removed.set()
+            wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=3.0)
+
+        assert len(setup.processed_collector.received_events) == 0
+        assert setup.error_collector.received_events[0].ctx_id == ctx_id
+        assert isinstance(setup.error_collector.received_events[0].payload, InternalStateCorruptionException)
+
+
+def test_async_http_neuron_communicator_drops_request_outcome_for_unknown_context(
+    communicator_factory: CommunicatorFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    pipe_to_bus: PipeToBus = queue.Queue()
+    communicator = communicator_factory(communicator_id="communicator-unknown-context")
+    actor = AsyncHttpNeuronCommunicatorActor(
+        spec=communicator, pipe_to_bus=pipe_to_bus, context_store=empty_context_store()
+    )
+
+    with caplog.at_level("ERROR"):
+        actor._report_request_failure(ContextId("unknown"), RemoteResponseTimeoutException("timed out"))
+        actor._report_request_result(ContextId("unknown"), CommunicatorOutput(text="late"))
+
+    # An event for an unknown context would crash the event bus loop.
+    assert pipe_to_bus.empty()
+    assert [record.getMessage() for record in caplog.records] == [
+        "Dropping request outcome for unknown ctx=unknown in communicator=communicator-unknown-context."
+    ] * 2
 
 
 def test_async_http_neuron_communicator_emits_remote_error_when_service_processing_fails(
