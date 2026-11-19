@@ -478,7 +478,16 @@ class SenderLoopRuntime[InputModel: BaseModel]:
     ) -> None:
         pending_request = pending_request_store.pop(request_id)
         if pending_request is not None:
-            error_callback.emit_executor_error(pending_request.ctx_id, error)
+            try:
+                error_callback.emit_executor_error(pending_request.ctx_id, error)
+            except Exception:
+                # Raising here would end the sender worker that reports the failure, and with it the sender loop.
+                logger.exception(
+                    "Failed to emit error for request %s (ctx=%s) in communicator=%s.",
+                    request_id,
+                    pending_request.ctx_id,
+                    communicator_id,
+                )
             return
 
         logger.warning(

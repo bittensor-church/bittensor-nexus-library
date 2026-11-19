@@ -121,6 +121,7 @@ class TimestamperActor[Input, Output](Actor):
     Notes:
     - Input events overwrite the stored start timestamp (latest input wins).
     - Output events require a `BlockBeat`; otherwise they are queued.
+    - An output without a valid start timestamp is rejected on arrival and never queued.
     - The flush on a `BlockBeat` handles each queued output independently: one that fails timestamping is
       logged and dropped, the rest are emitted, and the queue is always emptied.
     - Warning logs are emitted only when crossing the warning threshold for the current queue head.
@@ -160,8 +161,16 @@ class TimestamperActor[Input, Output](Actor):
         return SendEvent(ctx_id=event.ctx_id, source=self.spec.forwarded_input, payload=event.payload)
 
     def handle_output(self, ctx: Context, event: ReceiveEvent[Output]) -> MessagesToSend:
-        """Emit timestamped output if ready; otherwise enqueue while waiting for `BlockBeat`."""
+        """
+        Emit timestamped output if ready; otherwise enqueue while waiting for `BlockBeat`.
+
+        Raises:
+            InternalStateCorruptionException: if the context has no valid start timestamp.
+
+        """
         if self.latest_block_beat is None:
+            # Queue monitoring reads every queued start timestamp, so an output without one must not be queued.
+            self._started_at(event.ctx_id)
             self.queued_outputs.append(QueuedOutput(ctx_id=event.ctx_id, output=event.payload))
             self._log_if_first_queued_output_too_old(current_ctx=ctx)
             return ()

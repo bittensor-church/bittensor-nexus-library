@@ -40,7 +40,7 @@ class TimeoutSweepRuntime:
     - continuously scan the shared pending-request store for expired entries
     - remove expired requests from the store
     - emit `RemoteResponseTimeoutException` for each expired request via executor-failure callback;
-      a failing emit is logged and does not affect other requests or later sweeps
+      a failing store read or emit is logged and does not affect other requests or later sweeps
 
     How it works:
     - `start(...)` creates a dedicated daemon thread
@@ -95,11 +95,14 @@ class TimeoutSweepRuntime:
         pending_request_store: PendingAsyncHttpRequestStore,
         error_callback: CommunicatorErrorCallback,
     ) -> None:
-        """Periodically expire overdue requests and emit timeout errors, logging any emit that fails."""
+        """Periodically expire overdue requests and emit timeout errors, logging any store or emit failure."""
 
         while not stop_signal.is_set():
-            now = datetime.datetime.now(tz=datetime.UTC)
-            expired_requests = pending_request_store.pop_expired(now=now)
+            try:
+                expired_requests = pending_request_store.pop_expired(now=datetime.datetime.now(tz=datetime.UTC))
+            except Exception:
+                logger.exception("Failed to collect expired requests in communicator=%s.", communicator_id)
+                expired_requests = ()
             for request in expired_requests:
                 try:
                     error_callback.emit_executor_error(

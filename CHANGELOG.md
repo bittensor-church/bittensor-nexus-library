@@ -29,5 +29,6 @@
 
 ### Fixed
 
-- `TimestamperNode` no longer gets stuck when one output queued before the first `BlockBeat` cannot be timestamped. The flush now handles each queued output independently: a failing one is logged and dropped, the others are emitted, and the queue is always emptied.
-- The `AsyncHttpNeuronCommunicator` timeout sweep no longer stops when emitting the timeout error for one request fails. The failure is logged with the request and context IDs, the remaining expired requests still get their timeout errors, and later requests keep timing out.
+- `TimestamperNode` no longer gets stuck when one output queued before the first `BlockBeat` cannot be timestamped. The flush now handles each queued output independently: a failing one is logged and dropped, the others are emitted, and the queue is always emptied. An output that arrives before the first `BlockBeat` without a start timestamp is rejected on arrival instead of blocking the queue's staleness checks.
+- The `AsyncHttpNeuronCommunicator` timeout sweep no longer stops when emitting the timeout error for one request fails. The failure is logged with the request and context IDs, the remaining expired requests still get their timeout errors, and later requests keep timing out. A failing `PendingAsyncHttpRequestStore.pop_expired` call is likewise logged and retried on the next sweep.
+- The `AsyncHttpNeuronCommunicator` sender loop no longer crashes when emitting the error for a failed send fails; the failure is logged and the sender keeps running.
