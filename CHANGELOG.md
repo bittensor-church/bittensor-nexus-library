@@ -14,6 +14,16 @@
   `ImmutableMap[ContextId, ParentContextSnapshot]` instead of a tuple. Select snapshots by parent context ID rather
   than position; mapping iteration order is unspecified. Duplicate parent IDs produce one relationship and snapshot.
 
+### Added
+
+- Opt-in idle-context expiry: `SubnetBuilder(context_ttl=...)` and `NexusValidator(settings, context_ttl=...)` complete and remove contexts that had no activity for longer than the TTL, so long-running validators no longer grow memory without bound. The default `None` keeps every context as before. The TTL must exceed the longest gap between two uses of one context (retry delays, callback timeouts, gather windows). The cat-images demo uses a 3 hour TTL.
+- `ContextStorePersistence.release_context(ctx)` is called for every expired context. It is a no-op by default; `InMemoryContextStorePersistence` drops the context's log entries.
+- `ContextStore.expire_idle(ttl)` and an optional `clock` argument for `ContextStore.recover_from()`.
+
+### Fixed
+
+- The event bus drops a message for a missing context with an error log instead of stopping its thread.
+
 ### Changed
 
 - Updated `bittensor-pylon-client` to 2.3.1 and the cat-images Pylon service images to 2.3.4.

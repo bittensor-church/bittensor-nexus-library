@@ -43,6 +43,9 @@ from .validator_settings import CatValidatorSettings
 
 MINING_TASK_NAME = NexusTaskName("add-cat-to-image")
 VALIDATION_TASK_NAME = NexusTaskName("validation-task")
+# Contexts idle for longer than this are dropped. It must exceed the longest gap between two uses of one context
+# (retry delay, miner callback timeout); three hours leaves a wide margin over one epoch (~72 min).
+CONTEXT_TTL = timedelta(hours=3)
 
 # TEMP STUB (mTLS smoke test): DefaultS3ClientProvider hardcodes virtual-hosted-style addressing,
 # which only resolves against real AWS S3 (bucket.host). MinIO (used here for local testing,
@@ -61,7 +64,7 @@ class Validator(NexusValidator):
     """Validator graph for the cat-images subnet, including mining, validation, and weight setting."""
 
     def __init__(self, settings: CatValidatorSettings) -> None:
-        super().__init__(settings)
+        super().__init__(settings, context_ttl=CONTEXT_TTL)
 
         self.entry = RestEntryPoint(
             _id="cat-images-user-requests",

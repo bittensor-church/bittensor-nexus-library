@@ -1,4 +1,6 @@
+import datetime
 import logging
+import queue
 from threading import Thread
 from typing import Any
 
@@ -6,14 +8,15 @@ from nexus._internal.logging_utils import get_logger
 
 from ..dsl.nodes import Pipes, Sink
 from .actor import Actor
-from .context_store import ContextStore
-from .context_store_types import ContextId
+from .context_store import ContextStore, monotonic_now
+from .context_store_types import ContextId, InvalidContextIdException
 from .events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
 
 logger: logging.Logger = get_logger(__name__)
 
 MAX_EXCEPTION_DEPTH = 8
 MAX_PAYLOAD_LOG_CHARS = 80
+MAX_EXPIRY_SWEEP_INTERVAL = datetime.timedelta(minutes=1)
 
 
 def _truncate(text: str, max_chars: int = MAX_PAYLOAD_LOG_CHARS) -> str:
@@ -46,19 +49,36 @@ def _payload_for_log(payload: Any) -> str:
 
 
 class EventBus:
+    """
+    Routes messages emitted by actors to their target sinks, recording each message in its context's log.
+
+    With a `context_ttl`, the bus thread also expires contexts idle for longer than the TTL (see
+    ContextStore.expire_idle), sweeping every TTL/10, at most every minute, also while no messages arrive. A message
+    for a context that no longer exists is dropped with an error log.
+    """
+
     connections: Pipes
     input_pipe: PipeToBus
     unconsumed_events_sink: Actor
     sinks: dict[Sink[Any], Actor]
     context_store: ContextStore
+    context_ttl: datetime.timedelta | None
+    _next_sweep: datetime.timedelta
 
     def __init__(
-        self, connections: Pipes, input_pipe: PipeToBus, actors: list[Actor], context_store: ContextStore
+        self,
+        connections: Pipes,
+        input_pipe: PipeToBus,
+        actors: list[Actor],
+        context_store: ContextStore,
+        context_ttl: datetime.timedelta | None = None,
     ) -> None:
         self.connections = connections
         self.sinks = {sink: actor for actor in actors for sink in actor.handlers().keys()}
         self.input_pipe = input_pipe
         self.context_store = context_store
+        self.context_ttl = context_ttl
+        self._next_sweep = monotonic_now()
 
     def request_stop(self) -> None:
         self.input_pipe.put(StopBusEvent())
@@ -70,25 +90,55 @@ class EventBus:
 
     def _loop(self) -> None:
         while True:
-            event: SendEvent[Any] = self.input_pipe.get()
+            event = self._next_event()
+            if event is None:
+                continue
             if isinstance(event, StopBusEvent):
                 logger.info("Stop event received in EventBus; stopping loop.")
                 for sink in self.sinks.values():
                     sink.pipe_from_bus.put(StopActorEvent())
                 self.input_pipe.task_done()
                 break
-            else:
-                # update the context
-                with self.context_store.get_context(event.ctx_id) as context:
-                    context.append_message(event.source, event.payload)
+            self._dispatch(event)
+            self.input_pipe.task_done()
 
-                self.pass_message_downstream(event)
-                self.input_pipe.task_done()
+    def _next_event(self) -> SendEvent[Any] | None:
+        """Waits for the next event, sweeping idle contexts when due; returns None when a sweep is due."""
+        if self.context_ttl is None:
+            return self.input_pipe.get()
+        now = monotonic_now()
+        if now >= self._next_sweep:
+            expired = self.context_store.expire_idle(self.context_ttl)
+            logger.debug("Expired %d contexts idle for longer than %s.", expired, self.context_ttl)
+            self._next_sweep = now + min(self.context_ttl / 10, MAX_EXPIRY_SWEEP_INTERVAL)
+        try:
+            return self.input_pipe.get(timeout=(self._next_sweep - now).total_seconds())
+        except queue.Empty:
+            return None
+
+    def _dispatch(self, event: SendEvent[Any]) -> None:
+        try:
+            with self.context_store.get_context(event.ctx_id) as context:
+                context.append_message(event.source, event.payload)
+        except InvalidContextIdException:
+            logger.error(
+                "Dropping message from source %s: context %s does not exist; it may have expired "
+                "(context_ttl=%s). Payload: %s",
+                event.source.id,
+                event.ctx_id,
+                self.context_ttl,
+                _payload_for_log(event.payload),
+            )
+            return
+        self.pass_message_downstream(event)
 
     def pass_message_downstream(self, event: SendEvent[Any]) -> None:
         """
         Actual message distribution logic. Recovery from the context store
         means we rebuild the contexts and then replay the messages using this function.
+
+        Called on the bus thread right after the event touched its context; expiry runs on the same thread, so the
+        context cannot expire before its tap children are created.
         """
         targets = self.connections[event.source]
         if targets.primary is None and not targets.taps:

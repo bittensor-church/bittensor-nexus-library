@@ -2,9 +2,10 @@ import copy
 import datetime
 import logging
 import threading
+import time
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Iterable
+from collections.abc import Callable, Generator, Iterable
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from typing import Any, cast, override
@@ -35,10 +36,16 @@ from .serialization import unsafe_pickle_load
 type LastMessages = dict[ContextId, MessageSent]
 type AnyPayload = Any
 type AnyUserData = Any
+type MonotonicClock = Callable[[], datetime.timedelta]
 
 logger: logging.Logger = get_logger(__name__)
 
 DELTA_DESERIALIZER = unsafe_pickle_load
+
+
+def monotonic_now() -> datetime.timedelta:
+    """Time on the monotonic clock, measured from an arbitrary reference point."""
+    return datetime.timedelta(seconds=time.monotonic())
 
 
 class ContextStorePersistence(ABC):
@@ -65,6 +72,15 @@ class ContextStorePersistence(ABC):
         """
         pass
 
+    def release_context(self, ctx: ContextId) -> None:  # noqa: B027
+        """
+        Called after the ContextStore expired a context and appended its ContextCompleted entry.
+
+        The default keeps all entries; recovery skips completed contexts anyway. Implementations may drop or archive
+        them. Children of the context may still be live; they keep their own parent snapshots. A failed call is retried
+        on a later expiry sweep, so implementations should tolerate repeated calls.
+        """
+
 
 class ContextStoreLocks(ABC):
     """
@@ -77,7 +93,16 @@ class ContextStoreLocks(ABC):
         pass
 
     @abstractmethod
+    def unregister_context(self, ctx: ContextId) -> None:
+        pass
+
+    @abstractmethod
     def lock_context(self, ctx: ContextId) -> AbstractContextManager[None]:
+        pass
+
+    @abstractmethod
+    def try_lock_context(self, ctx: ContextId) -> AbstractContextManager[bool]:
+        """Locks the context if it is free, without blocking; yields whether the lock was acquired."""
         pass
 
 
@@ -99,12 +124,26 @@ class ThreadContextStoreLocks(ContextStoreLocks):
             self.__locks[ctx] = threading.RLock()
 
     @override
+    def unregister_context(self, ctx: ContextId) -> None:
+        with self.__registry_lock:
+            if self.__locks.pop(ctx, None) is None:
+                raise InternalFrameworkException(f"Context {ctx} is not registered in locks.")
+
+    @override
+    @contextmanager
+    def try_lock_context(self, ctx: ContextId) -> Generator[bool]:
+        context_lock = self.__lock_for(ctx)
+        acquired = context_lock.acquire(blocking=False)
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                context_lock.release()
+
+    @override
     @contextmanager
     def lock_context(self, ctx: ContextId) -> Generator[None]:
-        with self.__registry_lock:
-            context_lock = self.__locks.get(ctx, None)
-        if context_lock is None:
-            raise InvalidContextIdException(f"Context lock for {ctx} not found")
+        context_lock = self.__lock_for(ctx)
 
         # try-lock; it should succeed immediately if the framework is correctly ensuring that there
         # is no concurrent processing of the same context.
@@ -123,6 +162,13 @@ class ThreadContextStoreLocks(ContextStoreLocks):
         finally:
             context_lock.release()
             logger.debug(f"Context {ctx} released from processing.")
+
+    def __lock_for(self, ctx: ContextId) -> threading.RLock:
+        with self.__registry_lock:
+            context_lock = self.__locks.get(ctx, None)
+        if context_lock is None:
+            raise InvalidContextIdException(f"Context lock for {ctx} not found")
+        return context_lock
 
 
 @dataclass(frozen=True)
@@ -315,16 +361,33 @@ class ContextStore:
 
       Please consider these rules especially whenever you want to scatter or gather
       processing across contexts, and when you want to access contexts in your code.
+
+    Context lifetime:
+    - The store records the last activity of every context: its creation, and every log entry appended to it,
+      including the creation of a child. Contexts restored by recover_from() are active as of recovery.
+    - expire_idle() completes every context idle for longer than a TTL, removes it from the store and its lock, and
+      notifies ContextStorePersistence.release_context(). Children keep their parent snapshots, so a parent need not
+      outlive its children. An expired context cannot be accessed or used as a parent.
+    - Nothing expires contexts unless an expiry TTL is configured (see SubnetBuilder's context_ttl); by default
+      contexts are kept for the lifetime of the process.
     """
 
     __persistence: ContextStorePersistence
     __contexts: dict[ContextId, Context]
+    __last_activity: dict[ContextId, datetime.timedelta]
+    # guards mutation of __contexts and __last_activity; expiry iterates them while other threads create contexts
+    __registry_lock: threading.Lock
+    __clock: MonotonicClock
     __locks: ContextStoreLocks
 
     @classmethod
-    def recover_from(cls: type[ContextStore], persistence: ContextStorePersistence) -> RecoveredContextStore:
+    def recover_from(
+        cls: type[ContextStore], persistence: ContextStorePersistence, *, clock: MonotonicClock = monotonic_now
+    ) -> RecoveredContextStore:
         """
         Recovers a ContextStore from the given persistence layer by replaying all log entries.
+
+        `clock` measures context idle time for expire_idle(); tests may inject a fake one.
 
         pyright exclusions on Context private members is intentional; this is recovery code
         which we want to be able to mutate the context's payload directly
@@ -418,6 +481,9 @@ class ContextStore:
         # true initialization of the ContextStore
         context_store.__persistence = persistence
         context_store.__contexts = contexts
+        context_store.__clock = clock
+        context_store.__last_activity = dict.fromkeys(contexts, clock())
+        context_store.__registry_lock = threading.Lock()
         context_store.__locks = ThreadContextStoreLocks()
         for context_id in contexts:
             context_store.__locks.register_context(context_id)
@@ -484,8 +550,11 @@ class ContextStore:
                 parent_contexts=copy.deepcopy(parent_contexts),
                 context_store=self,
             )
-            self.__contexts[new_context_id] = context
+            with self.__registry_lock:
+                self.__contexts[new_context_id] = context
             self.__locks.register_context(new_context_id)
+            # the persistence appended ChildContextCreated to the parents itself, bypassing _append_entry
+            self._touch(new_context_id, *parent_ids)
             if parent_contexts:
                 self._append_entry(
                     new_context_id,
@@ -534,6 +603,45 @@ class ContextStore:
             )
         return value
 
+    def expire_idle(self, ttl: datetime.timedelta) -> int:
+        """
+        Completes and removes every context idle for longer than `ttl`; returns how many were removed.
+
+        Contexts locked by another thread are in use and are skipped. A failure to expire one context is logged and
+        leaves it in the store, so a later call retries it.
+        """
+        now = self.__clock()
+        with self.__registry_lock:
+            idle = [ctx for ctx, last_activity in self.__last_activity.items() if now - last_activity > ttl]
+        expired = 0
+        for ctx in idle:
+            try:
+                if self._expire_if_idle(ctx, ttl):
+                    expired += 1
+            except Exception:
+                logger.exception("Failed to expire idle context %s; it will be retried on the next sweep.", ctx)
+        return expired
+
+    def _expire_if_idle(self, ctx: ContextId, ttl: datetime.timedelta) -> bool:
+        with self.__locks.try_lock_context(ctx) as acquired:
+            if not acquired:
+                return False
+            with self.__registry_lock:
+                last_activity = self.__last_activity[ctx]
+            if self.__clock() - last_activity <= ttl:
+                return False
+            # Complete and release before removing it from the store: if either step fails, the context stays
+            # registered and the next sweep retries the remaining steps.
+            context = self.__contexts[ctx]
+            if not context.is_completed:
+                context.complete()
+            self.__persistence.release_context(ctx)
+            with self.__registry_lock:
+                del self.__contexts[ctx]
+                del self.__last_activity[ctx]
+            self.__locks.unregister_context(ctx)
+        return True
+
     def _append_entry(self, ctx: ContextId, entry: LogEntryData) -> None:
         context = self.__contexts.get(ctx, None)
         if context is None:
@@ -541,6 +649,15 @@ class ContextStore:
         if context.is_completed:
             raise ContextCompletedException(f"Context {ctx} is completed and cannot be mutated.")
         self.__persistence.append_entry(ctx, entry)
+        # completion is not activity, so a completed context whose release failed is retried on the next sweep
+        if not isinstance(entry, ContextCompleted):
+            self._touch(ctx)
+
+    def _touch(self, *contexts: ContextId) -> None:
+        now = self.__clock()
+        with self.__registry_lock:
+            for ctx in contexts:
+                self.__last_activity[ctx] = now
 
     @contextmanager
     def _lock_contexts(self, context_ids: Iterable[ContextId]) -> Generator[None]:
@@ -617,6 +734,22 @@ class InMemoryContextStorePersistence(ContextStorePersistence):
         self.__context_tree[child_ctx] = []
 
         return child_ctx
+
+    @override
+    def release_context(self, ctx: ContextId) -> None:
+        """Drops the context's log entries and its place in the context tree."""
+        entries = self.__data.pop(ctx, [])
+        self.__context_tree.pop(ctx, None)
+        if not entries:
+            return
+        created = entries[0].data
+        if not isinstance(created, ContextCreated):
+            raise InternalStateCorruptionException(f"Context {ctx} log does not start with ContextCreated.")
+        for parent in created.parents:
+            # the parent may have been released before its child
+            children = self.__context_tree.get(parent, [])
+            if ctx in children:
+                children.remove(ctx)
 
     @override
     def log_entries(self) -> tuple[LogEntry, ...]:
