@@ -14,6 +14,7 @@ from nexus._internal.actors.neuron_router import Routed
 from nexus._internal.actors.pylon_client_provider import DEFAULT_ASYNC_PYLON_CLIENT_PROVIDER, AsyncPylonClientProvider
 from nexus._internal.core.runtime.actor import Actor, ActorBuilder
 from nexus._internal.core.runtime.context_store import Context, ContextStore
+from nexus._internal.core.runtime.context_store_types import ContextId
 from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
 from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.exceptions import (
@@ -74,6 +75,7 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
     sink input: routed request payloads
     source processed: successful results, executor-side failures (timeout, invalid payload, rejection)
     source error: internal/framework failures (e.g. misconfiguration, invalid target address)
+      and request failures whose stored input can no longer be loaded for `processed`
     """
 
     target_path: NormalizedHttpPath
@@ -228,7 +230,7 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
             emit_processed=lambda ctx_id, payload: self._emit(self._processed_event(ctx_id, payload)),
         )
         error_callback = CommunicatorErrorCallback(
-            emit_executor_error=lambda ctx_id, error: self._emit(self._executor_error_event(ctx_id, error)),
+            emit_executor_error=self._report_request_failure,
         )
 
         self._sender = SenderLoopRuntime.start(
@@ -290,6 +292,20 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
                 thread_name=f"AsyncHttpNeuronCommunicatorTimeout-{self.spec.id}",
             ),
         )
+
+    def _report_request_failure(self, ctx_id: ContextId, error: NexusException) -> None:
+        """Emit a request failure on `processed`, or on `error` when the stored input cannot be loaded."""
+        try:
+            event = self._executor_error_event(ctx_id, error)
+        except Exception:
+            logger.exception(
+                "Failed to build executor failure for ctx=%s in communicator=%s; emitting on the error source.",
+                ctx_id,
+                self.spec.id,
+            )
+            self._emit_internal_error(ctx_id, error)
+            return
+        self._emit(event)
 
     def _stop_background_threads(self) -> None:
         sender = self._sender

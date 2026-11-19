@@ -211,6 +211,42 @@ def test_async_http_neuron_communicator_emits_timeout_when_no_callback_is_receiv
         assert isinstance(failure.output.executor_error, RemoteResponseTimeoutException)
 
 
+def test_async_http_neuron_communicator_emits_timeout_on_error_source_when_stored_input_is_lost(
+    async_http_neuron_service_factory: ServiceFactory,
+    communicator_factory: CommunicatorFactory,
+    transform_actor_test_setup_factory: TransformActorTestSetupFactory,
+) -> None:
+    service = async_http_neuron_service_factory(
+        callback_timeout=datetime.timedelta(seconds=0.1),
+    )
+    input_key = "communicator-lost-input-saved-input"
+
+    with service.running():
+        communicator = communicator_factory(
+            communicator_id="communicator-lost-input",
+            total_processing_timeout=datetime.timedelta(seconds=0.5),
+            callback_url_override="http://invalid-url-so-service-doesnt-connect:65530",
+        )
+        setup = transform_actor_test_setup_factory(communicator)
+        neuron = build_test_neuron(port=service.bound_port)
+        context_store = setup.runtime.context_store
+
+        def input_stored() -> bool:
+            with context_store.get_context(ctx_id) as context:
+                return input_key in context.copy_user_data()
+
+        with setup.running():
+            ctx_id = setup.send(input_payload=Routed(input=CommunicatorInput(text="hello"), target=neuron))
+            wait_until(input_stored)
+            with context_store.get_context(ctx_id) as context:
+                context.set_user_data(input_key, None)
+            wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+
+        assert len(setup.processed_collector.received_events) == 0
+        assert setup.error_collector.received_events[0].ctx_id == ctx_id
+        assert isinstance(setup.error_collector.received_events[0].payload, RemoteResponseTimeoutException)
+
+
 def test_async_http_neuron_communicator_emits_remote_error_when_service_processing_fails(
     async_http_neuron_service_factory: ServiceFactory,
     communicator_factory: CommunicatorFactory,
