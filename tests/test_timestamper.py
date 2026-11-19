@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from utils import CollectorActor, dummy_block_beat, wait_until
 
-from nexus.v1 import Flow, SendEvent, Source, SubnetBuilder, Timestamped, TimestamperNode
+from nexus.v1 import ContextId, Flow, SendEvent, Source, SubnetBuilder, Timestamped, TimestamperNode
 
 
 def test_timestamper_input_sets_start_timestamp_and_forwards_input() -> None:
@@ -149,6 +149,119 @@ def test_timestamper_uses_most_recent_block_beat_for_output() -> None:
         wait_until(lambda: len(output_collector.received_events) == 1)
 
     assert output_collector.received_events[0].payload.block_at_finish == newer_beat
+
+
+def test_timestamper_flush_drops_failing_queued_output_and_emits_the_rest(caplog: pytest.LogCaptureFixture) -> None:
+    timestamper = TimestamperNode[str, str]("timestamper")
+    builder = SubnetBuilder(nodes=[timestamper])
+
+    upstream_input = Source[str]("upstream-input")
+    upstream_output = Source[str]("upstream-output")
+    upstream_block_beat = Source("upstream-block-beat")
+
+    input_collector = CollectorActor[str](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="input-collector",
+    )
+    output_collector = CollectorActor[Timestamped[str]](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="output-collector",
+    )
+
+    runtime = (
+        builder.add_flows(
+            Flow.from_connectable(upstream_input).then(timestamper.input),
+            Flow.from_connectable(upstream_output).then(timestamper.executor_output),
+            Flow.from_connectable(upstream_block_beat).then(taps=[timestamper.block_beat]),
+            Flow.from_connectable(timestamper.forwarded_input).then(input_collector.sink),
+            Flow.from_connectable(timestamper.timestamped_output).then(output_collector.sink),
+        )
+        .add_actors(input_collector, output_collector)
+        .build()
+    )
+
+    ctx_ids: list[ContextId] = []
+    for _ in range(7):
+        with runtime.context_store.create_context() as context:
+            ctx_ids.append(context.id)
+    first_ctx, bad_ctx, third_ctx, late_ctx, sync_ctx, first_beat_ctx, second_beat_ctx = ctx_ids
+
+    with runtime.running(shutdown_timeout_seconds=1.0):
+        with caplog.at_level("ERROR"):
+            for ctx_id in (first_ctx, bad_ctx, third_ctx, late_ctx):
+                runtime.pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_input, payload="request"))
+            for ctx_id, payload in ((first_ctx, "first"), (bad_ctx, "bad"), (third_ctx, "third")):
+                runtime.pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_output, payload=payload))
+            # The sync input is handled after the outputs, so its arrival proves they are queued.
+            runtime.pipe_to_bus.put(SendEvent(ctx_id=sync_ctx, source=upstream_input, payload="sync"))
+            wait_until(lambda: len(input_collector.received_events) == 5)
+
+            # The bad context loses its start timestamp while its output is queued.
+            with runtime.context_store.get_context(bad_ctx) as bad_context:
+                bad_context.set_user_data(timestamper.processing_started_at_user_data_key, None)
+
+            beat = dummy_block_beat(1)
+            runtime.pipe_to_bus.put(SendEvent(ctx_id=first_beat_ctx, source=upstream_block_beat, payload=beat))
+            wait_until(lambda: len(output_collector.received_events) == 2)
+
+            # The late output is handled after the second beat, so its arrival proves the beat was processed.
+            beat = dummy_block_beat(2)
+            runtime.pipe_to_bus.put(SendEvent(ctx_id=second_beat_ctx, source=upstream_block_beat, payload=beat))
+            runtime.pipe_to_bus.put(SendEvent(ctx_id=late_ctx, source=upstream_output, payload="late"))
+            wait_until(lambda: len(output_collector.received_events) == 3)
+
+    assert [event.ctx_id for event in output_collector.received_events] == [first_ctx, third_ctx, late_ctx]
+    assert [event.payload.executor_output for event in output_collector.received_events] == ["first", "third", "late"]
+    timestamper_errors = [r for r in caplog.records if r.name == "nexus._internal.actors.timestamper"]
+    assert [str(bad_ctx) in r.getMessage() for r in timestamper_errors] == [True]
+    assert not [r for r in caplog.records if r.name == "Actor"]
+
+
+def test_timestamper_rejects_output_without_start_timestamp_before_first_block_beat(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    timestamper = TimestamperNode[str, str]("timestamper")
+    builder = SubnetBuilder(nodes=[timestamper])
+
+    upstream_output = Source[str]("upstream-output")
+    upstream_block_beat = Source("upstream-block-beat")
+
+    output_collector = CollectorActor[Timestamped[str]](
+        pipe_to_bus=builder.pipe_to_bus,
+        context_store=builder.context_store,
+        name="output-collector",
+    )
+
+    runtime = (
+        builder.add_flows(
+            Flow.from_connectable(upstream_output).then(timestamper.executor_output),
+            Flow.from_connectable(upstream_block_beat).then(taps=[timestamper.block_beat]),
+            Flow.from_connectable(timestamper.timestamped_output).then(output_collector.sink),
+        )
+        .add_actors(output_collector)
+        .build()
+    )
+
+    with runtime.context_store.create_context() as context:
+        bad_ctx = context.id
+    with runtime.context_store.create_context() as context:
+        old_ctx = context.id
+    with runtime.context_store.get_context(old_ctx) as old_context:
+        old_context.set_user_data(
+            timestamper.processing_started_at_user_data_key,
+            datetime.now(tz=UTC) - timedelta(minutes=6),
+        )
+
+    with runtime.running(shutdown_timeout_seconds=1.0), caplog.at_level("ERROR"):
+        # The bad context never passes through `input`, so it has no start timestamp.
+        runtime.pipe_to_bus.put(SendEvent(ctx_id=bad_ctx, source=upstream_output, payload="bad"))
+        runtime.pipe_to_bus.put(SendEvent(ctx_id=old_ctx, source=upstream_output, payload="too-old"))
+        # Queue monitoring still works: the bad output was not queued ahead of the stale one.
+        wait_until(lambda: any("dropped_old_entries=1" in record.getMessage() for record in caplog.records))
+
+    assert [str(bad_ctx) in r.getMessage() for r in caplog.records if r.name == "Actor"] == [True]
 
 
 def test_timestamper_drops_entries_older_than_five_minutes_when_logging_error(caplog: pytest.LogCaptureFixture) -> None:

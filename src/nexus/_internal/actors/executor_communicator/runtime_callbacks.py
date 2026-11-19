@@ -16,7 +16,8 @@ class CommunicatorProcessedCallback[Output: BaseModel]:
 
     Called when a pending request completed successfully and produced a validated response payload.
     Receives the request context id and the validated model instance that should be
-    emitted on the communicator `processed` output.
+    emitted on the communicator `processed` output. When the request's stored input is unavailable,
+    the payload is discarded and an error is emitted on the `error` output instead.
     """
 
     emit_processed: Callable[[ContextId, Output], None]
@@ -30,7 +31,7 @@ class CommunicatorErrorCallback:
     Called when a pending request cannot be completed successfully (send failure, timeout,
     invalid callback body, remote execution error, etc.). Receives the request context id
     and a `NexusException` that should be emitted on the communicator `processed` output
-    as an error.
+    as an error, or on the `error` output when the request's stored input is unavailable.
     """
 
     emit_executor_error: Callable[[ContextId, NexusException], None]

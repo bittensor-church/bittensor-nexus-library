@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import datetime
+from collections.abc import Callable
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv6Address
-from typing import override
+from typing import Any, override
 from urllib.parse import urlparse
 
 from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
@@ -14,11 +15,13 @@ from nexus._internal.actors.neuron_router import Routed
 from nexus._internal.actors.pylon_client_provider import DEFAULT_ASYNC_PYLON_CLIENT_PROVIDER, AsyncPylonClientProvider
 from nexus._internal.core.runtime.actor import Actor, ActorBuilder
 from nexus._internal.core.runtime.context_store import Context, ContextStore
-from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
+from nexus._internal.core.runtime.context_store_types import ContextId, InvalidContextIdException
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.exceptions import (
     ActorMisconfiguredException,
     InternalFrameworkException,
+    InternalStateCorruptionException,
     NeuronAddressInvalidException,
     NexusException,
     RemoteRequestFailedException,
@@ -74,6 +77,7 @@ class AsyncHttpNeuronCommunicator[InputModel: BaseModel, OutputModel: BaseModel]
     sink input: routed request payloads
     source processed: successful results, executor-side failures (timeout, invalid payload, rejection)
     source error: internal/framework failures (e.g. misconfiguration, invalid target address)
+      and request results or failures whose stored input can no longer be loaded for `processed`
     """
 
     target_path: NormalizedHttpPath
@@ -225,10 +229,10 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
             )
 
         processed_callback = CommunicatorProcessedCallback[OutputModel](
-            emit_processed=lambda ctx_id, payload: self._emit(self._processed_event(ctx_id, payload)),
+            emit_processed=self._report_request_result,
         )
         error_callback = CommunicatorErrorCallback(
-            emit_executor_error=lambda ctx_id, error: self._emit(self._executor_error_event(ctx_id, error)),
+            emit_executor_error=self._report_request_failure,
         )
 
         self._sender = SenderLoopRuntime.start(
@@ -290,6 +294,45 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
                 thread_name=f"AsyncHttpNeuronCommunicatorTimeout-{self.spec.id}",
             ),
         )
+
+    def _report_request_result(self, ctx_id: ContextId, payload: OutputModel) -> None:
+        """Emit a request result on `processed`, or an error on `error` when the stored input cannot be loaded."""
+        self._emit_request_outcome(
+            ctx_id,
+            lambda: self._processed_event(ctx_id, payload),
+            lambda: InternalStateCorruptionException(
+                f"Discarded the remote response for context {ctx_id}: its stored input is unavailable."
+            ),
+        )
+
+    def _report_request_failure(self, ctx_id: ContextId, error: NexusException) -> None:
+        """Emit a request failure on `processed`, or on `error` when the stored input cannot be loaded."""
+        self._emit_request_outcome(ctx_id, lambda: self._executor_error_event(ctx_id, error), lambda: error)
+
+    def _emit_request_outcome(
+        self,
+        ctx_id: ContextId,
+        processed_event: Callable[[], SendEvent[Any]],
+        fallback_error: Callable[[], NexusException],
+    ) -> None:
+        try:
+            event = processed_event()
+        except InvalidContextIdException:
+            # Nothing can be emitted: an event for an unknown context would crash the event bus loop.
+            logger.exception(
+                "Dropping request outcome for unknown ctx=%s in communicator=%s.",
+                ctx_id,
+                self.spec.id,
+            )
+            return
+        except Exception:
+            logger.exception(
+                "Failed to load stored input for ctx=%s in communicator=%s; emitting on the error source.",
+                ctx_id,
+                self.spec.id,
+            )
+            event = self._internal_error_event(ctx_id, fallback_error())
+        self._emit(event)
 
     def _stop_background_threads(self) -> None:
         sender = self._sender
