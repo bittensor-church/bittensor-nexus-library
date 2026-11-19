@@ -4,6 +4,7 @@ import sys
 import time
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
+from datetime import timedelta
 from typing import Any
 
 from pydantic import ValidationError
@@ -35,6 +36,9 @@ class NexusValidator:
     `start_runtime()` temporarily scopes those settings into the subnet-settings registry
     so actors that resolve settings indirectly (for example OpenRouter-backed actors)
     see the current validator configuration only for the lifetime of that runtime.
+
+    `context_ttl` is passed to `SubnetBuilder`: contexts idle for longer than it are expired. The default None never
+    expires contexts, so memory grows for as long as the validator runs; long-running validators should set it.
     """
 
     subnet_clock: BlockBeatNode
@@ -44,9 +48,11 @@ class NexusValidator:
     settings: BaseSettings
     subnet_flow: Flow
     runtime: SubnetRuntime | None = None
+    context_ttl: timedelta | None
 
-    def __init__(self, settings: BaseSettings) -> None:
+    def __init__(self, settings: BaseSettings, *, context_ttl: timedelta | None = None) -> None:
         self.settings = settings
+        self.context_ttl = context_ttl
         self.subnet_clock = BlockBeatNode("internal-subnet-clock")
         self._connected_nodes = {}
         self._connected_tasks = {}
@@ -122,7 +128,12 @@ class NexusValidator:
         ]
         deduped_nodes = tuple({id(node): node for node in all_nodes}.values())
 
-        return SubnetBuilder(nodes=deduped_nodes).add_flows(self.subnet_flow).add_flows(*task_flows).build()
+        return (
+            SubnetBuilder(nodes=deduped_nodes, context_ttl=self.context_ttl)
+            .add_flows(self.subnet_flow)
+            .add_flows(*task_flows)
+            .build()
+        )
 
     @contextmanager
     def start_runtime(self, shutdown_timeout_seconds: float = 30.0) -> Generator[SubnetRuntime]:

@@ -112,6 +112,16 @@ aggregate payload or user data explicitly. Mapping iteration order is not part o
 `ContextStore.create_context()` produce one parent relationship and snapshot, and are collapsed before determining
 single- versus multi-parent inheritance.
 
+#### Context lifetime
+
+By default contexts are never removed: every context, its lock, and its log entries stay in memory until the process restarts. Periodic sources such as block beats with taps create new contexts all the time, so memory grows without bound.
+
+Long-running validators should enable idle-context expiry with `context_ttl` on `SubnetBuilder` (or `NexusValidator.__init__`). A context with no activity for longer than the TTL is completed and removed from the context store, and `ContextStorePersistence.release_context()` is called for it. `InMemoryContextStorePersistence` then drops the context's entries; the default `release_context()` keeps them, so a custom persistence must override it to bound its own storage. Activity is the creation of the context, every log entry appended to it (messages dispatched for it, user data changes, user notes, and the creation of a child context), and every use of it: the idle timer restarts when a handler or any other `get_context()` caller releases the context, so a handler running longer than the TTL does not lose its context. Contexts recovered after a restart count as active at recovery time.
+
+The TTL must exceed the longest gap between two uses of one context, for example a retry delay, an HTTP callback timeout, or a gather window. A gather actor that collects parent context IDs and later calls `create_context(parents=...)` needs all parents to still exist, so a window spanning an epoch (~72 min) needs a TTL comfortably above that. Children keep snapshots of their parents, so a parent may expire before its children.
+
+A message for an expired context is dropped by the event bus with an error log naming the context and the source. An actor that receives a delivery whose context expired while the message was queued logs an error and skips it.
+
 ### Nexus Task
 
 A generic template for a unit of work with built-in and configurable retry, timeout, and result storage.

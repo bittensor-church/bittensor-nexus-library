@@ -9,6 +9,7 @@ It also supports backpressure while waiting for chain time:
 - outputs are queued until at least one `BlockBeat` is observed
 - queue head age is monitored and logged
 - when queue head age exceeds the error threshold, all queued entries older than that threshold are dropped
+- queued outputs whose context no longer exists (e.g. it expired) are dropped with an error log
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from nexus._internal.actors.chain_beat.block_beat import BlockBeat
 from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
 from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus._internal.core.runtime.context_store import Context, ContextStore
-from nexus._internal.core.runtime.context_store_types import ContextId
+from nexus._internal.core.runtime.context_store_types import ContextId, InvalidContextIdException
 from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
 from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.exceptions import InternalStateCorruptionException
@@ -177,8 +178,12 @@ class TimestamperActor[Input, Output](Actor):
         for queued_output in self.queued_outputs:
             # this is safe, because if the context is queued,
             # there should be no one else using it
-            with self.context_store.get_context(queued_output.ctx_id) as output_context:
-                timestamped_output = self._timestamp_output(ctx=output_context, output=queued_output.output)
+            try:
+                with self.context_store.get_context(queued_output.ctx_id) as output_context:
+                    timestamped_output = self._timestamp_output(ctx=output_context, output=queued_output.output)
+            except InvalidContextIdException:
+                self._log_missing_context(queued_output.ctx_id)
+                continue
             events_to_send.append(
                 SendEvent(
                     ctx_id=queued_output.ctx_id,
@@ -193,6 +198,7 @@ class TimestamperActor[Input, Output](Actor):
 
     def _log_if_first_queued_output_too_old(self, *, current_ctx: Context) -> None:
         """Log queue staleness based on head age and drop very old queued entries on error threshold."""
+        self._drop_outputs_of_missing_contexts()
         if len(self.queued_outputs) == 0:
             self._warning_logged_head = None
             return
@@ -240,6 +246,20 @@ class TimestamperActor[Input, Output](Actor):
 
         self.queued_outputs = retained_entries
         return dropped_count
+
+    def _drop_outputs_of_missing_contexts(self) -> None:
+        """Drop queued outputs whose context no longer exists, e.g. because it expired while queued."""
+        retained_entries: list[QueuedOutput[Output]] = []
+        for queued_output in self.queued_outputs:
+            try:
+                with self.context_store.get_context(queued_output.ctx_id):
+                    retained_entries.append(queued_output)
+            except InvalidContextIdException:
+                self._log_missing_context(queued_output.ctx_id)
+        self.queued_outputs = retained_entries
+
+    def _log_missing_context(self, ctx_id: ContextId) -> None:
+        logger.error("Dropping queued output: context %s no longer exists; it may have expired.", ctx_id)
 
     def _timestamp_output(self, *, ctx: Context, output: Output) -> Timestamped[Output]:
         """
