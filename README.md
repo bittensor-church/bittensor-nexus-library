@@ -101,6 +101,17 @@ flow = (
 Plain positional and named targets are primaries. Use `Targets(primary=..., taps=[...])` for a named source that needs
 both roles. Legacy `.then(a, b)` and iterable named-route values are invalid; use the explicit `taps=` forms instead.
 
+## Context lifetime
+
+Contexts are kept in memory until restart unless idle-context expiry is enabled. Long-running validators should pass a `context_ttl` that exceeds the longest gap between two uses of one context (retry delays, callback timeouts, gather windows spanning an epoch):
+
+```py
+super().__init__(settings, context_ttl=timedelta(hours=3))  # in a NexusValidator subclass
+SubnetBuilder(nodes=nodes, context_ttl=timedelta(hours=3))
+```
+
+See "Context lifetime" in `docs/nexus.md` for details.
+
 ## Public API
 
 Import Nexus public interfaces from the versioned API package:

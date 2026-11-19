@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -95,6 +96,15 @@ class SubnetRuntime:
 
 
 class SubnetBuilder:
+    """
+    Assembles nodes and flows into a runnable SubnetRuntime.
+
+    `context_ttl` enables idle-context expiry: a context with no activity for longer than the TTL is completed and
+    removed from the context store (see ContextStore.expire_idle). The default None keeps every context for the
+    lifetime of the process, so memory grows with every context created. The TTL must exceed the longest gap between
+    two uses of one context, e.g. retry delays, HTTP callback timeouts, or gather windows.
+    """
+
     _nodes: tuple[Node, ...]
     _flows: list[Flow]
     _extra_actors: list[Actor]
@@ -102,6 +112,7 @@ class SubnetBuilder:
     _context_store: ContextStore
     _pipe_to_bus: PipeToBus
     _include_node_flows: bool
+    _context_ttl: datetime.timedelta | None
     _is_built: bool
 
     def __init__(
@@ -111,7 +122,10 @@ class SubnetBuilder:
         context_store: ContextStore | None = None,
         pipe_to_bus: PipeToBus | None = None,
         include_node_flows: bool = True,
+        context_ttl: datetime.timedelta | None = None,
     ) -> None:
+        if context_ttl is not None and context_ttl <= datetime.timedelta(0):
+            raise ValueError(f"Expected a positive context_ttl or None, got {context_ttl}.")
         self._nodes = tuple(nodes)
         self._flows = []
         self._extra_actors = []
@@ -121,6 +135,7 @@ class SubnetBuilder:
         )
         self._pipe_to_bus = pipe_to_bus or PipeToBus()
         self._include_node_flows = include_node_flows
+        self._context_ttl = context_ttl
         self._is_built = False
 
     @property
@@ -181,6 +196,7 @@ class SubnetBuilder:
             input_pipe=self._pipe_to_bus,
             actors=list(all_actors),
             context_store=self._context_store,
+            context_ttl=self._context_ttl,
         )
 
         self._is_built = True
