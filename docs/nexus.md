@@ -97,13 +97,13 @@ Every message entering a pipeline gets its own context. As the message is transf
 actors, it carries the same context throughout the linear part of the flow.
 
 Contexts include an arbitrary data bag that actors can use to store persistent per-flow information. Contexts
-survive restarts — they are persisted and reloaded.
+survive restarts — they are persisted and reloaded until their flow has finished.
 
 Each context has a single linear lifecycle. When a source emits, its primary receives that context unchanged. Nexus
 creates one unique child context for every tap before dispatching any target. Each child records a snapshot of its
 parent and starts with the parent's current payload and user data. Creating every child first makes all tap snapshots
 reflect the same emission state, even if the primary immediately mutates its parent context. With taps-only wiring,
-the parent is retained as the children's snapshot source but is not dispatched to a sink.
+the parent only serves as the children's snapshot source and is not dispatched to a sink.
 
 Conversely, when there's a gather point, a new context with multiple parents should be created. Multi-parent
 contexts do not implicitly merge payloads or user data. Instead, `context.copy_parent_context_snapshots()` exposes an
@@ -111,6 +111,33 @@ immutable mapping from parent context ID to snapshot; the gather actor should se
 aggregate payload or user data explicitly. Mapping iteration order is not part of the API. Duplicate IDs passed to
 `ContextStore.create_context()` produce one parent relationship and snapshot, and are collapsed before determining
 single- versus multi-parent inheritance.
+
+#### Context lifetime
+
+A context lives while a message for it is queued or being handled. The event bus takes a reference for every delivery
+and the receiving actor releases it after its handler returned (or raised) and the messages it produced were queued.
+When the last reference is released, the context is completed and removed from the store, and its persisted entries
+are no longer needed for recovery. Children keep their parent snapshots, so a parent does not need to outlive its
+children. A new context that nothing references is released after the bus dispatched its first message.
+
+Code that uses a context ID after the handler that received it returns — a timer, a pending remote request, a queue
+waiting for another signal — must keep the context alive explicitly:
+
+```py
+from nexus.v1 import ReleaseContextEvent, SendEvent
+
+def handle(self, ctx: Context, event: ReceiveEvent[Request]) -> MessagesToSend:
+    self.context_store.retain(ctx.id)  # while the delivery still holds the context
+    self.pending.append(ctx.id)
+    return ()
+
+# later, from a handler or the actor's own thread:
+return (SendEvent(ctx_id=ctx_id, source=self.spec.ok, payload=result), ReleaseContextEvent(ctx_id))
+```
+
+The release goes through the bus after the messages queued before it, so it never overtakes them. Every `retain()`
+needs exactly one `ReleaseContextEvent`. Accessing or creating a child of a released context raises
+`InvalidContextIdException`. The built-in retry strategy, timestamper and async HTTP communicator already do this.
 
 ### Nexus Task
 
@@ -239,6 +266,12 @@ information that should not be lost on restart:
 - intermediate aggregates
 
 In most cases, you should use Nexus Tasks for the task and and result stores for its result.
+
+### Retain contexts that outlive their handler
+
+A context is released as soon as no message for it is queued or being handled. If an actor keeps a context ID for
+later (timers, pending requests, queues), it must `retain()` the context while handling it and emit
+`ReleaseContextEvent` after its last message for it. See [Context lifetime](#context-lifetime).
 
 ### Always connect logging listeners to all error sources
 

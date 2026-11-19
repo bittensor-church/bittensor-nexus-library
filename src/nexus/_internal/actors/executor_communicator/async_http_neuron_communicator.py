@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import datetime
+from collections.abc import Callable
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv6Address
-from typing import override
+from typing import Any, override
 from urllib.parse import urlparse
 
 from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
@@ -14,7 +15,8 @@ from nexus._internal.actors.neuron_router import Routed
 from nexus._internal.actors.pylon_client_provider import DEFAULT_ASYNC_PYLON_CLIENT_PROVIDER, AsyncPylonClientProvider
 from nexus._internal.core.runtime.actor import Actor, ActorBuilder
 from nexus._internal.core.runtime.context_store import Context, ContextStore
-from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent
+from nexus._internal.core.runtime.context_store_types import ContextId
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, ReleaseContextEvent, SendEvent
 from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.exceptions import (
     ActorMisconfiguredException,
@@ -225,10 +227,14 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
             )
 
         processed_callback = CommunicatorProcessedCallback[OutputModel](
-            emit_processed=lambda ctx_id, payload: self._emit(self._processed_event(ctx_id, payload)),
+            emit_processed=lambda ctx_id, payload: self._emit_final(
+                ctx_id, lambda: self._processed_event(ctx_id, payload)
+            ),
         )
         error_callback = CommunicatorErrorCallback(
-            emit_executor_error=lambda ctx_id, error: self._emit(self._executor_error_event(ctx_id, error)),
+            emit_executor_error=lambda ctx_id, error: self._emit_final(
+                ctx_id, lambda: self._executor_error_event(ctx_id, error)
+            ),
         )
 
         self._sender = SenderLoopRuntime.start(
@@ -327,6 +333,8 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
             self._emit_internal_error(event.ctx_id, InternalFrameworkException("Sender loop is not running."))
             return ()
 
+        # The request outlives this handler; its single terminal event releases the context (see _emit_final).
+        self.context_store.retain(event.ctx_id)
         try:
             target_url = self._resolve_neuron_target_url(event.payload.target)
             sender.dispatch(
@@ -336,7 +344,9 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
                 payload=event.payload.input,
             )
         except NexusException as exc:
+            # dispatch raises only before the request is registered, so no terminal event follows
             self._emit_internal_error(event.ctx_id, exc)
+            return (ReleaseContextEvent(event.ctx_id),)
         except Exception as exc:
             self._emit_internal_error(
                 event.ctx_id,
@@ -344,7 +354,14 @@ class AsyncHttpNeuronCommunicatorActor[InputModel: BaseModel, OutputModel: BaseM
                     f"Unexpected failure while dispatching request for context {event.ctx_id}: {exc!r}"
                 ),
             )
+            return (ReleaseContextEvent(event.ctx_id),)
         return ()
+
+    def _emit_final(self, ctx_id: ContextId, build_event: Callable[[], SendEvent[Any]]) -> None:
+        try:
+            self._emit(build_event())
+        finally:
+            self._emit(ReleaseContextEvent(ctx_id))
 
     def _resolve_neuron_target_url(self, target: Neuron) -> AnyHttpUrl:
         axon_info = target.axon_info

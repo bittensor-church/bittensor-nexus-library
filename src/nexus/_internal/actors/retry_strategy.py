@@ -6,7 +6,7 @@ from typing import Any, NewType, cast, override
 from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, SinkName, Source, SourceName
 from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus._internal.core.runtime.context_store import Context, ContextStore
-from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, ReleaseContextEvent, SendEvent
 from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.exceptions import (
     InternalFrameworkException,
@@ -124,6 +124,7 @@ class RetryStrategyActor[T](Actor):
 
     def _schedule_next_attempt(self, ctx: Context, _: RetryState[T]) -> None:
         ctx_id = ctx.id  # we can't reference the whole Context in the inner function as we lose its ownership
+        self.context_store.retain(ctx_id)
 
         # when we leave the scope of the handler
         def trigger_next_attempt():
@@ -138,19 +139,22 @@ class RetryStrategyActor[T](Actor):
                     threading.current_thread(),
                     self.timers,
                 )
-            with self.context_store.get_context(ctx_id) as context:
-                retry_state = self._retry_state_from_context(context)
-                if retry_state is None:
-                    # this should also never happen. Retry state should be set in a
-                    # previous handler, but we only log and continue.
-                    logger.error(
-                        "No retry state found in context user data when trying to trigger next attempt? "
-                        "ctx_id: %s, context user_data: %s.",
-                        ctx_id,
-                        context.copy_user_data(),
-                    )
-                    return
-                self._pipe_to_bus.put(self._next_attempt_message(context, retry_state))
+            try:
+                with self.context_store.get_context(ctx_id) as context:
+                    retry_state = self._retry_state_from_context(context)
+                    if retry_state is None:
+                        # this should also never happen. Retry state should be set in a
+                        # previous handler, but we only log and continue.
+                        logger.error(
+                            "No retry state found in context user data when trying to trigger next attempt? "
+                            "ctx_id: %s, context user_data: %s.",
+                            ctx_id,
+                            context.copy_user_data(),
+                        )
+                        return
+                    self._pipe_to_bus.put(self._next_attempt_message(context, retry_state))
+            finally:
+                self._pipe_to_bus.put(ReleaseContextEvent(ctx_id))
 
         # I don't care about threads really... We can have lots of them and be fine;
         # that said, me might want one day to just have a separate thread and run an AIO loop there...

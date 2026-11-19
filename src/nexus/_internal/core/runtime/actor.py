@@ -8,7 +8,15 @@ from nexus._internal.logging_utils import get_logger
 
 from ..dsl.nodes import Sink
 from .context_store import Context, ContextStore
-from .events import MessagesToSend, PipeFromBus, PipeToBus, ReceiveEvent, SendEvent, StopActorEvent
+from .events import (
+    MessagesToSend,
+    PipeFromBus,
+    PipeToBus,
+    ReceiveEvent,
+    ReleaseContextEvent,
+    SendEvent,
+    StopActorEvent,
+)
 
 logger = get_logger("Actor")
 
@@ -22,6 +30,10 @@ class Actor(ABC):
     Base runtime processing unit.
 
     Actor instances are one-off: their event loop can be started only once.
+
+    After handling a delivered message, the loop queues the produced messages and then a ReleaseContextEvent for the
+    delivery's context, also when the handler raised. To use a context after its handler returns, retain it with
+    ContextStore.retain(); see the "Context lifetime" section of ContextStore.
 
     The on_start and on_stop methods can be overridden to perform custom initialization and teardown logic.
     Both will be called from the actor's thread.
@@ -92,6 +104,7 @@ class Actor(ABC):
                         raise AssertionError(
                             f"Unexpected handler return type: {type(events_produced_by_the_handler)!r}"
                         )
+                self._pipe_to_bus.put(ReleaseContextEvent(event_to_handle.ctx_id))
                 self.pipe_from_bus.task_done()
 
     @abstractmethod

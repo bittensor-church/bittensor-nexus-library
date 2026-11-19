@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from utils import CollectorActor, dummy_block_beat, wait_until
+from utils import CollectorActor, dummy_block_beat, release_collected_contexts, wait_until
 
 from nexus.v1 import Flow, SendEvent, Source, SubnetBuilder, Timestamped, TimestamperNode
 
@@ -93,9 +93,12 @@ def test_timestamper_queues_output_until_first_block_beat() -> None:
         runtime.pipe_to_bus.put(SendEvent(ctx_id=ctx_id, source=upstream_block_beat, payload=block_beat))
         wait_until(lambda: len(output_collector.received_events) == 1)
 
+        with runtime.context_store.get_context(ctx_id) as context:
+            saved_start_time = context.copy_user_data()[timestamper.processing_started_at_user_data_key]
+        # the queued output's context was retained until the block beat flushed it
+        release_collected_contexts(runtime.context_store, input_collector, output_collector)
+
     timestamped = output_collector.received_events[0].payload
-    with runtime.context_store.get_context(ctx_id) as context:
-        saved_start_time = context.copy_user_data()[timestamper.processing_started_at_user_data_key]
 
     assert timestamped.executor_output == output_payload
     assert timestamped.block_at_finish == block_beat

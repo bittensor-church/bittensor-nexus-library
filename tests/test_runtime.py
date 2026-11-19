@@ -25,6 +25,7 @@ from nexus.v1 import (
     PipeToBus,
     Piping,
     ReceiveEvent,
+    ReleaseContextEvent,
     SafeInvokeWrappedException,
     SendEvent,
     Sink,
@@ -156,6 +157,18 @@ def _create_context(context_store: ContextStore) -> Context:
         return context
 
 
+def _drain(pipe_to_bus: PipeToBus) -> list[SendEvent[Any]]:
+    events: list[SendEvent[Any]] = []
+    while not pipe_to_bus.empty():
+        events.append(pipe_to_bus.get_nowait())
+    return events
+
+
+def _messages(pipe_to_bus: PipeToBus) -> list[SendEvent[Any]]:
+    """Drains the bus input, leaving out the release that follows every handled delivery."""
+    return [event for event in _drain(pipe_to_bus) if not isinstance(event, ReleaseContextEvent)]
+
+
 def test_actor_dispatches_events_to_handlers():
     context_store = empty_context_store()
     ctx_left_1 = _create_context(context_store)
@@ -197,8 +210,9 @@ def test_fork_actor_routes_left_and_right_sources():
     actor_job.join(1.0)
     assert not actor_job.is_alive()
 
-    left_event = pipe_to_bus.get_nowait()
-    right_event = pipe_to_bus.get_nowait()
+    left_event, left_release, right_event, right_release = _drain(pipe_to_bus)
+    assert left_release == ReleaseContextEvent(ctx_left.id)
+    assert right_release == ReleaseContextEvent(ctx_right.id)
 
     assert left_event.source == actor.spec.left
     assert left_event.payload == "left-payload"
@@ -224,7 +238,7 @@ def test_fork_actor_preserves_context_id():
     job.join(1.0)
     assert not job.is_alive()
 
-    emitted = pipe_to_bus.get_nowait()
+    [emitted] = _messages(pipe_to_bus)
     assert emitted.ctx_id == ctx_to_preserve.id
     assert emitted.source == actor.spec.left
     assert emitted.payload == "left-ctx"
@@ -246,7 +260,7 @@ def test_transform_actor_emits_transformed_event():
     actor_job.join(1.0)
     assert not actor_job.is_alive()
 
-    send_event = pipe_to_bus.get_nowait()
+    [send_event] = _messages(pipe_to_bus)
     assert send_event.payload == "123"
     assert send_event.source == stringify.ok
     assert send_event.ctx_id == context.id
@@ -270,7 +284,8 @@ def test_transform_actor_routes_ok_and_error_sources():
     job.join(1.0)
     assert not job.is_alive()
 
-    events = [pipe_to_bus.get_nowait(), pipe_to_bus.get_nowait()]
+    events = _messages(pipe_to_bus)
+    assert len(events) == 2
     ok_event = next(event for event in events if event.ctx_id == ctx_ok.id)
     error_event = next(event for event in events if event.ctx_id == ctx_error.id)
 
@@ -298,7 +313,7 @@ def test_transform_actor_preserves_context_id():
     job.join(1.0)
     assert not job.is_alive()
 
-    sent = pipe_to_bus.get_nowait()
+    [sent] = _messages(pipe_to_bus)
     assert sent.ctx_id == ctx.id
     assert sent.payload == "7"
     assert sent.source == stringify.ok
@@ -544,8 +559,8 @@ def test_event_bus_logs_when_no_connections(caplog: Any):
     event_bus.request_stop()
     event_loop.join(1.0)
     assert not event_loop.is_alive()
-    with context_store.get_context(ctx.id) as context:
-        assert context.copy_payload() == "payload"
+    # nothing references the context after its only message found no target
+    assert context_store.live_context_count == 0
 
 
 def test_actor_error_does_not_stop_event_bus(caplog: Any):
@@ -615,7 +630,8 @@ def test_double_transform_actor_routes_input_output_and_errors():
     actor_job.join(1.0)
     assert not actor_job.is_alive()
 
-    events = [pipe_to_bus.get_nowait() for _ in range(4)]
+    events = _messages(pipe_to_bus)
+    assert len(events) == 4
 
     def _event_by_ctx(ctx: ContextId) -> SendEvent[Any]:
         return next(event for event in events if event.ctx_id == ctx)
@@ -666,7 +682,8 @@ def test_double_transform_actor_preserves_context_id():
     job.join(1.0)
     assert not job.is_alive()
 
-    events = [pipe_to_bus.get_nowait(), pipe_to_bus.get_nowait()]
+    events = _messages(pipe_to_bus)
+    assert len(events) == 2
     input_event = next(event for event in events if event.ctx_id == ctx_input.id)
     output_event = next(event for event in events if event.ctx_id == ctx_output.id)
 

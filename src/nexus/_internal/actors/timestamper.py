@@ -23,7 +23,7 @@ from nexus._internal.core.dsl.nodes import Node, NodeSinks, NodeSources, Sink, S
 from nexus._internal.core.runtime.actor import Actor, ActorBuilder, EventHandler
 from nexus._internal.core.runtime.context_store import Context, ContextStore
 from nexus._internal.core.runtime.context_store_types import ContextId
-from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, SendEvent
+from nexus._internal.core.runtime.events import MessagesToSend, PipeToBus, ReceiveEvent, ReleaseContextEvent, SendEvent
 from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.exceptions import InternalStateCorruptionException
 
@@ -118,7 +118,8 @@ class TimestamperActor[Input, Output](Actor):
 
     Notes:
     - Input events overwrite the stored start timestamp (latest input wins).
-    - Output events require a `BlockBeat`; otherwise they are queued.
+    - Output events require a `BlockBeat`; otherwise they are queued. Queued contexts are retained until their
+      output is emitted or dropped.
     - Warning logs are emitted only when crossing the warning threshold for the current queue head.
 
     """
@@ -158,9 +159,10 @@ class TimestamperActor[Input, Output](Actor):
     def handle_output(self, ctx: Context, event: ReceiveEvent[Output]) -> MessagesToSend:
         """Emit timestamped output if ready; otherwise enqueue while waiting for `BlockBeat`."""
         if self.latest_block_beat is None:
+            self.context_store.retain(event.ctx_id)
             self.queued_outputs.append(QueuedOutput(ctx_id=event.ctx_id, output=event.payload))
-            self._log_if_first_queued_output_too_old(current_ctx=ctx)
-            return ()
+            dropped = self._log_if_first_queued_output_too_old(current_ctx=ctx)
+            return tuple(ReleaseContextEvent(queued.ctx_id) for queued in dropped)
 
         timestamped_output = self._timestamp_output(ctx=ctx, output=event.payload)
         return SendEvent(ctx_id=event.ctx_id, source=self.spec.timestamped_output, payload=timestamped_output)
@@ -174,6 +176,7 @@ class TimestamperActor[Input, Output](Actor):
             return ()
 
         events_to_send: list[SendEvent[Timestamped[Output]]] = []
+        releases = tuple(ReleaseContextEvent(queued_output.ctx_id) for queued_output in self.queued_outputs)
         for queued_output in self.queued_outputs:
             # this is safe, because if the context is queued,
             # there should be no one else using it
@@ -189,13 +192,13 @@ class TimestamperActor[Input, Output](Actor):
 
         self.queued_outputs.clear()
         self._warning_logged_head = None
-        return tuple(events_to_send)
+        return (*events_to_send, *releases)
 
-    def _log_if_first_queued_output_too_old(self, *, current_ctx: Context) -> None:
-        """Log queue staleness based on head age and drop very old queued entries on error threshold."""
+    def _log_if_first_queued_output_too_old(self, *, current_ctx: Context) -> list[QueuedOutput[Output]]:
+        """Log queue staleness based on head age, drop very old queued entries on error threshold and return them."""
         if len(self.queued_outputs) == 0:
             self._warning_logged_head = None
-            return
+            return []
 
         first_queued = self.queued_outputs[0]
         first_started_at = self._started_at(first_queued.ctx_id)
@@ -204,7 +207,7 @@ class TimestamperActor[Input, Output](Actor):
         now = datetime.now(tz=UTC)
         first_age = now - first_started_at
         if first_age > QUEUE_AGE_ERROR_THRESHOLD:
-            dropped_count = self._drop_entries_older_than_error_threshold(current_ctx=current_ctx, now=now)
+            dropped = self._drop_entries_older_than_error_threshold(current_ctx=current_ctx, now=now)
             self._warning_logged_head = None
             logger.error(
                 "Timestamper queue head is too old: age=%s threshold=%s head_ctx_id=%s queue_len=%d "
@@ -213,9 +216,10 @@ class TimestamperActor[Input, Output](Actor):
                 QUEUE_AGE_ERROR_THRESHOLD,
                 first_queued.ctx_id,
                 len(self.queued_outputs),
-                dropped_count,
+                len(dropped),
             )
-        elif first_age > QUEUE_AGE_WARNING_THRESHOLD and self._warning_logged_head != head_key:
+            return dropped
+        if first_age > QUEUE_AGE_WARNING_THRESHOLD and self._warning_logged_head != head_key:
             logger.warning(
                 "Timestamper queue head is old: age=%s threshold=%s head_ctx_id=%s queue_len=%d",
                 first_age,
@@ -224,22 +228,25 @@ class TimestamperActor[Input, Output](Actor):
                 len(self.queued_outputs),
             )
             self._warning_logged_head = head_key
+        return []
 
-    def _drop_entries_older_than_error_threshold(self, *, current_ctx: Context, now: datetime) -> int:
-        """Drop all queued entries older than the error threshold and return dropped count."""
+    def _drop_entries_older_than_error_threshold(
+        self, *, current_ctx: Context, now: datetime
+    ) -> list[QueuedOutput[Output]]:
+        """Drop all queued entries older than the error threshold and return them."""
         retained_entries: list[QueuedOutput[Output]] = []
-        dropped_count = 0
+        dropped: list[QueuedOutput[Output]] = []
         for queued_output in self.queued_outputs:
             queued_started_at = self._started_at(queued_output.ctx_id)
 
             queued_age = now - queued_started_at
             if queued_age > QUEUE_AGE_ERROR_THRESHOLD:
-                dropped_count += 1
+                dropped.append(queued_output)
             else:
                 retained_entries.append(queued_output)
 
         self.queued_outputs = retained_entries
-        return dropped_count
+        return dropped
 
     def _timestamp_output(self, *, ctx: Context, output: Output) -> Timestamped[Output]:
         """

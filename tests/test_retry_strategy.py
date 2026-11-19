@@ -5,7 +5,7 @@ from time import monotonic
 from typing import Any, override
 
 from pydantic import BaseModel
-from utils import CollectorActor, wait_until
+from utils import CollectorActor, release_collected_contexts, wait_until
 
 from nexus.v1 import (
     Actor,
@@ -143,6 +143,8 @@ def test_retry_strategy_actor_retries_first_k_failures() -> None:
 
     with runtime.context_store.create_context() as context:
         ctx_id = context.id
+    # keep the context inspectable after its flow ends
+    runtime.context_store.retain(ctx_id)
 
     payload = RetryInput(value="needs-retries")
     with runtime.running(shutdown_timeout_seconds=1.0):
@@ -197,6 +199,9 @@ def test_retry_strategy_actor_emits_retries_exhausted_after_too_many_failures() 
         exhausted_event = exhausted_collector.received_events[0]
         assert exhausted_event.ctx_id == ctx_id
         assert isinstance(exhausted_event.payload, RetriesExhaustedException)
+
+        # retry timers released the contexts they retained between attempts
+        release_collected_contexts(runtime.context_store, exhausted_collector)
 
 
 def test_retry_strategy_retry_wait_in_one_context_does_not_block_other_context() -> None:

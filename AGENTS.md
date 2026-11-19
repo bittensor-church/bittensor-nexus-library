@@ -45,6 +45,8 @@ Always use `uv` or `uvx`, never bare `python` or `pip`.
   an independent child context. Use taps-only wiring for broadcasts and subnet-clock consumers.
 - Use `.then(primary, taps=[...])`, `.then(taps=[...])`, or named `Targets(...)`. Do not use legacy `.then(a, b)` or
   iterable named-route values.
+- A context is released once no message for it is queued or being handled. Code that keeps a context ID beyond its
+  handler must `ContextStore.retain()` it and emit `ReleaseContextEvent` after its last message for it.
 - Prefer short and concise code. Avoid deeply nested code.
 - Code MUST be well-typed. Prefer typed structures over dictionaries.
 - Be strict with domain types: avoid bare `str`/`int`/`float` for domain values when a stronger type exists.

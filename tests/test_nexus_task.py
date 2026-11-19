@@ -359,6 +359,8 @@ def test_nexus_task_applies_non_trivial_executor_result_converter() -> None:
     with runtime.running():
         with runtime.context_store.create_context() as context:
             input_ctx_id = context.id
+        # the test emits twice on this context from outside any handler
+        runtime.context_store.retain(input_ctx_id)
         runtime.pipe_to_bus.put(
             SendEvent(
                 ctx_id=input_ctx_id,
@@ -486,6 +488,8 @@ def test_nexus_task_emits_error_when_executor_result_converter_fails_without_ret
     with runtime.running():
         with runtime.context_store.create_context() as context:
             input_ctx_id = context.id
+        # the test emits twice on this context from outside any handler
+        runtime.context_store.retain(input_ctx_id)
         runtime.pipe_to_bus.put(
             SendEvent(
                 ctx_id=input_ctx_id,

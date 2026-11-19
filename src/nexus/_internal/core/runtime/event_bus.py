@@ -7,8 +7,8 @@ from nexus._internal.logging_utils import get_logger
 from ..dsl.nodes import Pipes, Sink
 from .actor import Actor
 from .context_store import ContextStore
-from .context_store_types import ContextId
-from .events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
+from .context_store_types import ContextId, InvalidContextIdException
+from .events import PipeToBus, ReceiveEvent, ReleaseContextEvent, SendEvent, StopActorEvent, StopBusEvent
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -71,24 +71,45 @@ class EventBus:
     def _loop(self) -> None:
         while True:
             event: SendEvent[Any] = self.input_pipe.get()
-            if isinstance(event, StopBusEvent):
-                logger.info("Stop event received in EventBus; stopping loop.")
-                for sink in self.sinks.values():
-                    sink.pipe_from_bus.put(StopActorEvent())
-                self.input_pipe.task_done()
-                break
-            else:
-                # update the context
-                with self.context_store.get_context(event.ctx_id) as context:
-                    context.append_message(event.source, event.payload)
+            match event:
+                case StopBusEvent():
+                    logger.info("Stop event received in EventBus; stopping loop.")
+                    for sink in self.sinks.values():
+                        sink.pipe_from_bus.put(StopActorEvent())
+                    self.input_pipe.task_done()
+                    break
+                case ReleaseContextEvent():
+                    self._release(event.ctx_id)
+                case _:
+                    self._dispatch(event)
+            self.input_pipe.task_done()
 
-                self.pass_message_downstream(event)
-                self.input_pipe.task_done()
+    def _dispatch(self, event: SendEvent[Any]) -> None:
+        try:
+            with self.context_store.get_context(event.ctx_id) as context:
+                context.append_message(event.source, event.payload)
+        except InvalidContextIdException as exc:
+            logger.error(
+                "Dropping message from %s: %s Payload: %s", event.source.id, exc, _payload_for_log(event.payload)
+            )
+            return
+        self.pass_message_downstream(event)
+        # a context that nothing references (e.g. a new one emitted to taps only) is done after its dispatch
+        self.context_store._discard_if_unreferenced(event.ctx_id)  # pyright: ignore[reportPrivateUsage]
+
+    def _release(self, ctx_id: ContextId) -> None:
+        try:
+            self.context_store._release(ctx_id)  # pyright: ignore[reportPrivateUsage]
+        except Exception as exc:
+            # an unbalanced release is a bug in the releasing actor; it must not stop the bus for everyone else
+            logger.error("Failed to release context %s", ctx_id, exc_info=exc)
 
     def pass_message_downstream(self, event: SendEvent[Any]) -> None:
         """
         Actual message distribution logic. Recovery from the context store
         means we rebuild the contexts and then replay the messages using this function.
+
+        Every delivery takes a reference to its context, which the receiving actor releases after handling it.
         """
         targets = self.connections[event.source]
         if targets.primary is None and not targets.taps:
@@ -115,4 +136,6 @@ class EventBus:
             sink.id,
             _payload_for_log(event.payload),
         )
-        self.sinks[sink].pipe_from_bus.put(ReceiveEvent(ctx_id=ctx_id, target=sink, payload=event.payload))
+        pipe_from_bus = self.sinks[sink].pipe_from_bus
+        self.context_store.retain(ctx_id)
+        pipe_from_bus.put(ReceiveEvent(ctx_id=ctx_id, target=sink, payload=event.payload))

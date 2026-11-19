@@ -40,6 +40,21 @@ class StopActorEvent(ReceiveEvent[None]):
         super().__init__(ctx_id=_STOP_CTX, target=_STOP_SINK, payload=None)
 
 
+_RELEASE_SOURCE = Source[None]("release-context-source")
+
+
+class ReleaseContextEvent(SendEvent[None]):
+    """
+    Drops one reference to a context; see the "Context lifetime" section of ContextStore.
+
+    Put it on the bus (or return it from a handler) after the last message for the context. The bus handles its
+    input in order, so messages queued earlier by the same thread are dispatched before the release takes effect.
+    """
+
+    def __init__(self, ctx_id: ContextId) -> None:
+        super().__init__(ctx_id=ctx_id, source=_RELEASE_SOURCE, payload=None)
+
+
 PipeToBus = queue.Queue[SendEvent[Any]]
 PipeFromBus = queue.Queue[ReceiveEvent[Any]]
 

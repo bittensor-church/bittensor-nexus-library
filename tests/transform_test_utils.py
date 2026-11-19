@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
-from utils import CollectorActor
+from utils import CollectorActor, release_collected_contexts
 
 from nexus.v1 import (
     ContextId,
@@ -73,6 +73,10 @@ class TransformActorTestSetup[Input, Output]:
     ) -> Iterator[None]:
         with self.runtime.running(shutdown_timeout_seconds=shutdown_timeout_seconds):
             yield
+
+    def release_collected_contexts(self) -> None:
+        """Releases the collectors' contexts and waits until the transform released every context it retained."""
+        release_collected_contexts(self.runtime.context_store, self.processed_collector, self.error_collector)
 
     def send(
         self,

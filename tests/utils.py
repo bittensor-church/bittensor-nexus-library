@@ -34,6 +34,7 @@ from nexus.v1 import (
     ProcessedInput,
     PylonClientProvider,
     ReceiveEvent,
+    ReleaseContextEvent,
     Routed,
     Sink,
     StoredTaskExecution,
@@ -99,6 +100,8 @@ class Jobs:
 
 
 class CollectorActor[T](Actor):
+    """Records received events and retains their contexts so tests can inspect them afterwards."""
+
     sink: Sink[T]
     received_events: list[ReceiveEvent[T]]
 
@@ -117,8 +120,21 @@ class CollectorActor[T](Actor):
         return {self.sink: self._handle}
 
     def _handle(self, _: Context, event: ReceiveEvent[T]) -> MessagesToSend:
+        self.context_store.retain(event.ctx_id)
         self.received_events.append(event)
         return ()
+
+    def release_received(self) -> None:
+        """Releases the contexts retained for received events; call it while the runtime is running."""
+        for event in self.received_events:
+            self._pipe_to_bus.put(ReleaseContextEvent(event.ctx_id))
+
+
+def release_collected_contexts(context_store: ContextStore, *collectors: CollectorActor[Any]) -> None:
+    """Releases the collectors' contexts and waits until no context is left, i.e. every other holder released too."""
+    for collector in collectors:
+        collector.release_received()
+    wait_until(lambda: context_store.live_context_count == 0)
 
 
 def empty_context_store() -> ContextStore:

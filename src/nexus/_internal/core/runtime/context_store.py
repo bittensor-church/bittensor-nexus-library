@@ -65,6 +65,15 @@ class ContextStorePersistence(ABC):
         """
         pass
 
+    def release_context(self, ctx: ContextId) -> None:  # noqa: B027
+        """
+        Called once a context has been released by the ContextStore.
+
+        The context's log already ends with a ContextCompleted entry, so recovery skips it. The default keeps all
+        entries; implementations may drop, archive or compact them. Children of the context remain live and keep
+        their own parent snapshots.
+        """
+
 
 class ContextStoreLocks(ABC):
     """
@@ -74,6 +83,10 @@ class ContextStoreLocks(ABC):
 
     @abstractmethod
     def register_context(self, ctx: ContextId) -> None:
+        pass
+
+    @abstractmethod
+    def unregister_context(self, ctx: ContextId) -> None:
         pass
 
     @abstractmethod
@@ -97,6 +110,12 @@ class ThreadContextStoreLocks(ContextStoreLocks):
                     f"Context {ctx} already registered in locks? It should have been created first."
                 )
             self.__locks[ctx] = threading.RLock()
+
+    @override
+    def unregister_context(self, ctx: ContextId) -> None:
+        with self.__registry_lock:
+            if self.__locks.pop(ctx, None) is None:
+                raise InternalFrameworkException(f"Context {ctx} is not registered in locks.")
 
     @override
     @contextmanager
@@ -315,10 +334,26 @@ class ContextStore:
 
       Please consider these rules especially whenever you want to scatter or gather
       processing across contexts, and when you want to access contexts in your code.
+
+    Context lifetime:
+    - A context lives while something references it. The event bus takes a reference for every delivery it queues
+      for a sink, and the receiving actor releases it through the bus after handling the message and queueing the
+      messages it produced. A context therefore stays alive exactly while a message for it is queued or in progress.
+    - A new context has no references. Once the bus has dispatched a message for a context and nothing references
+      it, the context is released. Retain a new context before emitting more than one message on it.
+    - Code that keeps a context ID beyond the handler that received it (timers, pending requests, queues) must call
+      retain() while it still owns a delivery of that context, and emit ReleaseContextEvent after its last message
+      for that context. Messages queued before the release are dispatched first.
+    - Releasing completes the context (a ContextCompleted entry is appended unless it was completed already), removes
+      it from the store and notifies ContextStorePersistence.release_context(). Children keep their parent snapshots,
+      so a parent does not need to outlive its children. A released context cannot be accessed or used as a parent.
+    - Contexts restored by recover_from() have no references until messages for them are dispatched again.
     """
 
     __persistence: ContextStorePersistence
     __contexts: dict[ContextId, Context]
+    __references: dict[ContextId, int]
+    __registry_lock: threading.Lock
     __locks: ContextStoreLocks
 
     @classmethod
@@ -418,6 +453,8 @@ class ContextStore:
         # true initialization of the ContextStore
         context_store.__persistence = persistence
         context_store.__contexts = contexts
+        context_store.__references = dict.fromkeys(contexts, 0)
+        context_store.__registry_lock = threading.Lock()
         context_store.__locks = ThreadContextStoreLocks()
         for context_id in contexts:
             context_store.__locks.register_context(context_id)
@@ -445,17 +482,17 @@ class ContextStore:
         deciding whether the child has one or multiple parents. Snapshot iteration order is not part of the API.
 
         Raises:
-            InvalidContextIdException: if one of the provided parent context ids does not exist.
+            InvalidContextIdException: if one of the provided parent context ids does not exist or was released.
             ContextCompletedException: if one of the provided parent contexts is already completed.
 
         """
         parent_ids = tuple(dict.fromkeys(parents))
+        for parent_id in parent_ids:
+            self._ensure_exists(parent_id)
         with self._lock_contexts(parent_ids):
             parent_snapshots: list[ParentContextSnapshot] = []
             for parent_id in parent_ids:
-                parent_context = self.__contexts.get(parent_id, None)
-                if parent_context is None:
-                    raise InvalidContextIdException(f"Parent context {parent_id} not found")
+                parent_context = self._ensure_exists(parent_id)
                 if parent_context.is_completed:
                     raise ContextCompletedException(
                         f"Parent context {parent_id} is completed and cannot create child contexts."
@@ -484,8 +521,10 @@ class ContextStore:
                 parent_contexts=copy.deepcopy(parent_contexts),
                 context_store=self,
             )
-            self.__contexts[new_context_id] = context
             self.__locks.register_context(new_context_id)
+            with self.__registry_lock:
+                self.__contexts[new_context_id] = context
+                self.__references[new_context_id] = 0
             if parent_contexts:
                 self._append_entry(
                     new_context_id,
@@ -501,11 +540,39 @@ class ContextStore:
 
     @contextmanager
     def get_context(self, ctx: ContextId) -> Generator[Context]:
-        with self.__locks.lock_context(ctx):
-            if ctx not in self.__contexts:
-                raise InvalidContextIdException(f"Context {ctx} not found")
+        """
+        Yields an existing context with exclusive ownership.
 
-            yield self.__contexts[ctx]
+        Raises:
+            InvalidContextIdException: if the context does not exist or was released.
+
+        """
+        self._ensure_exists(ctx)
+        with self.__locks.lock_context(ctx):
+            yield self._ensure_exists(ctx)
+
+    @property
+    def live_context_count(self) -> int:
+        """Number of contexts that have not been released."""
+        return len(self.__contexts)
+
+    def retain(self, ctx: ContextId) -> None:
+        """
+        Takes a reference that keeps a context alive beyond the handler that received it.
+
+        Call it while still owning a delivery of the context, e.g. from its handler, then emit
+        ReleaseContextEvent(ctx) after the last message for that context. See the "Context lifetime" section of
+        the class docstring.
+
+        Raises:
+            InvalidContextIdException: if the context does not exist or was released.
+
+        """
+        with self.__registry_lock:
+            references = self.__references.get(ctx, None)
+            if references is None:
+                raise self._missing_context(ctx)
+            self.__references[ctx] = references + 1
 
     def get_user_data[T](
         self,
@@ -533,6 +600,53 @@ class ContextStore:
                 f"expected {expected_type!r}, got {type(value)!r}."
             )
         return value
+
+    def _release(self, ctx: ContextId) -> None:
+        """
+        Drops one reference and releases the context once none remain. Only the event bus calls this.
+
+        Raises:
+            InvalidContextIdException: if the context does not exist or was released.
+            InternalFrameworkException: if the context has no references to drop.
+
+        """
+        with self.__registry_lock:
+            references = self.__references.get(ctx, None)
+            if references is None:
+                raise self._missing_context(ctx)
+            if references == 0:
+                raise InternalFrameworkException(f"Context {ctx} released more often than it was referenced.")
+            self.__references[ctx] = references - 1
+        if references == 1:
+            self._discard_if_unreferenced(ctx)
+
+    def _discard_if_unreferenced(self, ctx: ContextId) -> None:
+        with self.__registry_lock:
+            if self.__references.get(ctx, None) != 0:
+                return
+            # retain() fails from here on, so nothing can revive the context while it is being completed
+            del self.__references[ctx]
+        with self.__locks.lock_context(ctx):
+            context = self.__contexts[ctx]
+            if not context.is_completed:
+                context.complete()
+        self.__locks.unregister_context(ctx)
+        with self.__registry_lock:
+            del self.__contexts[ctx]
+        self.__persistence.release_context(ctx)
+
+    def _ensure_exists(self, ctx: ContextId) -> Context:
+        context = self.__contexts.get(ctx, None)
+        if context is None:
+            raise self._missing_context(ctx)
+        return context
+
+    @staticmethod
+    def _missing_context(ctx: ContextId) -> InvalidContextIdException:
+        return InvalidContextIdException(
+            f"Context {ctx} not found: it was never created or it has been released. "
+            "Retain a context with ContextStore.retain() to use it after the handler that received it."
+        )
 
     def _append_entry(self, ctx: ContextId, entry: LogEntryData) -> None:
         context = self.__contexts.get(ctx, None)
@@ -617,6 +731,19 @@ class InMemoryContextStorePersistence(ContextStorePersistence):
         self.__context_tree[child_ctx] = []
 
         return child_ctx
+
+    @override
+    def release_context(self, ctx: ContextId) -> None:
+        """Drops the context's entries; recovery never needs them because the context is completed."""
+        entries = self.__data.pop(ctx)
+        self.__context_tree.pop(ctx)
+        created = entries[0].data
+        if not isinstance(created, ContextCreated):
+            raise InternalStateCorruptionException(f"Context {ctx} log does not start with ContextCreated.")
+        for parent in created.parents:
+            children = self.__context_tree.get(parent, None)
+            if children is not None:
+                children.remove(ctx)
 
     @override
     def log_entries(self) -> tuple[LogEntry, ...]:

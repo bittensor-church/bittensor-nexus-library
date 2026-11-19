@@ -146,6 +146,7 @@ def test_async_http_neuron_communicator_emits_processed_on_valid_response(
                 input_payload=routed_input,
             )
             wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=3.0)
+            setup.release_collected_contexts()
 
         processed_payload = setup.processed_collector.received_events[0].payload
         assert processed_payload == ProcessedInput(
@@ -173,6 +174,7 @@ def test_async_http_neuron_communicator_emits_error_when_target_request_fails(
     with setup.running():
         setup.send(input_payload=routed_input)
         wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
+        setup.release_collected_contexts()
 
     assert len(setup.error_collector.received_events) == 0
     failure = setup.processed_collector.received_events[0].payload
@@ -203,6 +205,7 @@ def test_async_http_neuron_communicator_emits_timeout_when_no_callback_is_receiv
         with setup.running():
             setup.send(input_payload=routed_input)
             wait_until(lambda: len(setup.processed_collector.received_events) == 1, timeout=2.0)
+            setup.release_collected_contexts()
 
         assert len(setup.error_collector.received_events) == 0
         failure = setup.processed_collector.received_events[0].payload
@@ -249,6 +252,7 @@ def test_async_http_neuron_communicator_rejects_non_http_axon_protocol(
     with setup.running():
         setup.send(input_payload=routed_input)
         wait_until(lambda: len(setup.error_collector.received_events) == 1, timeout=2.0)
+        setup.release_collected_contexts()
 
     assert len(setup.processed_collector.received_events) == 0
     failure = setup.error_collector.received_events[0].payload
