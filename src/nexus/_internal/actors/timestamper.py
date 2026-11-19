@@ -6,7 +6,8 @@ This component tracks processing time boundaries around two logical phases:
 - output phase: emits a `Timestamped` payload enriched with start/end times and block beat
 
 It also supports backpressure while waiting for chain time:
-- outputs are queued until at least one `BlockBeat` is observed
+- outputs are queued until at least one `BlockBeat` is observed, then flushed; a queued output that fails
+  timestamping is logged and dropped without blocking the others
 - queue head age is monitored and logged
 - when queue head age exceeds the error threshold, all queued entries older than that threshold are dropped
 """
@@ -58,7 +59,8 @@ class TimestamperNode[Input, Output](Node, ActorBuilder):
     Wraps a processing step with timing metadata. Records a start timestamp on input,
     then enriches the output with start/end times and the latest observed block beat.
     Connect the processing step from `forwarded_input` back to `executor_output`.
-    Outputs are queued until at least one BlockBeat has been received.
+    Outputs are queued until at least one BlockBeat has been received. A queued output that cannot be
+    timestamped (e.g. its start timestamp is missing) is logged and dropped without blocking the others.
 
     sink input: payload to forward and start timing
     sink executor_output: result from the wrapped processing step
@@ -119,6 +121,8 @@ class TimestamperActor[Input, Output](Actor):
     Notes:
     - Input events overwrite the stored start timestamp (latest input wins).
     - Output events require a `BlockBeat`; otherwise they are queued.
+    - The flush on a `BlockBeat` handles each queued output independently: one that fails timestamping is
+      logged and dropped, the rest are emitted, and the queue is always emptied.
     - Warning logs are emitted only when crossing the warning threshold for the current queue head.
 
     """
@@ -166,7 +170,7 @@ class TimestamperActor[Input, Output](Actor):
         return SendEvent(ctx_id=event.ctx_id, source=self.spec.timestamped_output, payload=timestamped_output)
 
     def handle_block_beat(self, _: Context, event: ReceiveEvent[BlockBeat]) -> MessagesToSend:
-        """Update latest beat and flush all currently queued outputs."""
+        """Update latest beat and flush all currently queued outputs, logging and dropping any that fail."""
         self.latest_block_beat = event.payload
 
         if len(self.queued_outputs) == 0:
@@ -175,10 +179,15 @@ class TimestamperActor[Input, Output](Actor):
 
         events_to_send: list[SendEvent[Timestamped[Output]]] = []
         for queued_output in self.queued_outputs:
-            # this is safe, because if the context is queued,
-            # there should be no one else using it
-            with self.context_store.get_context(queued_output.ctx_id) as output_context:
-                timestamped_output = self._timestamp_output(ctx=output_context, output=queued_output.output)
+            try:
+                # this is safe, because if the context is queued,
+                # there should be no one else using it
+                with self.context_store.get_context(queued_output.ctx_id) as output_context:
+                    timestamped_output = self._timestamp_output(ctx=output_context, output=queued_output.output)
+            except Exception:
+                # Same outcome as a failing direct output, which the actor loop logs: this actor has no error source.
+                logger.exception("Dropping queued output for ctx=%s: timestamping failed.", queued_output.ctx_id)
+                continue
             events_to_send.append(
                 SendEvent(
                     ctx_id=queued_output.ctx_id,

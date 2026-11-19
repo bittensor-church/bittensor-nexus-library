@@ -4,11 +4,14 @@ import datetime
 import threading
 from dataclasses import dataclass
 
+from nexus._internal.logging_utils import get_logger
 from nexus._internal.utils.exceptions import RemoteResponseTimeoutException
 
 from .common import timeout_seconds
 from .pending_requests import PendingAsyncHttpRequestStore
 from .runtime_callbacks import CommunicatorErrorCallback
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -36,7 +39,8 @@ class TimeoutSweepRuntime:
     Purpose:
     - continuously scan the shared pending-request store for expired entries
     - remove expired requests from the store
-    - emit `RemoteResponseTimeoutException` for each expired request via executor-failure callback
+    - emit `RemoteResponseTimeoutException` for each expired request via executor-failure callback;
+      a failing emit is logged and does not affect other requests or later sweeps
 
     How it works:
     - `start(...)` creates a dedicated daemon thread
@@ -91,19 +95,27 @@ class TimeoutSweepRuntime:
         pending_request_store: PendingAsyncHttpRequestStore,
         error_callback: CommunicatorErrorCallback,
     ) -> None:
-        """Periodically expire overdue requests and emit timeout errors."""
+        """Periodically expire overdue requests and emit timeout errors, logging any emit that fails."""
 
         while not stop_signal.is_set():
             now = datetime.datetime.now(tz=datetime.UTC)
             expired_requests = pending_request_store.pop_expired(now=now)
             for request in expired_requests:
-                error_callback.emit_executor_error(
-                    request.ctx_id,
-                    RemoteResponseTimeoutException(
-                        "Timed out waiting for remote response "
-                        f"for request {request.request_id} in communicator={communicator_id}."
-                    ),
-                )
+                try:
+                    error_callback.emit_executor_error(
+                        request.ctx_id,
+                        RemoteResponseTimeoutException(
+                            "Timed out waiting for remote response "
+                            f"for request {request.request_id} in communicator={communicator_id}."
+                        ),
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to emit timeout for request %s (ctx=%s) in communicator=%s.",
+                        request.request_id,
+                        request.ctx_id,
+                        communicator_id,
+                    )
             stop_signal.wait(timeout_seconds(sweep_timeout))
 
     def stop(self, *, join_timeout_seconds: float) -> None:

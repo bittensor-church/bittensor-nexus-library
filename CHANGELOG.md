@@ -26,3 +26,8 @@
   conflicting primaries or a sink assigned both roles raise `FlowMisconfiguredException`.
 - All tap child contexts and parent snapshots are created before dispatch begins, so primary processing cannot change
   what sibling taps inherit from the emission.
+
+### Fixed
+
+- `TimestamperNode` no longer gets stuck when one output queued before the first `BlockBeat` cannot be timestamped. The flush now handles each queued output independently: a failing one is logged and dropped, the others are emitted, and the queue is always emptied.
+- The `AsyncHttpNeuronCommunicator` timeout sweep no longer stops when emitting the timeout error for one request fails. The failure is logged with the request and context IDs, the remaining expired requests still get their timeout errors, and later requests keep timing out.
