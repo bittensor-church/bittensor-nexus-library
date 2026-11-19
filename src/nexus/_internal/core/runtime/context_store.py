@@ -363,8 +363,9 @@ class ContextStore:
       processing across contexts, and when you want to access contexts in your code.
 
     Context lifetime:
-    - The store records the last activity of every context: its creation, and every log entry appended to it,
-      including the creation of a child. Contexts restored by recover_from() are active as of recovery.
+    - The store records the last activity of every context: its creation, every log entry appended to it,
+      including the creation of a child, and every release of its ownership (also after read-only access). Contexts
+      restored by recover_from() are active as of recovery.
     - expire_idle() completes every context idle for longer than a TTL, removes it from the store and its lock, and
       notifies ContextStorePersistence.release_context(). Children keep their parent snapshots, so a parent need not
       outlive its children. An expired context cannot be accessed or used as a parent.
@@ -566,7 +567,10 @@ class ContextStore:
                 )
 
         with self.__locks.lock_context(new_context_id):
-            yield context
+            try:
+                yield context
+            finally:
+                self._touch_on_release(context)
 
     @contextmanager
     def get_context(self, ctx: ContextId) -> Generator[Context]:
@@ -574,7 +578,11 @@ class ContextStore:
             if ctx not in self.__contexts:
                 raise InvalidContextIdException(f"Context {ctx} not found")
 
-            yield self.__contexts[ctx]
+            context = self.__contexts[ctx]
+            try:
+                yield context
+            finally:
+                self._touch_on_release(context)
 
     def get_user_data[T](
         self,
@@ -608,7 +616,8 @@ class ContextStore:
         Completes and removes every context idle for longer than `ttl`; returns how many were removed.
 
         Contexts locked by another thread are in use and are skipped. A failure to expire one context is logged and
-        leaves it in the store, so a later call retries it.
+        leaves it in the store, so a later call retries it. Context locks are re-entrant, so the caller must not own
+        any context: an idle context it owns would be expired while in use.
         """
         now = self.__clock()
         with self.__registry_lock:
@@ -652,6 +661,12 @@ class ContextStore:
         # completion is not activity, so a completed context whose release failed is retried on the next sweep
         if not isinstance(entry, ContextCompleted):
             self._touch(ctx)
+
+    def _touch_on_release(self, context: Context) -> None:
+        # Holding a context is activity, so one held for longer than the TTL does not expire right after its release.
+        # A completed context is left alone: it is either already removed or awaiting a release retry.
+        if not context.is_completed:
+            self._touch(context.id)
 
     def _touch(self, *contexts: ContextId) -> None:
         now = self.__clock()

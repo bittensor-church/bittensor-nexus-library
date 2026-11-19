@@ -7,9 +7,10 @@ from datetime import timedelta
 from typing import override
 
 import pytest
-from utils import CollectorActor, Jobs, wait_until
+from utils import CollectorActor, Jobs, dummy_block_beat, wait_until
 
 from nexus.v1 import (
+    Actor,
     ContextCompleted,
     ContextId,
     ContextStore,
@@ -17,12 +18,17 @@ from nexus.v1 import (
     Flow,
     InMemoryContextStorePersistence,
     InvalidContextIdException,
+    NexusException,
     PipeToBus,
     Piping,
+    ReceiveEvent,
+    RetryStrategy,
     SendEvent,
+    Sink,
     Source,
     StopBusEvent,
     SubnetBuilder,
+    TimestamperNode,
 )
 
 TTL = timedelta(minutes=10)
@@ -136,7 +142,6 @@ def test_activity_resets_idle_timer():
     _new_context(store, parents=(ctx,))
     clock.advance(TTL * 0.8)
     assert store.expire_idle(TTL) == 0
-    assert _exists(store, ctx)
 
     clock.advance(TTL * 0.8)
     assert store.expire_idle(TTL) == 2
@@ -193,6 +198,9 @@ def test_locked_context_is_skipped_without_error_log(caplog: pytest.LogCaptureFi
     holder.join()
 
     assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+    # releasing the context is activity, so it does not expire right after a use longer than the TTL
+    assert store.expire_idle(TTL) == 0
+    clock.advance(TTL * 2)
     assert store.expire_idle(TTL) == 1
 
 
@@ -298,14 +306,15 @@ def test_bus_drops_message_for_context_whose_release_failed(caplog: pytest.LogCa
 
 
 def test_bus_sweeps_idle_contexts_while_no_events_arrive():
-    store, _, clock = _store()
+    store, persistence, clock = _store()
     ttl = timedelta(milliseconds=100)
     bus, collector, _, _ = _collector_bus(store, context_ttl=ttl)
-    ctx = _new_context(store)
+    _new_context(store)
 
     jobs = Jobs(bus.run_loop(), collector.run_loop())
     clock.advance(ttl * 2)
-    wait_until(lambda: not _exists(store, ctx))
+    # polling the store itself would count as activity
+    wait_until(lambda: _persisted(persistence) == set())
     bus.request_stop()
     jobs.join()
 
@@ -328,3 +337,64 @@ def test_subnet_builder_passes_ttl_to_event_bus():
     )
 
     assert runtime.event_bus.context_ttl == TTL
+
+
+@pytest.mark.parametrize("ttl", [timedelta(0), timedelta(seconds=-1)])
+def test_event_bus_rejects_non_positive_ttl(ttl: timedelta):
+    store, _, _ = _store()
+    with pytest.raises(ValueError, match="context_ttl"):
+        _collector_bus(store, context_ttl=ttl)
+
+
+def _handle[T](actor: Actor, store: ContextStore, ctx: ContextId, sink: Sink[T], payload: T):
+    with store.get_context(ctx) as context:
+        return actor.handlers()[sink](context, ReceiveEvent(ctx_id=ctx, target=sink, payload=payload))
+
+
+@pytest.mark.parametrize("expires_before_next_output", [True, False])
+def test_timestamper_drops_queued_output_of_expired_context(
+    expires_before_next_output: bool, caplog: pytest.LogCaptureFixture
+):
+    store, _, clock = _store()
+    node = TimestamperNode[str, str]("expiry-timestamper")
+    actor = node.build_actor(pipe_to_bus=queue.Queue(), context_store=store)
+    expired = _new_context(store)
+    _handle(actor, store, expired, node.input, "stale request")
+    _handle(actor, store, expired, node.executor_output, "stale result")
+    clock.advance(TTL * 2)
+    live = _new_context(store)
+    _handle(actor, store, live, node.input, "request")
+
+    with caplog.at_level(logging.ERROR):
+        if expires_before_next_output:
+            assert store.expire_idle(TTL) == 1
+        _handle(actor, store, live, node.executor_output, "result")
+        if not expires_before_next_output:
+            # queueing the live output read the stale context, which counts as activity
+            clock.advance(TTL * 2)
+            assert _exists(store, live)
+            assert store.expire_idle(TTL) == 1
+        beat = _new_context(store)
+        sent = _handle(actor, store, beat, node.block_beat, dummy_block_beat(1))
+
+    assert isinstance(sent, tuple)
+    assert [(event.ctx_id, event.payload.executor_output) for event in sent] == [(live, "result")]
+    assert any("Dropping queued output" in r.getMessage() and expired in r.getMessage() for r in caplog.records)
+    assert _handle(actor, store, beat, node.block_beat, dummy_block_beat(2)) == ()
+
+
+def test_retry_is_abandoned_when_context_expires_during_delay(caplog: pytest.LogCaptureFixture):
+    store, _, clock = _store()
+    pipe_to_bus: PipeToBus = queue.Queue()
+    node = RetryStrategy[str]("expiry-retry", max_attempts=3, delay=timedelta(milliseconds=100))
+    actor = node.build_actor(pipe_to_bus=pipe_to_bus, context_store=store)
+    ctx = _new_context(store)
+    _handle(actor, store, ctx, node.input, "job")
+    _handle(actor, store, ctx, node.failed_attempt, NexusException("boom"))
+    clock.advance(TTL * 2)
+
+    with caplog.at_level(logging.ERROR):
+        assert store.expire_idle(TTL) == 1
+        wait_until(lambda: any("Abandoning retry" in r.getMessage() and ctx in r.getMessage() for r in caplog.records))
+
+    assert pipe_to_bus.empty()

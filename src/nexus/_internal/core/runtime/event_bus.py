@@ -53,8 +53,12 @@ class EventBus:
     Routes messages emitted by actors to their target sinks, recording each message in its context's log.
 
     With a `context_ttl`, the bus thread also expires contexts idle for longer than the TTL (see
-    ContextStore.expire_idle), sweeping every TTL/10, at most every minute, also while no messages arrive. A message
-    for a context that no longer exists is dropped with an error log.
+    ContextStore.expire_idle), sweeping every TTL/10 and at least once a minute, also while no messages arrive. A
+    message for a context that no longer exists is dropped with an error log.
+
+    Raises:
+        ValueError: if `context_ttl` is not positive.
+
     """
 
     connections: Pipes
@@ -73,6 +77,8 @@ class EventBus:
         context_store: ContextStore,
         context_ttl: datetime.timedelta | None = None,
     ) -> None:
+        if context_ttl is not None and context_ttl <= datetime.timedelta(0):
+            raise ValueError(f"Expected a positive context_ttl or None, got {context_ttl}.")
         self.connections = connections
         self.sinks = {sink: actor for actor in actors for sink in actor.handlers().keys()}
         self.input_pipe = input_pipe
