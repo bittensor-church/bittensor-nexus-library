@@ -22,7 +22,7 @@
 
 ### Fixed
 
-- The event bus drops a message for a missing context with an error log instead of stopping its thread.
+- The event bus drops a message for a missing or completed context with an error log instead of stopping its thread.
 
 ### Changed
 

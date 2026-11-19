@@ -273,6 +273,30 @@ def test_bus_drops_message_for_expired_context_and_keeps_running(caplog: pytest.
     assert source.id in dropped[0]
 
 
+def test_bus_drops_message_for_context_whose_release_failed(caplog: pytest.LogCaptureFixture):
+    persistence = FailingReleasePersistence()
+    store, _, clock = _store(persistence)
+    bus, collector, source, pipe_to_bus = _collector_bus(store, context_ttl=None)
+    completed = _new_context(store)
+    persistence.failing.add(completed)
+    clock.advance(TTL * 2)
+    store.expire_idle(TTL)
+    live = _new_context(store)
+
+    pipe_to_bus.put(SendEvent(ctx_id=completed, source=source, payload="late"))
+    pipe_to_bus.put(SendEvent(ctx_id=live, source=source, payload="on time"))
+    with caplog.at_level(logging.ERROR):
+        jobs = Jobs(bus.run_loop(), collector.run_loop())
+        wait_until(lambda: len(collector.received_events) == 1)
+        bus.request_stop()
+        jobs.join()
+
+    assert collector.received_events[0].ctx_id == live
+    assert any(
+        "Dropping message" in record.getMessage() and completed in record.getMessage() for record in caplog.records
+    )
+
+
 def test_bus_sweeps_idle_contexts_while_no_events_arrive():
     store, _, clock = _store()
     ttl = timedelta(milliseconds=100)

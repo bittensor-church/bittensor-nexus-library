@@ -8,7 +8,7 @@ from nexus._internal.logging_utils import get_logger
 
 from ..dsl.nodes import Pipes, Sink
 from .actor import Actor
-from .context_store import ContextStore, monotonic_now
+from .context_store import ContextCompletedException, ContextStore, monotonic_now
 from .context_store_types import ContextId, InvalidContextIdException
 from .events import PipeToBus, ReceiveEvent, SendEvent, StopActorEvent, StopBusEvent
 
@@ -120,9 +120,10 @@ class EventBus:
         try:
             with self.context_store.get_context(event.ctx_id) as context:
                 context.append_message(event.source, event.payload)
-        except InvalidContextIdException:
+        # a context whose release failed stays registered but completed until a later sweep removes it
+        except InvalidContextIdException, ContextCompletedException:
             logger.error(
-                "Dropping message from source %s: context %s does not exist; it may have expired "
+                "Dropping message from source %s: context %s does not exist or is completed; it may have expired "
                 "(context_ttl=%s). Payload: %s",
                 event.source.id,
                 event.ctx_id,
