@@ -103,7 +103,7 @@ both roles. Legacy `.then(a, b)` and iterable named-route values are invalid; us
 
 ## Context lifetime
 
-Contexts are kept in memory until restart unless idle-context expiry is enabled. Long-running validators should pass a `context_ttl` that exceeds the longest gap between two uses of one context (retry delays, callback timeouts, gather windows spanning an epoch):
+Contexts are kept in memory until restart unless idle-context expiry is enabled. Deployed validators must pass a `context_ttl` that exceeds the longest gap between two uses of one context (retry delays, callback timeouts, gather windows spanning an epoch):
 
 ```py
 super().__init__(settings, context_ttl=timedelta(hours=3))  # in a NexusValidator subclass

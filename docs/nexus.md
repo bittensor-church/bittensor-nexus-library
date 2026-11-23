@@ -116,7 +116,7 @@ single- versus multi-parent inheritance.
 
 By default contexts are never removed: every context, its lock, and its log entries stay in memory until the process restarts. Periodic sources such as block beats with taps create new contexts all the time, so memory grows without bound.
 
-Long-running validators should enable idle-context expiry with `context_ttl` on `SubnetBuilder` (or `NexusValidator.__init__`). A context with no activity for longer than the TTL is completed and removed from the context store, and `ContextStorePersistence.release_context()` is called for it. `InMemoryContextStorePersistence` then drops the context's entries; the default `release_context()` keeps them, so a custom persistence must override it to bound its own storage. Activity is the creation of the context, every log entry appended to it (messages dispatched for it, user data changes, user notes, and the creation of a child context), and every use of it: the idle timer restarts when a handler or any other `get_context()` caller releases the context, so a handler running longer than the TTL does not lose its context. Contexts recovered after a restart count as active at recovery time.
+Deployed validators must enable idle-context expiry with `context_ttl` on `SubnetBuilder` (or `NexusValidator.__init__`); see [Always set a context TTL](#always-set-a-context-ttl). A context with no activity for longer than the TTL is completed and removed from the context store, and `ContextStorePersistence.release_context()` is called for it. `InMemoryContextStorePersistence` then drops the context's entries; the default `release_context()` keeps them, so a custom persistence must override it to bound its own storage. Activity is the creation of the context, every log entry appended to it (messages dispatched for it, user data changes, user notes, and the creation of a child context), and every use of it: the idle timer restarts when a handler or any other `get_context()` caller releases the context, so a handler running longer than the TTL does not lose its context. Contexts recovered after a restart count as active at recovery time.
 
 The TTL must exceed the longest gap between two uses of one context, for example a retry delay, an HTTP callback timeout, or a gather window. A gather actor that collects parent context IDs and later calls `create_context(parents=...)` needs all parents to still exist, so a window spanning an epoch (~72 min) needs a TTL comfortably above that. Children keep snapshots of their parents, so a parent may expire before its children.
 
@@ -249,6 +249,18 @@ information that should not be lost on restart:
 - intermediate aggregates
 
 In most cases, you should use Nexus Tasks for the task and and result stores for its result.
+
+### Always set a context TTL
+
+**Every deployed validator must pass a `context_ttl` to `NexusValidator.__init__` (or `SubnetBuilder`).**
+
+```python
+super().__init__(settings, context_ttl=timedelta(hours=3))
+```
+
+The default `None` never removes contexts. Periodic sources such as block, epoch, and set-weights beats create new contexts all the time, so a validator without a TTL grows its memory until it is restarted.
+
+Size the TTL from your pipeline: make it at least twice the longest gap between two uses of one context. Look at retry delays, HTTP callback and processing timeouts, and gather windows. A gather that collects parent contexts over a whole epoch (~72 min) needs a TTL of at least ~2.5 hours. Without such long waits, 3 hours is a safe default. See [Context lifetime](#context-lifetime) for what counts as activity and what happens to messages for expired contexts.
 
 ### Always connect logging listeners to all error sources
 
