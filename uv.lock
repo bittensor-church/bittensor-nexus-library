@@ -143,7 +143,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bittensor-pylon-client", specifier = "==2.3.1" },
+    { name = "bittensor-pylon-client", specifier = ">=2.3.1,<3" },
     { name = "boto3" },
     { name = "deepdiff" },
     { name = "httpx" },
