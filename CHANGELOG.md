@@ -27,6 +27,7 @@
 
 ### Changed
 
+- `docs/nexus.md` lists setting `context_ttl` as a critical requirement for deployed validators, with guidance on sizing it.
 - Updated `bittensor-pylon-client` to 2.3.1 and the cat-images Pylon service images to 2.3.4.
   When overriding `PYLON_BITTENSOR_NETWORK`, also set `PYLON_BITTENSOR_ARCHIVE_NETWORK` for the same chain;
   the demo localnet examples configure both endpoints.
